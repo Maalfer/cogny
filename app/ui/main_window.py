@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (QMainWindow, QTreeView, QTextEdit, QPlainTextEdit,
                                QSplitter, QWidget, QVBoxLayout, QToolBar, 
-                               QMessageBox, QInputDialog, QLineEdit, QStyle, QMenu)
-from PySide6.QtGui import QAction, QKeySequence, QPalette, QColor, QIcon
+                               QMessageBox, QInputDialog, QLineEdit, QStyle, QMenu, QSizePolicy)
+from PySide6.QtGui import QAction, QKeySequence, QPalette, QColor, QIcon, QStandardItemModel, QStandardItem
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt, QSettings
+from PySide6.QtCore import Qt, QSettings, QSortFilterProxyModel
 
 from app.database.manager import DatabaseManager
 from app.models.note_model import NoteTreeModel
@@ -17,8 +17,19 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Cogny") # Rebrand
         self.resize(1200, 800)
         
-        # Set App Icon
-        self.setWindowIcon(QIcon("assets/logo.png"))
+        # Resolve Assets Path
+        import os
+        # Assuming structure:
+        #  - Source: root/app/ui/main_window.py
+        #  - Install: site-packages/app/ui/main_window.py
+        #  - Assets: site-packages/assets
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        # If running from source (root/app/ui/...), base_dir is root/app/.., i.e. root/app? No.
+        # root/app/ui/../.. = root. OK.
+        # If running from site-packages/app/ui/../.. = site-packages. OK.
+        
+        icon_path = os.path.join(base_dir, "assets", "logo.png")
+        self.setWindowIcon(QIcon(icon_path))
 
         # Database Setup
         self.db = DatabaseManager(db_path)
@@ -35,7 +46,14 @@ class MainWindow(QMainWindow):
 
         # Left: Tree View
         self.tree_view = QTreeView()
-        self.tree_view.setModel(self.model)
+        
+        # Proxy Model for Search/Filtering
+        self.proxy_model = QSortFilterProxyModel(self)
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.proxy_model.setRecursiveFilteringEnabled(True)
+        
+        self.tree_view.setModel(self.proxy_model)
         self.tree_view.setHeaderHidden(True)
         self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
         # Expand/Collapse on single click as requested
@@ -120,9 +138,13 @@ class MainWindow(QMainWindow):
         
         if last_id and last_id in self.model.note_items:
             item = self.model.note_items[last_id]
-            index = item.index()
-            self.tree_view.setCurrentIndex(index)
-            self.tree_view.scrollTo(index)
+            source_index = item.index()
+            # Map Source Index to Proxy Index
+            proxy_index = self.proxy_model.mapFromSource(source_index)
+            
+            if proxy_index.isValid():
+                self.tree_view.setCurrentIndex(proxy_index)
+                self.tree_view.scrollTo(proxy_index)
 
     def show_context_menu(self, position):
         index = self.tree_view.indexAt(position)
@@ -132,9 +154,21 @@ class MainWindow(QMainWindow):
             # Select the item implicitly for better UX
             self.tree_view.setCurrentIndex(index)
             
-            action_add_child = QAction("Crear subnodo", self)
-            action_add_child.triggered.connect(self.add_child_note)
-            menu.addAction(action_add_child)
+            # Check if it is a folder (has children) - Using Source Index to check logic properties
+            source_index = self.proxy_model.mapToSource(index)
+            # We can check rowCount of the source index or the item
+            # But standard `hasChildren()` on model is good.
+            # User wants "Create subnode" ONLY if it is a folder.
+            # Assumption: Folder = hasChildren() > 0 or maybe distinct flag?
+            # Existing code: "if item.rowCount() > 0: # It is a folder"
+            
+            is_folder = self.model.hasChildren(source_index)
+            
+            # If it's a folder, allow adding child (subnode)
+            if is_folder:
+                action_add_child = QAction("Crear subnodo", self)
+                action_add_child.triggered.connect(self.add_child_note)
+                menu.addAction(action_add_child)
             
             menu.addSeparator()
             
@@ -323,15 +357,75 @@ class MainWindow(QMainWindow):
         
         style = self.style()
         
-        self.act_new_root.setIcon(style.standardIcon(QStyle.SP_FileIcon))
-        self.act_save.setIcon(style.standardIcon(QStyle.SP_DriveFDIcon))
-        self.act_delete.setIcon(style.standardIcon(QStyle.SP_TrashIcon))
+        # Spacer
+        empty = QWidget()
+        empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        # toolbar.addWidget(empty) # No spacer needed if it's the only thing? 
+        # User said: "en esa fila quiero que solamente este el buscador de notas"
+        # If I want it to take up the full width or just be there?
+        # Usually search bars are on the right or take available space.
+        # If it's the ONLY thing, maybe valid to just add it.
+        # But `QToolBar` packs left.
         
-        toolbar.addAction(self.act_new_root)
-        toolbar.addAction(self.act_new_child)
-        toolbar.addSeparator()
-        toolbar.addAction(self.act_save)
-        toolbar.addAction(self.act_delete)
+        # Search Bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search notes...")
+        self.search_bar.textChanged.connect(self.on_search_text_changed)
+        
+        toolbar.addWidget(self.search_bar)
+        
+    def on_search_text_changed(self, text):
+        if not text.strip():
+            # Restore Tree View
+            self.tree_view.setModel(self.proxy_model)
+            self.tree_view.setRootIsDecorated(True)
+            self.proxy_model.setFilterRegularExpression("") # Clear filter just in case
+            # Reconnect Selection Model
+            self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
+        else:
+            # Perform Ranked Search
+            self.perform_search(text)
+
+    def perform_search(self, text):
+        search_model = QStandardItemModel()
+        all_notes = self.db.get_all_notes()
+        
+        results = []
+        import re
+        
+        query = text.lower()
+        
+        for note in all_notes:
+            # note: (id, parent_id, title, content, created, updated)
+            note_id = note[0]
+            title = note[2] or ""
+            content = note[3] or ""
+            
+            # Simple Counting
+            title_count = title.lower().count(query)
+            content_count = content.lower().count(query)
+            
+            if title_count > 0 or content_count > 0:
+                score = (title_count * 2) + content_count
+                results.append((score, note_id, title))
+        
+        # Sort by Score Descending
+        results.sort(key=lambda x: x[0], reverse=True)
+        
+        # Icon for notes
+        note_icon = QIcon.fromTheme("text-x-generic")
+        
+        for score, note_id, title in results:
+            item = QStandardItem(f"{title} ({score} matches)")
+            item.setEditable(False)
+            item.note_id = note_id
+            item.setIcon(note_icon)
+            search_model.appendRow(item)
+            
+        self.tree_view.setModel(search_model)
+        self.tree_view.setRootIsDecorated(False)
+        # Reconnect Selection Model (New model = New Selection Model)
+        self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
 
     def add_root_note(self):
         title, ok = QInputDialog.getText(self, "New Note", "Note Title:")
@@ -344,7 +438,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Selection", "Please select a parent note first.")
             return
 
-        item = self.model.itemFromIndex(index)
+        # Map Proxy Index to Source Index
+        source_index = self.proxy_model.mapToSource(index)
+        item = self.model.itemFromIndex(source_index)
+        
         title, ok = QInputDialog.getText(self, "New Note", "Note Title:")
         if ok and title:
             self.model.add_note(title, item.note_id)
@@ -425,7 +522,10 @@ class MainWindow(QMainWindow):
                                    QMessageBox.Yes | QMessageBox.No)
         
         if ret == QMessageBox.Yes:
-            item = self.model.itemFromIndex(index)
+            # Map Proxy Index to Source Index for Deletion
+            source_index = self.proxy_model.mapToSource(index)
+            item = self.model.itemFromIndex(source_index)
+            
             self.db.delete_note(item.note_id)
             self.model.delete_note(item.note_id)
             
@@ -490,9 +590,11 @@ class MainWindow(QMainWindow):
 
     def on_rows_moved(self, parent, start, end, destination, row):
         """Auto-expand the destination folder when a note is dropped into it."""
-        # destination is the QModelIndex of the NEW parent.
+        # destination is the QModelIndex of the NEW parent (SOURCE MODEL INDEX).
         if destination.isValid():
-            self.tree_view.expand(destination)
+            # Map Source Index back to Proxy Index to expand in View
+            proxy_dest = self.proxy_model.mapFromSource(destination)
+            self.tree_view.expand(proxy_dest)
 
     def on_selection_changed(self, current, previous):
         # Auto-save previous note if active
@@ -507,7 +609,23 @@ class MainWindow(QMainWindow):
             self.text_editor.setReadOnly(True)
             return
 
-        item = self.model.itemFromIndex(current)
+        # Determine if we are in Proxy Model (Tree) or Standard Model (Search)
+        model = self.tree_view.model()
+        
+        if isinstance(model, QSortFilterProxyModel):
+            # Map Proxy Index to Source Index
+            source_index = self.proxy_model.mapToSource(current)
+            if not source_index.isValid():
+                return
+            item = self.model.itemFromIndex(source_index)
+        else:
+            # Standard Model (Search Results)
+            item = model.itemFromIndex(current)
+            
+        if not item:
+            # Defensive check fixes AttributeError: 'NoneType' object has no attribute 'note_id'
+            return
+            
         self.current_note_id = item.note_id
         
         # Check if it has children (Folder Behavior)

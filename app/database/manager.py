@@ -265,3 +265,11 @@ class DatabaseManager:
         conn.close()
         return stats
 
+    def get_all_notes(self) -> List[Tuple]:
+        """Get all notes for search processing."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM notes")
+        rows = cursor.fetchall()
+        conn.close()
+        return rows

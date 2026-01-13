@@ -57,7 +57,7 @@ python main.py
 
 ## 📈 Historial de Estrellas
 
-[![Gráfico de Historial de Estrellas](https://api.star-history.com/svg?repos=Maalfer/cogny&type=Date)](https://star-history.com/#Maalfer/cogny&Date)
+[![Gráfico de Historial de Estrellas](https://api.star-history.com/svg?repos=Maalfer/cogny&type=Date&theme=dark)](https://star-history.com/#Maalfer/cogny&Date)
 
 ---
 *Creado por El Pingüino de Mario.*

@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QApplication, QStyleFactory
 from app.ui.main_window import MainWindow
 from app.ui.themes import ThemeManager
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     
     # Apply Fusion Style
@@ -24,3 +24,6 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

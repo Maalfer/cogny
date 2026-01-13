@@ -1,0 +1,75 @@
+name: cogny
+base: core22
+icon: assets/logo.png
+version: '1.0.0'
+summary: A hierarchical note-taking app built with PySide6.
+description: |
+  Cogny is a powerful hierarchical note-taking application designed for developers and power users.
+  Built with Python and PySide6, it offers a seamless experience for organizing complex information,
+  code snippets, and documentation.
+
+grade: devel
+confinement: devmode
+
+apps:
+  cogny:
+    command: bin/cogny
+    extensions: [gnome]
+    plugs:
+      - home
+      - network
+      - removable-media
+      - opengl
+      - audio-playback
+    environment:
+      # Ensure Assets are found if they are relative to CWD or specific paths
+      # In main.py: QIcon("assets/logo.png"). CWD is usually where it's run from.
+      # wrapper changes dir or we patch path?
+      # Common fix: set CWD or use absolute paths in code relative to __file__.
+      # For now, we rely on copying assets to site-packages or just keeping them alongside.
+      # If using `bin/cogny` wrapper, we might need to be careful.
+      # Let's try standard approach.
+      PYTHONPATH: $SNAP/lib/python3.10/site-packages:$SNAP/usr/lib/python3/dist-packages
+
+parts:
+  cogny:
+    plugin: python
+    source: .
+    build-environment:
+      - SNAP_RESULT_USER: "snap_daemon"
+      
+    override-build: |
+      craftctl default
+      # Deploy assets to a location where we can find them.
+      # Since we don't have a reliable resource path loader in the code yet (plain "assets/logo.png"),
+      # simplest is to place them in $SNAP and maybe wrap execution or hope PWD is preserved?
+      # Actually, better to place in install/share and use env var?
+      # Or copy to site-packages like the reference did.
+      # Reference: cp -r $CRAFT_PART_SRC/assets $CRAFT_PART_INSTALL/lib/python3.10/site-packages/
+      # But code must look there.
+      # "assets/logo.png" implies relative to current working directory.
+      # When running snap, CWD is usually user's home or $SNAP?
+      # Safe bet: copy to $SNAP/usr/share/cogny/assets
+      # We might need to adjust code to find it. 
+      # User provided reference specifically did: `cp -r ... site-packages/`
+      # Assuming their code looks in site-packages or they just dump it there?
+      # Let's stick to the user's reference pattern as a starting point.
+      mkdir -p $CRAFT_PART_INSTALL/lib/python3.10/site-packages/assets
+      cp -r $CRAFT_PART_SRC/assets/* $CRAFT_PART_INSTALL/lib/python3.10/site-packages/assets/
+
+    stage-packages:
+      - libxkbcommon-x11-0
+      - libxcb-cursor0
+      - libxcb-icccm4
+      - libxcb-image0
+      - libxcb-keysyms1
+      - libxcb-randr0
+      - libxcb-render-util0
+      - libxcb-render0
+      - libxcb-shape0
+      - libxcb-sync1
+      - libxcb-xfixes0
+      - libxcb-xinerama0
+      - libxcb-xkb1
+      - libx11-xcb1
+      - libgl1
