@@ -1,62 +1,63 @@
 # Cogny 🧠
-> **Your Intelligent Knowledge Base & Note Manager.**
+> **Tu Base de Conocimiento Inteligente y Gestor de Notas.**
 
 <div align="center">
   <img src="assets/logo.png" alt="Cogny Logo" width="128">
 </div>
 
-**Cogny** is a powerful, hierarchical note-taking application designed for developers and power users. Built with Python and PySide6, it offers a seamless experience for organizing complex information, snippets, and documentation.
+**Cogny** es una potente aplicación para la toma de notas jerárquicas diseñada para desarrolladores y usuarios avanzados. Construida con Python y PySide6, ofrece una experiencia fluida para organizar información compleja, fragmentos de código y documentación.
 
-## 📸 Screenshots
+## 📸 Capturas de Pantalla
 
-### Main Interface
-Manage your knowledge with a clean, dual-pane layout. The hierarchical tree lets you structure deep nested notes, while the editor supports rich Markdown formatting.
-![Main Interface](assets/portada.png)
+### Interfaz Principal
+Gestiona tu conocimiento con un diseño limpio de doble panel. El árbol jerárquico te permite estructurar notas profundamente anidadas, mientras que el editor soporta un formato Markdown enriquecido.
+![Interfaz Principal](assets/portada.png)
 
-### Statistics & Insights
-Visualize your writing habits and database growth.
-![Statistics](assets/stats.png)
+### Estadísticas e Insights
+Visualiza tus hábitos de escritura y el crecimiento de tu base de datos.
+![Estadísticas](assets/stats.png)
 
-### Secure Vault
-Keep sensitive information protected? *(Assuming boveda.png relates to this)*
-![Vault](assets/boveda.png)
+### Bóveda Segura
+Mantén protegida tu información sensible.
+![Bóveda](assets/boveda.png)
 
 ---
 
-## ✨ Key Features
+## ✨ Características Clave
 
--   **Hierarchical Organization**: Create unlimited nested folders and notes. Drag and drop to reorganize effortlessly.
--   **Strict Structure Protection**: 
-    -   Prevents accidental nesting into leaf notes (rebound logic).
-    -   Folders act as containers (read-only) to keep structure clean.
--   **Rich Markdown Editor**:
-    -   Syntax highlighting for code blocks (Python, SQL, Bash, etc.).
-    -   Auto-formatting (lists, headers).
-    -   **Code Copy**: One-click copy buttons for code snippets.
--   **User-Centric Zoom**:
-    -   **Text Zoom**: Adjust font size independently (`Ctrl + / -`).
-    -   **Image Zoom**: Scale images independently (`Ctrl + Shift + / -`).
-    -   *No accidental Ctrl+Scroll zooming.*
--   **Modern UI**: Clean, light/dark theme support (customizable).
+-   **Organización Jerárquica**: Crea carpetas y notas anidadas ilimitadas. Arrastra y suelta para reorganizar sin esfuerzo.
+-   **Protección Estricta de Estructura**: 
+    -   Evita el anidamiento accidental en notas finales (lógica de rebote).
+    -   Las carpetas actúan como contenedores (solo lectura) para mantener la estructura limpia.
+-   **Editor Markdown Enriquecido**:
+    -   Resaltado de sintaxis para bloques de código (Python, SQL, Bash, etc.).
+    -   Código en Línea: Texto entre comillas (` `texto` `) se muestra con énfasis.
+    -   Auto-formato (listas, encabezados).
+    -   **Copia de Código**: Botones de copia con un clic para fragmentos de código.
+-   **Zoom Centrado en el Usuario**:
+    -   **Zoom de Texto**: Ajusta el tamaño de fuente independientemente (`Ctrl + / -`).
+    -   **Zoom de Imagen**: Escala imágenes independientemente (`Ctrl + Shift + / -`).
+    -   *Sin zoom accidental con Ctrl+Rueda.*
+-   **UI Moderna**: Soporte para temas claro/oscuro (personalizable).
 
-## 🚀 Getting Started
+## 🚀 Empezando
 
-### Prerequisites
+### Prerrequisitos
 -   Python 3.10+
--   `pip install -r requirements.txt` (Mainly `PySide6`)
+-   `pip install -r requirements.txt` (Principalmente `PySide6`)
 
-### Running the App
+### Ejecutar la Aplicación
 ```bash
 python main.py
 ```
 
-## 🛠️ Configuration
--   **Database**: Notes are stored in `notes.cdb` (SQLite).
--   **Assets**: Images and attachments are managed internally.
+## 🛠️ Configuración
+-   **Base de Datos**: Las notas se almacenan en `notes.cdb` (SQLite).
+-   **Assets**: Las imágenes y adjuntos se gestionan internamente.
 
-## 📈 Star History
+## 📈 Historial de Estrellas
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Maalfer/cogny&type=Date)](https://star-history.com/#Maalfer/cogny&Date)
+[![Gráfico de Historial de Estrellas](https://api.star-history.com/svg?repos=Maalfer/cogny&type=Date)](https://star-history.com/#Maalfer/cogny&Date)
 
 ---
-*Created by Mario.*
+*Creado por El Pingüino de Mario.*

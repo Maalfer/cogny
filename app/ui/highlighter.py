@@ -101,6 +101,40 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
                 self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
 
+        # Inline Code (`text`)
+        # Must be before normal text rules? No, separate regex.
+        # User wants: Italic + Emphasis (Color)
+        inline_code_pattern = QRegularExpression(r"(`)([^`\n]+)(`)")
+        it = inline_code_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            
+            # Format Content
+            fmt = QTextCharFormat()
+            fmt.setFontItalic(True) # Cursiva
+            fmt.setFontFamilies(["Consolas", "Monospace", "JetBrains Mono"])
+            
+            # Use specific colored emphasis
+            # We use "string" or "keyword"? We defined "inline_code"
+            # We need to fetch it. `self.get_color("inline_code")`
+            # Fallback to string color if not found? get_color handles defaults.
+            fmt.setForeground(self.get_color("inline_code"))
+            # Optional: Start with bold too? "Cierto Enfasis" could mean Bold.
+            # User said "Cursiva y con cierto enfasis". Italics IS emphasis. Color is extra.
+            
+            self.setFormat(match.capturedStart(2), match.capturedLength(2), fmt)
+            
+            # Hide backticks if not active
+            if not is_active:
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
+            else:
+                # Color the backticks gray
+                tick_fmt = QTextCharFormat()
+                tick_fmt.setForeground(QColor("gray"))
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), tick_fmt)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), tick_fmt)
+
 
         # Code Block Logic
         self.setCurrentBlockState(0)

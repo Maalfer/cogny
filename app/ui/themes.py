@@ -210,7 +210,10 @@ class ThemeManager:
                 "number": "#B5CEA8",        # Light Green
                 "operator": "#D4D4D4",      # White
                 "decorator": "#DCDCAA",     # Yellow
-                "default": "#D4D4D4"        # White
+                "default": "#D4D4D4",       # White
+                "inline_code": "#CE9178"    # Orange/Redish (Same as String for now, or distinct?)
+                                            # User wants emphasis. Let's use a specialized bright color?
+                                            # #E67E22 (Carrot/Orange)
             }
         else: # Light
             return {
@@ -223,5 +226,6 @@ class ThemeManager:
                 "number": "#098658",        # Dark Green
                 "operator": "#000000",      # Black
                 "decorator": "#AF00DB",     # Purple
-                "default": "#000000"        # Black
+                "default": "#000000",       # Black
+                "inline_code": "#E67E22"    # Bright Orange for emphasis
             }
