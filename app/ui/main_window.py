@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         # TitleEditor is imported globally
         self.title_edit = TitleEditor()
         self.title_edit.setObjectName("TitleEdit")
-        self.title_edit.setPlaceholderText("Title")
+        self.title_edit.setPlaceholderText("Título")
         
         # Style Title: Big & Bold
         from PySide6.QtGui import QFont
@@ -259,91 +259,91 @@ class MainWindow(QMainWindow):
 
     def create_actions(self):
         # File Actions
-        self.act_new_root = QAction("New Root Note", self)
-        self.act_new_root.setStatusTip("Create a new root level note")
+        self.act_new_root = QAction("Nueva Nota Raíz", self)
+        self.act_new_root.setStatusTip("Crear una nueva nota de nivel raíz")
         self.act_new_root.triggered.connect(self.add_root_note)
 
-        self.act_new_child = QAction("New Child Note", self)
-        self.act_new_child.setStatusTip("Create a child note for the selected note")
+        self.act_new_child = QAction("Nueva Nota Hija", self)
+        self.act_new_child.setStatusTip("Crear una nota hija para la nota seleccionada")
         self.act_new_child.triggered.connect(self.add_child_note)
         
-        self.act_import_obsidian = QAction("Import Obsidian Vault...", self)
-        self.act_import_obsidian.setStatusTip("Import an entire Obsidian vault (Wipes current data)")
+        self.act_import_obsidian = QAction("Importar Bóveda Obsidian...", self)
+        self.act_import_obsidian.setStatusTip("Importar una bóveda completa de Obsidian (Borra los datos actuales)")
         self.act_import_obsidian.triggered.connect(self.import_obsidian_vault)
 
-        self.act_attach = QAction("Attach File...", self)
-        self.act_attach.setStatusTip("Attach a file to the current note")
+        self.act_attach = QAction("Adjuntar Archivo...", self)
+        self.act_attach.setStatusTip("Adjuntar un archivo a la nota actual")
         self.act_attach.triggered.connect(self.attach_file)
 
-        self.act_save = QAction("Save Note", self)
+        self.act_save = QAction("Guardar Nota", self)
         self.act_save.setShortcut(QKeySequence.Save)
-        self.act_save.setStatusTip("Save the current note")
+        self.act_save.setStatusTip("Guardar la nota actual")
         self.act_save.triggered.connect(self.save_current_note)
 
-        self.act_exit = QAction("Exit", self)
+        self.act_exit = QAction("Salir", self)
         self.act_exit.setShortcut(QKeySequence.Quit)
-        self.act_exit.setStatusTip("Exit the application")
+        self.act_exit.setStatusTip("Salir de la aplicación")
         self.act_exit.triggered.connect(self.close)
 
         # Edit Actions
-        self.act_undo = QAction("Undo", self)
+        self.act_undo = QAction("Deshacer", self)
         self.act_undo.setShortcut(QKeySequence.Undo)
         self.act_undo.triggered.connect(self.text_editor.undo)
 
-        self.act_redo = QAction("Redo", self)
+        self.act_redo = QAction("Rehacer", self)
         self.act_redo.setShortcut(QKeySequence.Redo)
         self.act_redo.triggered.connect(self.text_editor.redo)
 
-        self.act_cut = QAction("Cut", self)
+        self.act_cut = QAction("Cortar", self)
         self.act_cut.setShortcut(QKeySequence.Cut)
         self.act_cut.triggered.connect(self.text_editor.cut)
 
-        self.act_copy = QAction("Copy", self)
+        self.act_copy = QAction("Copiar", self)
         self.act_copy.setShortcut(QKeySequence.Copy)
         self.act_copy.triggered.connect(self.text_editor.copy)
 
-        self.act_paste = QAction("Paste", self)
+        self.act_paste = QAction("Pegar", self)
         self.act_paste.setShortcut(QKeySequence.Paste)
         self.act_paste.triggered.connect(self.text_editor.paste)
 
-        self.act_delete = QAction("Delete Note", self)
+        self.act_delete = QAction("Eliminar Nota", self)
         self.act_delete.setShortcut(QKeySequence.Delete)
-        self.act_delete.setStatusTip("Delete the selected note")
+        self.act_delete.setStatusTip("Eliminar la nota seleccionada")
         self.act_delete.triggered.connect(self.delete_note)
         
         # View Actions
-        self.act_zoom_in = QAction("Text Zoom In", self)
+        self.act_zoom_in = QAction("Zoom Texto (+)", self)
         self.act_zoom_in.setShortcut(QKeySequence.ZoomIn)
-        self.act_zoom_in.setStatusTip("Increase text size only")
+        self.act_zoom_in.setStatusTip("Aumentar solo el tamaño del texto")
         self.act_zoom_in.triggered.connect(lambda _: self.text_editor.textZoomIn())
         
-        self.act_zoom_out = QAction("Text Zoom Out", self)
+        self.act_zoom_out = QAction("Zoom Texto (-)", self)
         self.act_zoom_out.setShortcut(QKeySequence.ZoomOut)
-        self.act_zoom_out.setStatusTip("Decrease text size only")
+        self.act_zoom_out.setStatusTip("Disminuir solo el tamaño del texto")
         self.act_zoom_out.triggered.connect(lambda _: self.text_editor.textZoomOut())
         
         # Page Zoom Actions (Text + Images) - Renaming to "Image Zoom"
-        self.act_page_zoom_in = QAction("Image Zoom In", self)
+        self.act_page_zoom_in = QAction("Zoom Imagen (+)", self)
         self.act_page_zoom_in.setShortcut(QKeySequence("Ctrl+Shift++"))
-        self.act_page_zoom_in.setStatusTip("Increase image size only")
+        self.act_page_zoom_in.setStatusTip("Aumentar solo el tamaño de las imágenes")
         self.act_page_zoom_in.triggered.connect(lambda _: self.text_editor.imageZoomIn())
         
-        self.act_page_zoom_out = QAction("Image Zoom Out", self)
+        self.act_page_zoom_out = QAction("Zoom Imagen (-)", self)
         self.act_page_zoom_out.setShortcut(QKeySequence("Ctrl+Shift+-"))
-        self.act_page_zoom_out.setStatusTip("Decrease image size only")
+        self.act_page_zoom_out.setStatusTip("Disminuir solo el tamaño de las imágenes")
         self.act_page_zoom_out.triggered.connect(lambda _: self.text_editor.imageZoomOut())
 
         # Tools Actions
-        self.act_stats = QAction("Statistics", self)
+        self.act_stats = QAction("Estadísticas", self)
         self.act_stats.triggered.connect(self.show_statistics)
 
-        self.act_theme = QAction("Theme", self)
-        self.act_theme.setStatusTip("Switch between Light and Dark theme")
+        self.act_theme = QAction("Tema", self)
+        self.act_theme.setStatusTip("Cambiar entre tema Claro y Oscuro")
         self.act_theme.triggered.connect(self.show_theme_dialog)
 
 
         # Help Actions
-        self.act_about = QAction("About", self)
+        self.act_about = QAction("Acerca de", self)
         self.act_about.triggered.connect(self.show_about)
 
 
@@ -352,7 +352,7 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # File Menu
-        file_menu = menubar.addMenu("&File")
+        file_menu = menubar.addMenu("&Archivo")
         file_menu.addAction(self.act_new_root)
         file_menu.addAction(self.act_new_child)
         file_menu.addSeparator()
@@ -365,7 +365,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.act_exit)
 
         # Edit Menu
-        edit_menu = menubar.addMenu("&Edit")
+        edit_menu = menubar.addMenu("&Editar")
         edit_menu.addAction(self.act_undo)
         edit_menu.addAction(self.act_redo)
         edit_menu.addSeparator()
@@ -376,7 +376,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.act_delete)
         
         # View Menu
-        view_menu = menubar.addMenu("&View")
+        view_menu = menubar.addMenu("&Ver")
         view_menu.addAction(self.act_zoom_in)
         view_menu.addAction(self.act_zoom_out)
         view_menu.addSeparator()
@@ -384,42 +384,44 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.act_page_zoom_out)
         
         # Tools Menu
-        tools_menu = menubar.addMenu("&Tools")
+        tools_menu = menubar.addMenu("&Herramientas")
         tools_menu.addAction(self.act_stats)
         tools_menu.addAction(self.act_theme)
         
         # Help Menu
-        help_menu = menubar.addMenu("&Help")
+        help_menu = menubar.addMenu("&Ayuda")
         help_menu.addAction(self.act_about)
 
     def show_theme_dialog(self):
-        themes = ["Light", "Dark"]
-        current = getattr(self.text_editor, "current_theme", "Light")
-        try:
-            current_idx = themes.index(current)
-        except ValueError:
-            current_idx = 0
-            
-        from app.ui.widgets import ModernSelection
-        item, ok = ModernSelection.get_item(self, "Select Theme", "Choose a theme:", themes, current_idx)
-        if ok and item:
-            self.switch_theme(item)
+        from app.ui.widgets import ThemeSettingsDialog
+        if ThemeSettingsDialog.show_dialog(self):
+            # Dialog handles saving to QSettings. We just need to apply.
+            # We can get the new theme name from settings.
+            settings = QSettings()
+            new_theme = settings.value("theme", "Dark")
+            self.switch_theme(new_theme)
 
     def switch_theme(self, theme_name):
+        settings = QSettings()
+        # Retrieve custom colors
+        sidebar_bg = settings.value("theme_custom_sidebar_bg", "")
+        editor_bg = settings.value("theme_custom_editor_bg", "")
+        
         # Update App Palette
-        QApplication.instance().setPalette(ThemeManager.get_palette(theme_name))
+        QApplication.instance().setPalette(ThemeManager.get_palette(theme_name, sidebar_bg))
         # Update Editor
-        self.text_editor.apply_theme(theme_name)
+        self.text_editor.apply_theme(theme_name, editor_bg)
+             
         # Update Highlighter
         if hasattr(self, "highlighter"):
              self.highlighter.set_theme(theme_name)
         
         # Save Preference
-        settings = QSettings()
+        # Already saved by Dialog, but good for direct calls
         settings.setValue("theme", theme_name)
         
         # Update Status
-        self.statusBar().showMessage(f"Theme switched to {theme_name}", 2000)
+        self.statusBar().showMessage(f"Tema cambiado a {theme_name}", 2000)
 
     # ... (other methods) ...
 
@@ -441,7 +443,7 @@ class MainWindow(QMainWindow):
         
         # Search Bar
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search notes...")
+        self.search_bar.setPlaceholderText("Buscar notas...")
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         
         toolbar.addWidget(self.search_bar)
@@ -496,21 +498,21 @@ class MainWindow(QMainWindow):
         self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
 
     def add_root_note(self):
-        title, ok = ModernInput.get_text(self, "New Note", "Note Title:")
+        title, ok = ModernInput.get_text(self, "Nueva Nota", "Título de la Nota:")
         if ok and title:
             self.model.add_note(title, None)
 
     def add_child_note(self):
         index = self.tree_view.currentIndex()
         if not index.isValid():
-            ModernAlert.show(self, "No Selection", "Please select a parent note first.")
+            ModernAlert.show(self, "Sin Selección", "Por favor seleccione una nota padre primero.")
             return
 
         # Map Proxy Index to Source Index
         source_index = self.proxy_model.mapToSource(index)
         item = self.model.itemFromIndex(source_index)
         
-        title, ok = ModernInput.get_text(self, "New Note", "Note Title:")
+        title, ok = ModernInput.get_text(self, "Nueva Nota", "Título de la Nota:")
         if ok and title:
             self.model.add_note(title, item.note_id)
             self.tree_view.expand(index)
@@ -519,13 +521,13 @@ class MainWindow(QMainWindow):
 
     def attach_file(self):
         if self.current_note_id is None:
-            ModernAlert.show(self, "No Note Selected", "Please select a note to attach a file.")
+            ModernAlert.show(self, "Sin Selección", "Por favor seleccione una nota para adjuntar el archivo.")
             return
 
         from PySide6.QtWidgets import QFileDialog
         import os
         
-        path, _ = QFileDialog.getOpenFileName(self, "Attach File")
+        path, _ = QFileDialog.getOpenFileName(self, "Adjuntar Archivo")
         if not path:
             return
             
@@ -539,13 +541,13 @@ class MainWindow(QMainWindow):
             
             
         except Exception as e:
-            ModernAlert.show(self, "Error", f"Could not attach file: {e}")
+            ModernAlert.show(self, "Error", f"No se pudo adjuntar el archivo: {e}")
 
             self.text_editor.insert_attachment(att_id, filename)
             
             
         except Exception as e:
-            ModernAlert.show(self, "Error", f"Could not attach file: {e}")
+            ModernAlert.show(self, "Error", f"No se pudo adjuntar el archivo: {e}")
 
 
 
@@ -557,8 +559,8 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             return
             
-        ret = ModernConfirm.show(self, "Confirm Delete", "Delete this note and all its children?", 
-                                   "Yes", "Cancel")
+        ret = ModernConfirm.show(self, "Confirmar Eliminación", "¿Eliminar esta nota y todos sus hijos?", 
+                                   "Sí", "Cancelar")
         
         if ret:
             # Map Proxy Index to Source Index for Deletion
@@ -609,7 +611,7 @@ class MainWindow(QMainWindow):
         if self.current_note_id in self.model.note_items:
              self.model.note_items[self.current_note_id].setText(title)
              
-        self.statusBar().showMessage("Saved.", 2000)
+        self.statusBar().showMessage("Guardado.", 2000)
 
     class ImportWorker(QThread):
         progress = Signal(str)
@@ -634,18 +636,18 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QFileDialog
         
         # Confirmation
-        ret = ModernConfirm.show(self, "Confirm Import", 
-                                  "Importing an Obsidian Vault will ERASE all current notes.\n\nAre you sure you want to continue?",
-                                  "Yes", "Cancel")
+        ret = ModernConfirm.show(self, "Confirmar Importación", 
+                                  "Importar una Bóveda de Obsidian BORRARÁ todas las notas actuales.\n\n¿Estás seguro de que quieres continuar?",
+                                  "Sí", "Cancelar")
         if not ret:
             return
 
-        vault_path = QFileDialog.getExistingDirectory(self, "Select Obsidian Vault Directory")
+        vault_path = QFileDialog.getExistingDirectory(self, "Seleccionar Bóveda de Obsidian")
         if not vault_path:
             return
 
         # Setup Progress Dialog
-        self.progress_dialog = QProgressDialog("Importing Vault...", "Cancel", 0, 0, self)
+        self.progress_dialog = QProgressDialog("Importando Bóveda...", "Cancelar", 0, 0, self)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
         self.progress_dialog.setCancelButton(None) # Disable cancel for now as it's unsafe to stop mid-transaction easily
@@ -663,32 +665,55 @@ class MainWindow(QMainWindow):
         self.progress_dialog.setLabelText(message)
 
     def on_import_finished(self):
-        self.progress_dialog.close()
+        if hasattr(self, "progress_dialog"):
+            self.progress_dialog.close()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
+            
+        if hasattr(self, "worker"):
+            self.worker.quit()
+            self.worker.wait()
+            self.worker.deleteLater()
+            self.worker = None
+            
         self.model.load_notes()
         self.current_note_id = None
         self.title_edit.clear()
         self.text_editor.clear()
-        ModernInfo.show(self, "Success", "Vault imported successfully!")
+        
+        # Show success message slightly delayed to ensure UI refresh
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: ModernInfo.show(self, "Éxito", "¡Bóveda importada correctamente!"))
 
     def on_import_error(self, error_msg):
-        self.progress_dialog.close()
-        ModernAlert.show(self, "Import Error", f"An error occurred: {error_msg}")
+        if hasattr(self, "progress_dialog"):
+            self.progress_dialog.close()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
+            
+        if hasattr(self, "worker"):
+            self.worker.quit()
+            self.worker.wait()
+            self.worker.deleteLater()
+            self.worker = None
+            
+        ModernAlert.show(self, "Error de Importación", f"Ocurrió un error: {error_msg}")
 
     def show_statistics(self):
         stats = self.db.get_detailed_statistics()
         
         msg = (
-            f"<b>Total Notes:</b> {stats['total_notes']}<br>"
-            f"<b>Total Sub-notes:</b> {stats['total_subnotes']}<br>"
-            f"<b>Total Images:</b> {stats['total_images']}<br>"
-            f"<b>Total Code Fragments:</b> {stats['total_code_fragments']}<br>"
-            f"<b>Total Words:</b> {stats['total_words']}<br>"
-            f"<b>Total Letters:</b> {stats['total_letters']}"
+            f"<b>Notas Totales:</b> {stats['total_notes']}<br>"
+            f"<b>Sub-notas Totales:</b> {stats['total_subnotes']}<br>"
+            f"<b>Imágenes Totales:</b> {stats['total_images']}<br>"
+            f"<b>Fragmentos de Código Totales:</b> {stats['total_code_fragments']}<br>"
+            f"<b>Palabras Totales:</b> {stats['total_words']}<br>"
+            f"<b>Letras Totales:</b> {stats['total_letters']}"
         )
-        ModernInfo.show(self, "Statistics", msg)
+        ModernInfo.show(self, "Estadísticas", msg)
 
     def show_about(self):
-        ModernInfo.show(self, "About", "Cogni\n\nA hierarchical note taking app.\nBuilt with PySide6 and SQLite.")
+        ModernInfo.show(self, "Acerca de", "Cogni\n\nUna aplicación jerárquica para tomar notas.\nConstruida con PySide6 y SQLite.")
 
     def on_rows_moved(self, parent, start, end, destination, row):
         """Auto-expand the destination folder when a note is dropped into it."""
@@ -737,7 +762,7 @@ class MainWindow(QMainWindow):
             self.title_edit.setReadOnly(True) # Cannot edit title of folder from here? User said "cannot write in them".
             
             # Show placeholder in editor
-            self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Folder: {item.text()}</h1><p style='color: gray; text-align: center;'>Select a sub-note to edit.</p>")
+            self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {item.text()}</h1><p style='color: gray; text-align: center;'>Selecciona una sub-nota para editar.</p>")
             self.text_editor.setReadOnly(True)
             
             # Ensure it's expanded? User said "click displays notes inside".

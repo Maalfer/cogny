@@ -10,14 +10,14 @@ class ObsidianImporter:
 
     def import_vault(self, vault_path: str, progress_callback=None):
         if not os.path.exists(vault_path):
-            raise ValueError("Vault path does not exist")
+            raise ValueError("La ruta de la bóveda no existe")
 
         # 1. Wipe DB
-        if progress_callback: progress_callback("Clearing database...")
+        if progress_callback: progress_callback("Limpiando base de datos...")
         self.db.clear_database()
 
         # 2. Index Attachments (Images + Others)
-        if progress_callback: progress_callback("Indexing attachments...")
+        if progress_callback: progress_callback("Indexando adjuntos...")
         self._index_attachments(vault_path)
 
         # 3. Traverse and Import
@@ -38,7 +38,7 @@ class ObsidianImporter:
                 if d.startswith('.'): continue
                 full_path = os.path.join(root, d)
                 
-                if progress_callback: progress_callback(f"Creating folder: {d}")
+                if progress_callback: progress_callback(f"Creando carpeta: {d}")
                 
                 # Create Folder Note
                 note_id = self.db.add_note(d, parent_id, "")
@@ -49,7 +49,7 @@ class ObsidianImporter:
                 if f.startswith('.'): continue
                 name, ext = os.path.splitext(f)
                 if ext.lower() == '.md':
-                    if progress_callback: progress_callback(f"Importing note: {f}")
+                    if progress_callback: progress_callback(f"Importando nota: {f}")
                     self._import_note(root, f, parent_id)
 
     def _index_attachments(self, vault_path):
@@ -138,5 +138,5 @@ class ObsidianImporter:
                 return f'&nbsp;<span style="font-size: 16px;">📎</span>&nbsp;<a href="attachment://{att_id}" style="color: #4A90E2; text-decoration: none;">{filename}</a>&nbsp;'
                 
         except Exception as e:
-            print(f"Error embedding {filename}: {e}")
-            return f"[Error loading {filename}]"
+            print(f"Error al incrustar {filename}: {e}")
+            return f"[Error cargando {filename}]"

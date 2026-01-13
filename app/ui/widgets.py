@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QPlainTextEdit, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QFrame, QGraphicsDropShadowEffect, QWidget, QListWidget, QListWidgetItem
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtWidgets import QPlainTextEdit, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QFrame, QGraphicsDropShadowEffect, QWidget, QListWidget, QListWidgetItem, QColorDialog, QComboBox
+from PySide6.QtCore import Qt, Signal, QSize, QSettings
 from PySide6.QtGui import QColor
 
 class TitleEditor(QPlainTextEdit):
@@ -149,7 +149,7 @@ class ModernInfo(ModernDialog):
 
     def __init__(self, title, message, parent=None):
         super().__init__(title, message, parent)
-        self.add_button("OK", "primary")
+        self.add_button("Aceptar", "primary")
 
 class ModernAlert(ModernDialog):
     @staticmethod
@@ -159,11 +159,11 @@ class ModernAlert(ModernDialog):
 
     def __init__(self, title, message, parent=None):
         super().__init__(title, message, parent)
-        self.add_button("Dismiss", "danger")
+        self.add_button("Cerrar", "danger")
 
 class ModernConfirm(ModernDialog):
     @staticmethod
-    def show(parent, title, message, yes_text="Yes", no_text="Cancel"):
+    def show(parent, title, message, yes_text="Sí", no_text="Cancelar"):
         dlg = ModernConfirm(title, message, yes_text, no_text, parent)
         return dlg.exec() == QDialog.Accepted
 
@@ -200,8 +200,8 @@ class ModernInput(ModernDialog):
         # Insert input before buttons
         self.content_layout.insertWidget(2, self.input)
         
-        self.add_button("Cancel", "normal")
-        self.add_button("OK", "primary")
+        self.add_button("Cancelar", "normal")
+        self.add_button("Aceptar", "primary")
         
         self.input.returnPressed.connect(self.accept)
         self.input.setFocus()
@@ -252,7 +252,147 @@ class ModernSelection(ModernDialog):
             
         self.content_layout.insertWidget(2, self.list_widget)
         
-        self.add_button("Cancel", "normal")
-        self.add_button("Select", "primary")
+        self.add_button("Cancelar", "normal")
+        self.add_button("Seleccionar", "primary")
         
         self.list_widget.doubleClicked.connect(self.accept)
+
+class ThemeSettingsDialog(ModernDialog):
+    @staticmethod
+    def show_dialog(parent):
+        dlg = ThemeSettingsDialog(parent)
+        if dlg.exec() == QDialog.Accepted:
+             return True
+        return False
+
+    def __init__(self, parent=None):
+        super().__init__("Configuración de Tema", None, parent)
+        self.settings = QSettings()
+        
+        # Grid-like layout manually
+        # Row 1: Base Theme
+        row1 = QHBoxLayout()
+        tk_label = QLabel("Tema Base:")
+        tk_label.setStyleSheet("color: #CCCCCC; font-size: 14px;")
+        
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Light", "Dark"])
+        current_theme = self.settings.value("theme", "Dark")
+        self.theme_combo.setCurrentText(current_theme)
+        self.theme_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #1E1E1E;
+                color: white;
+                border: 1px solid #3F3F3F;
+                border-radius: 4px;
+                padding: 4px;
+            }
+        """)
+        row1.addWidget(tk_label)
+        row1.addWidget(self.theme_combo)
+        self.content_layout.addLayout(row1)
+        
+        # Row 2: Editor BG
+        row2 = QHBoxLayout()
+        editor_label = QLabel("Fondo del Editor:")
+        editor_label.setStyleSheet("color: #CCCCCC; font-size: 14px;")
+        
+        self.editor_bg_btn = QPushButton("Elegir Color")
+        self.editor_bg_btn.setCursor(Qt.PointingHandCursor)
+        self.current_editor_bg = self.settings.value("theme_custom_editor_bg", "")
+        self.update_btn_style(self.editor_bg_btn, self.current_editor_bg)
+        self.editor_bg_btn.clicked.connect(self.pick_editor_bg)
+        
+        row2.addWidget(editor_label)
+        row2.addWidget(self.editor_bg_btn)
+        self.content_layout.addLayout(row2)
+        
+        # Row 3: Sidebar BG
+        row3 = QHBoxLayout()
+        sidebar_label = QLabel("Fondo de la Barra Lateral:")
+        sidebar_label.setStyleSheet("color: #CCCCCC; font-size: 14px;")
+        
+        self.sidebar_bg_btn = QPushButton("Elegir Color")
+        self.sidebar_bg_btn.setCursor(Qt.PointingHandCursor)
+        self.current_sidebar_bg = self.settings.value("theme_custom_sidebar_bg", "")
+        self.update_btn_style(self.sidebar_bg_btn, self.current_sidebar_bg)
+        self.sidebar_bg_btn.clicked.connect(self.pick_sidebar_bg)
+        
+        row3.addWidget(sidebar_label)
+        row3.addWidget(self.sidebar_bg_btn)
+        self.content_layout.addLayout(row3)
+        
+        # Row 4: Reset Button
+        reset_btn = QPushButton("Restaurar Valores por Defecto")
+        reset_btn.setCursor(Qt.PointingHandCursor)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3F3F3F;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 6px;
+                margin-top: 10px;
+            }
+            QPushButton:hover { background-color: #4F4F4F; }
+        """)
+        reset_btn.clicked.connect(self.reset_defaults)
+        self.content_layout.addWidget(reset_btn)
+        
+        self.add_button("Cancelar", "normal")
+        self.add_button("Guardar y Aplicar", "primary", self.save_settings)
+        
+    def update_btn_style(self, btn, color_str):
+        if color_str:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color_str};
+                    color: {'black' if self.is_light(color_str) else 'white'};
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    padding: 6px;
+                }}
+            """)
+            btn.setText(color_str)
+        else:
+             btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3F3F3F;
+                    color: #E0E0E0;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    padding: 6px;
+                }
+             """)
+             btn.setText("Default")
+
+    def is_light(self, color_str):
+        c = QColor(color_str)
+        return c.lightness() > 128
+
+    def pick_editor_bg(self):
+        c = QColorDialog.getColor(QColor(self.current_editor_bg) if self.current_editor_bg else Qt.white, self, "Seleccionar Fondo del Editor")
+        if c.isValid():
+            self.current_editor_bg = c.name()
+            self.update_btn_style(self.editor_bg_btn, self.current_editor_bg)
+
+    def pick_sidebar_bg(self):
+        c = QColorDialog.getColor(QColor(self.current_sidebar_bg) if self.current_sidebar_bg else Qt.white, self, "Seleccionar Fondo de la Barra Lateral")
+        if c.isValid():
+            self.current_sidebar_bg = c.name()
+            self.update_btn_style(self.sidebar_bg_btn, self.current_sidebar_bg)
+
+    def reset_defaults(self):
+        self.current_editor_bg = ""
+        self.current_sidebar_bg = ""
+        self.update_btn_style(self.editor_bg_btn, "")
+        self.update_btn_style(self.sidebar_bg_btn, "")
+        # Reset combo to Dark? Or keep current?
+        # User said "volve r a poner todo como estaba al principio" -> Usually default.
+        self.theme_combo.setCurrentText("Dark")
+
+    def save_settings(self):
+        self.settings.setValue("theme", self.theme_combo.currentText())
+        self.settings.setValue("theme_custom_editor_bg", self.current_editor_bg)
+        self.settings.setValue("theme_custom_sidebar_bg", self.current_sidebar_bg)
+        self.accept()

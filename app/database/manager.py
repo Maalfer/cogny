@@ -171,36 +171,42 @@ class DatabaseManager:
     def add_note(self, title: str, parent_id: Optional[int] = None, content: str = "") -> int:
         """Add a new note and return its ID."""
         conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO notes (title, parent_id, content) VALUES (?, ?, ?)",
-            (title, parent_id, content)
-        )
-        note_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return note_id
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO notes (title, parent_id, content) VALUES (?, ?, ?)",
+                (title, parent_id, content)
+            )
+            note_id = cursor.lastrowid
+            conn.commit()
+            return note_id
+        finally:
+            conn.close()
 
     def update_note_title(self, note_id: int, title: str):
         conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE notes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (title, note_id)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE notes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (title, note_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def update_note(self, note_id: int, title: str, content: str):
         """Update a note's title and content."""
         conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (title, content, note_id)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (title, content, note_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def delete_note(self, note_id: int):
         """Delete a note and its children."""
@@ -222,14 +228,16 @@ class DatabaseManager:
     def get_children(self, parent_id: Optional[int] = None) -> List[Tuple]:
         """Get all notes that are direct children of parent_id."""
         conn = self._get_connection()
-        cursor = conn.cursor()
-        if parent_id is None:
-            cursor.execute("SELECT id, title FROM notes WHERE parent_id IS NULL")
-        else:
-            cursor.execute("SELECT id, title FROM notes WHERE parent_id = ?", (parent_id,))
-        rows = cursor.fetchall()
-        conn.close()
-        return rows
+        try:
+            cursor = conn.cursor()
+            if parent_id is None:
+                cursor.execute("SELECT id, title FROM notes WHERE parent_id IS NULL")
+            else:
+                cursor.execute("SELECT id, title FROM notes WHERE parent_id = ?", (parent_id,))
+            rows = cursor.fetchall()
+            return rows
+        finally:
+            conn.close()
     
     def move_note_to_parent(self, note_id: int, new_parent_id: Optional[int]):
         conn = self._get_connection()

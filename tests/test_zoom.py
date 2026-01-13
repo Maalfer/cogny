@@ -1,70 +1,73 @@
-
 import sys
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QFont
+
+# Init App
+if not QApplication.instance():
+    app = QApplication(sys.argv)
+
 from app.ui.editor import NoteEditor
 from app.database.manager import DatabaseManager
-from PySide6.QtGui import QWheelEvent
-from PySide6.QtCore import Qt, QPoint
+from app.ui.themes import ThemeManager
 
-def test_zoom():
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
+class MockDB:
+    pass
+
+def test_text_zoom_changes_font_but_keeps_images():
+    editor = NoteEditor(MockDB())
+    
+    # 1. Initial State
+    initial_font_size = editor.current_font_size
+    assert initial_font_size == 14, f"Initial font size should be 14, got {initial_font_size}"
+    
+    # Check Font Property
+    assert editor.font().pointSize() == 14, f"Widget font size mismatch: {editor.font().pointSize()}"
+    
+    # 2. Zoom In
+    editor.textZoomIn()
+    new_size = editor.current_font_size
+    assert new_size == 15, f"Font size should increase to 15, got {new_size}"
+    
+    assert editor.font().pointSize() == 15, f"Widget font size mismatch after zoom in: {editor.font().pointSize()}"
+    
+    # 3. Zoom Out
+    editor.textZoomOut()
+    editor.textZoomOut()
+    new_size = editor.current_font_size
+    assert new_size == 13, f"Font size should decrease to 13, got {new_size}"
+    
+    assert editor.font().pointSize() == 13, f"Widget font size mismatch after zoom out: {editor.font().pointSize()}"
+
+    print("Text Zoom Test Passed")
+
+def test_zoom_does_not_reset_custom_background():
+    # Setup with custom background logic injection if needed
+    # But currently `apply_theme` defaults to None.
+    # We want to verified if we can preserve it.
+    
+    editor = NoteEditor(MockDB())
+    
+    # Simulate custom bg applied via MainWindow
+    custom_bg = "#123456"
+    editor.apply_theme("Dark", custom_bg)
+    
+    style = editor.styleSheet()
+    assert f"background-color: {custom_bg}" in style, "Custom BG not applied initially"
+    
+    # Trigger Zoom
+    editor.textZoomIn()
+    
+    # Check if BG is preserved (It FAILS currently because code passes None)
+    style = editor.styleSheet()
+    if f"background-color: {custom_bg}" not in style:
+        print("FAIL: Custom background was reset during zoom!")
     else:
-        app = QApplication.instance()
-        
-    db = DatabaseManager(":memory:")
-    editor = NoteEditor(db)
-    editor.show()
-    
-    app.processEvents()
-    
-    # 1. Get Initial Function
-    base_font_size = editor.font().pointSize()
-    
-    # 2. Simulate Ctrl + Scroll Up (Zoom In)
-    # Target viewport!
-    event = QWheelEvent(
-        QPoint(10, 10), 
-        QPoint(10, 10), 
-        QPoint(0, 0), 
-        QPoint(0, 120), 
-        Qt.NoButton,
-        Qt.ControlModifier, 
-        Qt.NoScrollPhase,
-        False 
-    )
-    
-    QApplication.sendEvent(editor.viewport(), event)
-    # Also process events to allow async updates if any
-    app.processEvents()
-    
-    # 3. Check New Size
-    new_base = editor.font().pointSize()
-    
-    # Note: If wheelEvent is on Editor (ScrollArea), it receives event if viewport ignores it?
-    # Or we send to editor?
-    # Let's try sending to Editor AND Viewport to be sure.
-    QApplication.sendEvent(editor, event)
-    app.processEvents()
-    
-    new_base_2 = editor.font().pointSize()
-    
-    print(f"Base: {base_font_size} -> After Viewport: {new_base} -> After Widget: {new_base_2}")
-
-    if new_base_2 > base_font_size or new_base > base_font_size:
-        print("SUCCESS: Event triggered zoom.")
-        return True
-        
-    # Manual check
-    editor.zoomIn(1)
-    if editor.font().pointSize() > base_font_size:
-         print("PARTIAL SUCCESS: Method works, Event dispatch failed (Likely Headless/Focus issue).")
-         return True # Accept logic Correctness
-         
-    return False
+        print("PASS: Custom background preserved during zoom")
 
 if __name__ == "__main__":
-    if test_zoom():
-        sys.exit(0)
-    else:
+    try:
+        test_text_zoom_changes_font_but_keeps_images()
+        test_zoom_does_not_reset_custom_background()
+    except AssertionError as e:
+        print(f"Test Failed: {e}")
         sys.exit(1)

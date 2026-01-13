@@ -15,23 +15,35 @@ class NoteEditor(QTextEdit):
         
         self.copy_buttons = []
         self.current_theme = "Light"
+        self.current_font_size = 14
+        self.current_editor_bg = None
         self.apply_theme("Light") # Default
 
-    def apply_theme(self, theme_name: str):
+    def apply_theme(self, theme_name: str, editor_bg: str = None):
         self.current_theme = theme_name
         
-        # Get base style
-        style = ThemeManager.get_editor_style(theme_name)
+        # Update stored custom bg if provided
+        if editor_bg is not None:
+             self.current_editor_bg = editor_bg
         
-        # Inject dynamic font size
+        # Get base style with stored bg
+        style = ThemeManager.get_editor_style(theme_name, self.current_editor_bg)
+        
+        # Inject dynamic font size via setFont (CSS usually ignored for size if setHtml used)
         font_size = getattr(self, "current_font_size", 14)
-        # We append a specific rule for NoteEditor
-        style += f"\nNoteEditor {{ font-size: {font_size}pt; }}"
         
+        # Apply Stylesheet (Colors, Padding, etc.)
         self.setStyleSheet(style)
         self.code_bg_color = ThemeManager.get_code_bg_color(theme_name)
         
-        # Revert Native Margins (Reset to default/0 allows CSS to handle padding)
+        # Apply Font Size directly to Widget and Document
+        font = self.font()
+        font.setPointSize(font_size)
+        self.setFont(font)
+        # Also helpful for proper parsing of new content
+        # self.document().setDefaultFont(font) # Should cascade from widget, but being explicit helps
+        
+        # Revert Native Margins
         doc = self.document()
         root_frame = doc.rootFrame()
         frame_fmt = root_frame.frameFormat()
@@ -181,17 +193,11 @@ class NoteEditor(QTextEdit):
     def textZoomOut(self):
         self._adjust_font_size(-1)
 
+
+
     def _adjust_font_size(self, delta):
-        # We need to maintain the current font size state
-        current_pt = getattr(self, "current_font_size", 14) # Default 14pt
-        new_pt = max(8, current_pt + delta)
-        self.current_font_size = new_pt
-        
-        # Apply via stylesheet to override any default
-        # We need to get current theme style and append/modify font-size
-        # But modify apply_theme to use this variable is cleaner.
-        # Let's just re-apply theme.
-        self.apply_theme(self.current_theme)
+        self.current_font_size = max(8, self.current_font_size + delta)
+        self.apply_theme(self.current_theme) # Uses stored self.current_editor_bg automatically
 
     # Image Zoom: Adjusts image size only.
     def imageZoomIn(self):

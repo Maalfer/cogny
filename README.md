@@ -2,7 +2,7 @@
 > **Tu Base de Conocimiento Inteligente y Gestor de Notas.**
 
 <div align="center">
-  <img src="assets/logo.png" alt="Cogny Logo" width="128">
+  <img src="assets/logo.png" alt="Cogny Logo" width="256">
 </div>
 
 **Cogny** es una potente aplicación para la toma de notas jerárquicas diseñada para desarrolladores y usuarios avanzados. Construida con Python y PySide6, ofrece una experiencia fluida para organizar información compleja, fragmentos de código y documentación.
@@ -42,14 +42,33 @@ Mantén protegida tu información sensible.
 
 ## 🚀 Empezando
 
-### Prerrequisitos
--   Python 3.10+
--   `pip install -r requirements.txt` (Principalmente `PySide6`)
+### 🐧 Instalación y Ejecución en Linux
 
-### Ejecutar la Aplicación
-```bash
-python main.py
-```
+Sigue estos pasos para configurar y ejecutar la aplicación correctamente:
+
+1.  **Crear entorno virtual**:
+    Genera un entorno aislado para las dependencias del proyecto.
+    ```bash
+    python3 -m venv venv
+    ```
+
+2.  **Activar entorno virtual**:
+    Es crucial activar el entorno antes de instalar nada.
+    ```bash
+    source venv/bin/activate
+    ```
+
+3.  **Instalar dependencias**:
+    Instala las librerías necesarias (PySide6, etc.).
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Lanzar la aplicación**:
+    Una vez configurado, ejecuta el archivo principal.
+    ```bash
+    python3 main.py
+    ```
 
 ## 🛠️ Configuración
 -   **Base de Datos**: Las notas se almacenan en `notes.cdb` (SQLite).
