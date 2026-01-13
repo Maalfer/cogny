@@ -7,7 +7,14 @@ class DatabaseManager:
         self.init_db()
 
     def _get_connection(self):
-        return sqlite3.connect(self.db_path)
+        # Increased timeout to 30s to allow for concurrent operations without "database is locked"
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        
+        # Performance & Concurrency Tuning
+        conn.execute("PRAGMA journal_mode=WAL;") # Write-Ahead Logging allows concurrent readers
+        conn.execute("PRAGMA synchronous=NORMAL;") # Faster, slightly less safe than FULL, but standard for desktop apps
+        
+        return conn
 
     def init_db(self):
         """Initialize the database tables."""
@@ -43,6 +50,41 @@ class DatabaseManager:
                 FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE
             )
         """)
+        
+        # Performance Indices
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_images_note ON images(note_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);")
+        
+        # FTS5 Virtual Table for Fast Search
+        # We use external content table 'notes' to save space.
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+                title, 
+                content, 
+                content='notes', 
+                content_rowid='id'
+            );
+        """)
+        
+        # Triggers to keep FTS in sync
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+                INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+            END;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+                INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+            END;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+                INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+                INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+            END;
+        """)
+        
         conn.commit()
         conn.close()
 
@@ -138,6 +180,16 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         return note_id
+
+    def update_note_title(self, note_id: int, title: str):
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE notes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (title, note_id)
+        )
+        conn.commit()
+        conn.close()
 
     def update_note(self, note_id: int, title: str, content: str):
         """Update a note's title and content."""
@@ -266,10 +318,50 @@ class DatabaseManager:
         return stats
 
     def get_all_notes(self) -> List[Tuple]:
-        """Get all notes for search processing."""
+        """Get all notes for search processing. (Legacy/Backup)"""
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM notes")
         rows = cursor.fetchall()
         conn.close()
+        return rows
+
+    def search_notes_fts(self, query: str) -> List[Tuple]:
+        """Search notes using FTS5 match."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # FTS Query Syntax: "title: query OR content: query" or simple token match.
+        # We want simple match across both columns.
+        # Also, FTS5 'rank' column gives relevance score.
+        try:
+            # Using simple query parameter binding. 
+            # Note: For partial matches in FTS, we might need wildcard *. 
+            # e.g. "app*" matches apple. 
+            # User query might need processing.
+            
+            # Simple sanitization and wildcard appending
+            sanitized = query.replace('"', '""') # cleaning
+            if not sanitized.strip():
+                 return []
+                 
+            # Construct FTS query string. 
+            # Using standard MATCH. 
+            # We want partial match support -> "term*"
+            fts_query = f'"{sanitized}"*' 
+            
+            sql = """
+                SELECT rowid, title, rank 
+                FROM notes_fts 
+                WHERE notes_fts MATCH ? 
+                ORDER BY rank
+            """
+            cursor.execute(sql, (fts_query,))
+            rows = cursor.fetchall()
+        except sqlite3.OperationalError:
+            # Fallback if FTS table not ready or bad query syntax
+            return []
+        finally:
+            conn.close()
+            
         return rows

@@ -8,14 +8,16 @@ class ObsidianImporter:
         self.image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'}
         self.attachment_map = {} # filename -> full_path
 
-    def import_vault(self, vault_path: str):
+    def import_vault(self, vault_path: str, progress_callback=None):
         if not os.path.exists(vault_path):
             raise ValueError("Vault path does not exist")
 
         # 1. Wipe DB
+        if progress_callback: progress_callback("Clearing database...")
         self.db.clear_database()
 
         # 2. Index Attachments (Images + Others)
+        if progress_callback: progress_callback("Indexing attachments...")
         self._index_attachments(vault_path)
 
         # 3. Traverse and Import
@@ -24,6 +26,9 @@ class ObsidianImporter:
         dir_map = {vault_path: None}
 
         # We must index directories first or walk top-down correctly
+        # Pre-calculate total for better progress?
+        # For now, just string status updates.
+        
         for root, dirs, files in os.walk(vault_path):
             dirs.sort()
             # Register directories as "Notes" (Folders)
@@ -32,6 +37,9 @@ class ObsidianImporter:
             for d in dirs:
                 if d.startswith('.'): continue
                 full_path = os.path.join(root, d)
+                
+                if progress_callback: progress_callback(f"Creating folder: {d}")
+                
                 # Create Folder Note
                 note_id = self.db.add_note(d, parent_id, "")
                 dir_map[full_path] = note_id
@@ -41,6 +49,7 @@ class ObsidianImporter:
                 if f.startswith('.'): continue
                 name, ext = os.path.splitext(f)
                 if ext.lower() == '.md':
+                    if progress_callback: progress_callback(f"Importing note: {f}")
                     self._import_note(root, f, parent_id)
 
     def _index_attachments(self, vault_path):

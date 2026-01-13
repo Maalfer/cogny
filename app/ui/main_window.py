@@ -2,14 +2,15 @@ from PySide6.QtWidgets import (QMainWindow, QTreeView, QTextEdit, QPlainTextEdit
                                QSplitter, QWidget, QVBoxLayout, QToolBar, 
                                QMessageBox, QInputDialog, QLineEdit, QStyle, QMenu, QSizePolicy)
 from PySide6.QtGui import QAction, QKeySequence, QPalette, QColor, QIcon, QStandardItemModel, QStandardItem
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt, QSettings, QSortFilterProxyModel
+from PySide6.QtWidgets import QApplication, QProgressDialog
+from PySide6.QtCore import Qt, QSettings, QSortFilterProxyModel, QThread, Signal, QObject
 
 from app.database.manager import DatabaseManager
 from app.models.note_model import NoteTreeModel
 from app.ui.highlighter import MarkdownHighlighter
 from app.ui.editor import NoteEditor
 from app.ui.themes import ThemeManager
+from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm, ModernInput
 
 class MainWindow(QMainWindow):
     def __init__(self, db_path="notes.cdb"):
@@ -80,7 +81,7 @@ class MainWindow(QMainWindow):
         right_layout.setContentsMargins(0, 0, 0, 0)
         
         # Custom Title Edit to handle Enter key
-        from app.ui.widgets import TitleEditor
+        # TitleEditor is imported globally
         self.title_edit = TitleEditor()
         self.title_edit.setObjectName("TitleEdit")
         self.title_edit.setPlaceholderText("Title")
@@ -154,21 +155,40 @@ class MainWindow(QMainWindow):
             # Select the item implicitly for better UX
             self.tree_view.setCurrentIndex(index)
             
-            # Check if it is a folder (has children) - Using Source Index to check logic properties
+            # Use Source Index for logic
             source_index = self.proxy_model.mapToSource(index)
-            # We can check rowCount of the source index or the item
-            # But standard `hasChildren()` on model is good.
-            # User wants "Create subnode" ONLY if it is a folder.
-            # Assumption: Folder = hasChildren() > 0 or maybe distinct flag?
-            # Existing code: "if item.rowCount() > 0: # It is a folder"
+            
+            # 1. Rename Option (Always available)
+            action_rename = QAction("Cambiar nombre", self)
+            action_rename.triggered.connect(self.rename_note_dialog)
+            menu.addAction(action_rename)
+            
+            # 2. Create New Note (Context Aware)
+            # If Folder -> Create Child (Inside)
+            # If Note -> Create Sibling (Next to it)
             
             is_folder = self.model.hasChildren(source_index)
             
-            # If it's a folder, allow adding child (subnode)
             if is_folder:
-                action_add_child = QAction("Crear subnodo", self)
-                action_add_child.triggered.connect(self.add_child_note)
-                menu.addAction(action_add_child)
+                 action_new = QAction("Crear nueva nota", self)
+                 action_new.setStatusTip("Crear una nota dentro de esta carpeta")
+                 action_new.triggered.connect(self.add_child_note)
+                 menu.addAction(action_new)
+            else:
+                 action_new = QAction("Crear nueva nota", self)
+                 action_new.setStatusTip("Crear una nota al mismo nivel")
+                 action_new.triggered.connect(self.add_sibling_note)
+                 menu.addAction(action_new)
+
+            # 3. Create Subnode (Explicit) - redundant if we have the above, but kept for clarity if needed
+            # User request: "lo que quiero es que me cree una nota dentro de esa carpeta"
+            # The above logic satisfies this.
+            
+            # We can keep "Crear carpeta" or "Create Subnode" if creating a specific folder type?
+            # But notes are folders. So "Crear nueva nota" inside folder = New Child.
+            
+            # Let's remove the old explicit "Start subnode" if it's redundant, or rename it.
+            # actually let's just use the logic above.
             
             menu.addSeparator()
             
@@ -176,11 +196,62 @@ class MainWindow(QMainWindow):
             action_delete.triggered.connect(self.delete_note)
             menu.addAction(action_delete)
         else:
-            action_add_root = QAction("Crear nota raiz", self)
-            action_add_root.triggered.connect(self.add_root_note)
-            menu.addAction(action_add_root)
+            # Clicked on empty space -> New Root Note
+            action_new_root = QAction("Crear nota raíz", self)
+            action_new_root.triggered.connect(self.add_root_note)
+            menu.addAction(action_new_root)
+            
+        menu.exec(self.tree_view.viewport().mapToGlobal(position))
 
-        menu.exec_(self.tree_view.viewport().mapToGlobal(position))
+    def rename_note_dialog(self):
+        index = self.tree_view.currentIndex()
+        if not index.isValid():
+            return
+            
+        # Map to source
+        source_index = self.proxy_model.mapToSource(index)
+        item = self.model.itemFromIndex(source_index)
+        if not item: 
+            return
+            
+        old_name = item.text()
+        new_name, ok = ModernInput.get_text(self, "Cambiar nombre", "Nuevo nombre:", text=old_name)
+        
+        if ok and new_name.strip():
+            # Update Model (and DB via save logic if needed, but model update usually enough in-memory?)
+            # Wait, item.setText updates the view, but we need to update DB.
+            # Does item.setData update DB? No, manually unless we hook itemChanged.
+            item.setText(new_name.strip())
+            
+            # Update DB immediately
+            self.db.update_note_title(item.note_id, new_name.strip())
+            
+            # Note: Content isn't changed, but updated_at should update?
+            # update_note_title method needed in DB manager or just use update_note.
+            # Let's use update_note but we need content.
+            # Fetch content first? Or add specialized method.
+            # Optimization: update_note_title.
+
+    def add_sibling_note(self):
+        index = self.tree_view.currentIndex()
+        if not index.isValid():
+            self.add_root_note()
+            return
+
+        source_index = self.proxy_model.mapToSource(index)
+        item = self.model.itemFromIndex(source_index)
+        
+        parent = item.parent()
+        parent_id = None
+        if parent:
+             # It's a child of someone
+             if hasattr(parent, "note_id"):
+                 parent_id = parent.note_id
+             # Else it's root item (None id)
+        
+        title, ok = ModernInput.get_text(self, "Nueva nota", "Título de la nota:")
+        if ok and title.strip():
+            self.model.add_note(title.strip(), parent_id)
 
     def add_child_note_context(self):
         # Deprecated by direct connection to add_child_note after setting selection
@@ -329,7 +400,8 @@ class MainWindow(QMainWindow):
         except ValueError:
             current_idx = 0
             
-        item, ok = QInputDialog.getItem(self, "Select Theme", "Theme:", themes, current_idx, False)
+        from app.ui.widgets import ModernSelection
+        item, ok = ModernSelection.get_item(self, "Select Theme", "Choose a theme:", themes, current_idx)
         if ok and item:
             self.switch_theme(item)
 
@@ -388,35 +460,31 @@ class MainWindow(QMainWindow):
 
     def perform_search(self, text):
         search_model = QStandardItemModel()
-        all_notes = self.db.get_all_notes()
         
-        results = []
-        import re
+        # Use FTS5 Search (Ranked by DB)
+        results = self.db.search_notes_fts(text)
         
-        query = text.lower()
-        
-        for note in all_notes:
-            # note: (id, parent_id, title, content, created, updated)
-            note_id = note[0]
-            title = note[2] or ""
-            content = note[3] or ""
-            
-            # Simple Counting
-            title_count = title.lower().count(query)
-            content_count = content.lower().count(query)
-            
-            if title_count > 0 or content_count > 0:
-                score = (title_count * 2) + content_count
-                results.append((score, note_id, title))
-        
-        # Sort by Score Descending
-        results.sort(key=lambda x: x[0], reverse=True)
+        # Result tuple from FTS: (rowid, title, rank)
+        # Note: FTS rank is typically lower = better, but it depends on the function. 
+        # Standard 'bm25' or default 'rank' function.
+        # SQLite's default usually returns rank values where *smaller* is better relevance? 
+        # Wait, the order is already ORDER BY rank.
+        # Let's assume the DB returns them in correct order.
         
         # Icon for notes
         note_icon = QIcon.fromTheme("text-x-generic")
         
-        for score, note_id, title in results:
-            item = QStandardItem(f"{title} ({score} matches)")
+        for row in results:
+            note_id = row[0]
+            title = row[1]
+            rank_score = row[2] # might be used for display?
+            
+            # Since title might be empty in FTS if not stored? 
+            # We configured 'content=notes', so we retrieve from external table presumably?
+            # actually we mapped: SELECT rowid, title... FROM notes_fts. 
+            # If external content, it fetches from there correctly.
+            
+            item = QStandardItem(f"{title}")
             item.setEditable(False)
             item.note_id = note_id
             item.setIcon(note_icon)
@@ -428,21 +496,21 @@ class MainWindow(QMainWindow):
         self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
 
     def add_root_note(self):
-        title, ok = QInputDialog.getText(self, "New Note", "Note Title:")
+        title, ok = ModernInput.get_text(self, "New Note", "Note Title:")
         if ok and title:
             self.model.add_note(title, None)
 
     def add_child_note(self):
         index = self.tree_view.currentIndex()
         if not index.isValid():
-            QMessageBox.warning(self, "No Selection", "Please select a parent note first.")
+            ModernAlert.show(self, "No Selection", "Please select a parent note first.")
             return
 
         # Map Proxy Index to Source Index
         source_index = self.proxy_model.mapToSource(index)
         item = self.model.itemFromIndex(source_index)
         
-        title, ok = QInputDialog.getText(self, "New Note", "Note Title:")
+        title, ok = ModernInput.get_text(self, "New Note", "Note Title:")
         if ok and title:
             self.model.add_note(title, item.note_id)
             self.tree_view.expand(index)
@@ -451,7 +519,7 @@ class MainWindow(QMainWindow):
 
     def attach_file(self):
         if self.current_note_id is None:
-            QMessageBox.warning(self, "No Note Selected", "Please select a note to attach a file.")
+            ModernAlert.show(self, "No Note Selected", "Please select a note to attach a file.")
             return
 
         from PySide6.QtWidgets import QFileDialog
@@ -469,46 +537,17 @@ class MainWindow(QMainWindow):
             att_id = self.db.add_attachment(self.current_note_id, filename, data)
             self.text_editor.insert_attachment(att_id, filename)
             
+            
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not attach file: {e}")
+            ModernAlert.show(self, "Error", f"Could not attach file: {e}")
 
             self.text_editor.insert_attachment(att_id, filename)
             
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not attach file: {e}")
-
-    def import_obsidian_vault(self):
-        from PySide6.QtWidgets import QFileDialog
-        from app.importers.obsidian import ObsidianImporter
-        
-        # Confirmation
-        ret = QMessageBox.warning(self, "Confirm Import", 
-                                  "Importing an Obsidian Vault will ERASE all current notes.\n\nAre you sure you want to continue?",
-                                  QMessageBox.Yes | QMessageBox.No)
-        if ret != QMessageBox.Yes:
-            return
-
-        vault_path = QFileDialog.getExistingDirectory(self, "Select Obsidian Vault Directory")
-        if not vault_path:
-            return
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            importer = ObsidianImporter(self.db)
-            importer.import_vault(vault_path)
-            
-            # Reload
-            self.model.load_notes()
-            self.current_note_id = None
-            self.title_edit.clear()
-            self.text_editor.clear()
-            self.statusBar().showMessage("Vault imported successfully.", 3000)
             
         except Exception as e:
-            QApplication.restoreOverrideCursor()
-            QMessageBox.critical(self, "Import Error", f"An error occurred: {e}")
-        finally:
-            QApplication.restoreOverrideCursor()
+            ModernAlert.show(self, "Error", f"Could not attach file: {e}")
+
+
 
     def delete_note(self):
         index = self.tree_view.currentIndex()
@@ -518,10 +557,10 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             return
             
-        ret = QMessageBox.question(self, "Confirm Delete", "Delete this note and all its children?", 
-                                   QMessageBox.Yes | QMessageBox.No)
+        ret = ModernConfirm.show(self, "Confirm Delete", "Delete this note and all its children?", 
+                                   "Yes", "Cancel")
         
-        if ret == QMessageBox.Yes:
+        if ret:
             # Map Proxy Index to Source Index for Deletion
             source_index = self.proxy_model.mapToSource(index)
             item = self.model.itemFromIndex(source_index)
@@ -572,6 +611,69 @@ class MainWindow(QMainWindow):
              
         self.statusBar().showMessage("Saved.", 2000)
 
+    class ImportWorker(QThread):
+        progress = Signal(str)
+        finished = Signal()
+        error = Signal(str)
+
+        def __init__(self, db_manager, vault_path):
+            super().__init__()
+            self.db = db_manager
+            self.vault_path = vault_path
+
+        def run(self):
+            try:
+                from app.importers.obsidian import ObsidianImporter
+                importer = ObsidianImporter(self.db)
+                importer.import_vault(self.vault_path, progress_callback=self.progress.emit)
+                self.finished.emit()
+            except Exception as e:
+                self.error.emit(str(e))
+
+    def import_obsidian_vault(self):
+        from PySide6.QtWidgets import QFileDialog
+        
+        # Confirmation
+        ret = ModernConfirm.show(self, "Confirm Import", 
+                                  "Importing an Obsidian Vault will ERASE all current notes.\n\nAre you sure you want to continue?",
+                                  "Yes", "Cancel")
+        if not ret:
+            return
+
+        vault_path = QFileDialog.getExistingDirectory(self, "Select Obsidian Vault Directory")
+        if not vault_path:
+            return
+
+        # Setup Progress Dialog
+        self.progress_dialog = QProgressDialog("Importing Vault...", "Cancel", 0, 0, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.setCancelButton(None) # Disable cancel for now as it's unsafe to stop mid-transaction easily
+        self.progress_dialog.show()
+
+        # Setup Worker
+        self.worker = self.ImportWorker(self.db, vault_path)
+        self.worker.progress.connect(self.update_import_progress)
+        self.worker.finished.connect(self.on_import_finished)
+        self.worker.error.connect(self.on_import_error)
+        
+        self.worker.start()
+
+    def update_import_progress(self, message):
+        self.progress_dialog.setLabelText(message)
+
+    def on_import_finished(self):
+        self.progress_dialog.close()
+        self.model.load_notes()
+        self.current_note_id = None
+        self.title_edit.clear()
+        self.text_editor.clear()
+        ModernInfo.show(self, "Success", "Vault imported successfully!")
+
+    def on_import_error(self, error_msg):
+        self.progress_dialog.close()
+        ModernAlert.show(self, "Import Error", f"An error occurred: {error_msg}")
+
     def show_statistics(self):
         stats = self.db.get_detailed_statistics()
         
@@ -583,10 +685,10 @@ class MainWindow(QMainWindow):
             f"<b>Total Words:</b> {stats['total_words']}<br>"
             f"<b>Total Letters:</b> {stats['total_letters']}"
         )
-        QMessageBox.information(self, "Statistics", msg)
+        ModernInfo.show(self, "Statistics", msg)
 
     def show_about(self):
-        QMessageBox.about(self, "About", "Cogni\n\nA hierarchical note taking app.\nBuilt with PySide6 and SQLite.")
+        ModernInfo.show(self, "About", "Cogni\n\nA hierarchical note taking app.\nBuilt with PySide6 and SQLite.")
 
     def on_rows_moved(self, parent, start, end, destination, row):
         """Auto-expand the destination folder when a note is dropped into it."""

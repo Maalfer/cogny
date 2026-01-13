@@ -1,5 +1,6 @@
-from PySide6.QtWidgets import QPlainTextEdit
+from PySide6.QtWidgets import QPlainTextEdit, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QFrame, QGraphicsDropShadowEffect, QWidget, QListWidget, QListWidgetItem
 from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QColor
 
 class TitleEditor(QPlainTextEdit):
     return_pressed = Signal()
@@ -9,39 +10,14 @@ class TitleEditor(QPlainTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setTabChangesFocus(True)
-        
-        # Connect text change to resize
         self.textChanged.connect(self.update_height)
-        self.update_height() # Initial set
+        self.update_height()
 
     def update_height(self):
-        # Calculate new height based on document contents
         doc_height = self.document().size().height()
-        
-        # Add some padding for the margins/borders defined in CSS
-        # In CSS we have 20px top + 10px bottom padding.
-        # document size usually excludes frame width if not careful, 
-        # but QPlainTextEdit contentsRect is informative.
-        # Let's try enforcing a min-height and setting fixed height.
-        
-        # We need to account for the widget's padding which is part of the "height" but not "document height".
-        # From CSS: padding-top: 20px, padding-bottom: 10px. Total 30px.
-        # Plus title font is huge (24pt).
-        
-        # A safer way: margins
         margins = self.contentsMargins()
-        # Since we use stylesheet padding, getting exact margins via Python API might return 0 if not polished,
-        # but let's assume ~35px offset (30px padding + 5px extra).
-        
-        # QPlainTextEdit's document().size() often returns layout size.
-        # line count * line height.
-        
         new_height = int(doc_height + 35) 
-        
-        # Enforce minimum for 1 line
-        if new_height < 60: 
-             new_height = 60
-             
+        if new_height < 60: new_height = 60
         self.setFixedHeight(new_height)
 
     def resizeEvent(self, event):
@@ -54,3 +30,229 @@ class TitleEditor(QPlainTextEdit):
                self.return_pressed.emit()
                return
         super().keyPressEvent(event)
+
+# --- MODERN DIALOGS ---
+
+class ModernDialog(QDialog):
+    def __init__(self, title, message, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.layout)
+        
+        # Main Container (Rounded, Shadow)
+        self.container = QFrame()
+        self.container.setStyleSheet("""
+            QFrame {
+                background-color: #2D2D2D;
+                border: 1px solid #3F3F3F;
+                border-radius: 12px;
+            }
+        """)
+        
+        # Shadow
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        shadow.setOffset(0, 5)
+        self.container.setGraphicsEffect(shadow)
+        
+        self.layout.addWidget(self.container)
+        
+        # Content Layout
+        self.content_layout = QVBoxLayout()
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
+        self.content_layout.setSpacing(15)
+        self.container.setLayout(self.content_layout)
+        
+        # Title
+        if title:
+            self.title_label = QLabel(title)
+            self.title_label.setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: bold; border: none;")
+            self.content_layout.addWidget(self.title_label)
+            
+        # Message
+        if message:
+            self.msg_label = QLabel(message)
+            self.msg_label.setWordWrap(True)
+            self.msg_label.setStyleSheet("color: #CCCCCC; font-size: 14px; border: none;")
+            self.content_layout.addWidget(self.msg_label)
+            
+        # Button Area
+        self.button_layout = QHBoxLayout()
+        self.button_layout.addStretch()
+        self.content_layout.addLayout(self.button_layout)
+
+    def add_button(self, text, role="normal", callback=None):
+        btn = QPushButton(text)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setFixedHeight(32)
+        
+        if role == "primary":
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3b82f6; 
+                    color: white; 
+                    border-radius: 6px;
+                    padding: 0 16px;
+                    font-weight: bold;
+                    border: none;
+                }
+                QPushButton:hover { background-color: #2563eb; }
+                QPushButton:pressed { background-color: #1d4ed8; }
+            """)
+        elif role == "danger":
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ef4444; 
+                    color: white; 
+                    border-radius: 6px;
+                    padding: 0 16px;
+                    font-weight: bold;
+                    border: none;
+                }
+                QPushButton:hover { background-color: #dc2626; }
+                QPushButton:pressed { background-color: #b91c1c; }
+            """)
+        else:
+            # Secondary / Cancel
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3F3F3F; 
+                    color: #E0E0E0; 
+                    border-radius: 6px;
+                    padding: 0 15px;
+                    border: none;
+                }
+                QPushButton:hover { background-color: #4B4B4B; }
+            """)
+            
+        if callback:
+            btn.clicked.connect(callback)
+        else:
+            if role in ["primary", "danger"]:
+                btn.clicked.connect(self.accept)
+            else:
+                btn.clicked.connect(self.reject)
+                
+        self.button_layout.addWidget(btn)
+        return btn
+
+class ModernInfo(ModernDialog):
+    @staticmethod
+    def show(parent, title, message):
+        dlg = ModernInfo(title, message, parent)
+        dlg.exec()
+
+    def __init__(self, title, message, parent=None):
+        super().__init__(title, message, parent)
+        self.add_button("OK", "primary")
+
+class ModernAlert(ModernDialog):
+    @staticmethod
+    def show(parent, title, message):
+        dlg = ModernAlert(title, message, parent)
+        dlg.exec()
+
+    def __init__(self, title, message, parent=None):
+        super().__init__(title, message, parent)
+        self.add_button("Dismiss", "danger")
+
+class ModernConfirm(ModernDialog):
+    @staticmethod
+    def show(parent, title, message, yes_text="Yes", no_text="Cancel"):
+        dlg = ModernConfirm(title, message, yes_text, no_text, parent)
+        return dlg.exec() == QDialog.Accepted
+
+    def __init__(self, title, message, yes_text, no_text, parent=None):
+        super().__init__(title, message, parent)
+        self.add_button(no_text, "normal")
+        self.add_button(yes_text, "primary")
+
+class ModernInput(ModernDialog):
+    @staticmethod
+    def get_text(parent, title, label, text=""):
+        dlg = ModernInput(title, label, text, parent)
+        if dlg.exec() == QDialog.Accepted:
+            return dlg.input.text(), True
+        return "", False
+
+    def __init__(self, title, label, text, parent=None):
+        super().__init__(title, label, parent)
+        
+        self.input = QLineEdit(text)
+        self.input.setStyleSheet("""
+            QLineEdit {
+                background-color: #1E1E1E;
+                color: #FFFFFF;
+                border: 1px solid #3F3F3F;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #3b82f6;
+            }
+        """)
+        # Insert input before buttons
+        self.content_layout.insertWidget(2, self.input)
+        
+        self.add_button("Cancel", "normal")
+        self.add_button("OK", "primary")
+        
+        self.input.returnPressed.connect(self.accept)
+        self.input.setFocus()
+
+class ModernSelection(ModernDialog):
+    @staticmethod
+    def get_item(parent, title, label, items, current=0, editable=False):
+        dlg = ModernSelection(title, label, items, current, parent)
+        if dlg.exec() == QDialog.Accepted:
+            # Return item, ok
+            item = dlg.list_widget.currentItem()
+            if item:
+                return item.text(), True
+        return None, False
+
+    def __init__(self, title, label, items, current, parent=None):
+        super().__init__(title, label, parent)
+        
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #1E1E1E;
+                color: #FFFFFF;
+                border: 1px solid #3F3F3F;
+                border-radius: 6px;
+                padding: 4px;
+                font-size: 14px;
+                outline: none;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QListWidget::item:selected {
+                background-color: #3b82f6;
+                color: white;
+            }
+            QListWidget::item:hover:!selected {
+                background-color: #2D2D2D;
+            }
+        """)
+        
+        for item_text in items:
+            self.list_widget.addItem(item_text)
+            
+        if 0 <= current < len(items):
+            self.list_widget.setCurrentRow(current)
+            
+        self.content_layout.insertWidget(2, self.list_widget)
+        
+        self.add_button("Cancel", "normal")
+        self.add_button("Select", "primary")
+        
+        self.list_widget.doubleClicked.connect(self.accept)
