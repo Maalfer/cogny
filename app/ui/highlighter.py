@@ -42,9 +42,17 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.hidden_format.setFontPointSize(0.1) # Collapse width
         self.hidden_format.setFontStretch(0) # Minimal stretch
         
+        # Pre-compile regexes for highlightBlock to improve performance
+        self.header_pattern_live = QRegularExpression(r"^(#+)\s+(.+)")
+        self.bold_pattern_live = QRegularExpression(r"(\*\*)(.*?)(\*\*)")
+        self.italic_pattern_live = QRegularExpression(r"(\*)(.*?)(\*)")
+        self.link_pattern_live = QRegularExpression(r"(\[)(.*?)(\])(\()(.*?)(\))")
+        
         # Dynamic Language Registry
         self.languages = [] 
         # Map: "python" -> index 0 (so state = 2)
+        
+        self.lexer_cache = {} # Cache for Pygments lexers to avoid repetitive instantiation
         
         self.current_theme = "Light"
         self.syntax_colors = {}
@@ -69,8 +77,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # but replace_file_content replaces range. I'll include the whole method for safety or careful chunks.)
         
         # Re-implementing formatting loop for standard markdown to ensure context is kept
-        header_pattern = QRegularExpression(r"^(#+)\s+(.+)")
-        header_match = header_pattern.match(text)
+        header_match = self.header_pattern_live.match(text)
         if header_match.hasMatch():
             header_format = QTextCharFormat()
             header_format.setFontWeight(QFont.Bold)
@@ -79,8 +86,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             if not is_active:
                 self.setFormat(header_match.capturedStart(1), header_match.capturedLength(1), self.hidden_format)
 
-        bold_pattern = QRegularExpression(r"(\*\*)(.*?)(\*\*)")
-        it = bold_pattern.globalMatch(text)
+        it = self.bold_pattern_live.globalMatch(text)
         while it.hasNext():
             match = it.next()
             fmt = QTextCharFormat()
@@ -90,8 +96,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
                 self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
                 
-        italic_pattern = QRegularExpression(r"(\*)(.*?)(\*)")
-        it = italic_pattern.globalMatch(text)
+        it = self.italic_pattern_live.globalMatch(text)
         while it.hasNext():
             match = it.next()
             fmt = QTextCharFormat()
@@ -204,10 +209,16 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         lang_idx = state - 2
         if 0 <= lang_idx < len(self.languages):
             lang_name = self.languages[lang_idx]
-            try:
-                lexer = get_lexer_by_name(lang_name, stripall=False)
-            except:
-                pass
+            
+            # Use Cache
+            if lang_name in self.lexer_cache:
+                lexer = self.lexer_cache[lang_name]
+            else:
+                try:
+                    lexer = get_lexer_by_name(lang_name, stripall=False)
+                    self.lexer_cache[lang_name] = lexer
+                except:
+                    pass
         
         if not lexer:
             return

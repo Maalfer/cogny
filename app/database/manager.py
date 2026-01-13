@@ -13,6 +13,7 @@ class DatabaseManager:
         # Performance & Concurrency Tuning
         conn.execute("PRAGMA journal_mode=WAL;") # Write-Ahead Logging allows concurrent readers
         conn.execute("PRAGMA synchronous=NORMAL;") # Faster, slightly less safe than FULL, but standard for desktop apps
+        conn.row_factory = sqlite3.Row # Access columns by name (faster C implementation than dict)
         
         return conn
 
@@ -52,7 +53,14 @@ class DatabaseManager:
         """)
         
         # Performance Indices
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_id);")
+        # Composite Index for Tree View: Filters by parent AND sorts by title in one go.
+        # This makes "Opening Folders" instantaneous and sorting essentially free.
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent_title ON notes(parent_id, title);")
+        
+        # We don't strictly need idx_notes_parent anymore if we have the composite one starting with parent_id,
+        # but existing DBs might have it. SQLite chooses the best one.
+        # cursor.execute("DROP INDEX IF EXISTS idx_notes_parent;") # Optional cleanup? Better keep for safety or drop if we are sure.
+        
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_images_note ON images(note_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);")
         
@@ -153,6 +161,14 @@ class DatabaseManager:
             params = [note_id] + present_ids
             cursor.execute(query, params)
             
+        conn.commit()
+        conn.close()
+
+    def delete_attachment(self, att_id: int):
+        """Delete an attachment by ID."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM attachments WHERE id = ?", (att_id,))
         conn.commit()
         conn.close()
 
@@ -335,41 +351,39 @@ class DatabaseManager:
         return rows
 
     def search_notes_fts(self, query: str) -> List[Tuple]:
-        """Search notes using FTS5 match."""
+        """Search notes using FTS5 match. (Legacy simple prefix search)"""
+        # ... existing logic wrapped or reused ...
+        sanitized = query.replace('"', '""').strip()
+        if not sanitized:
+             return []
+        fts_query = f'"{sanitized}"*' 
+        return self.advanced_search(fts_query)
+
+    def advanced_search(self, fts_query: str) -> List[Tuple]:
+        """
+        Execute a raw FTS5 query.
+        Returns: [(note_id, title, snippet)]
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
-        
-        # FTS Query Syntax: "title: query OR content: query" or simple token match.
-        # We want simple match across both columns.
-        # Also, FTS5 'rank' column gives relevance score.
         try:
-            # Using simple query parameter binding. 
-            # Note: For partial matches in FTS, we might need wildcard *. 
-            # e.g. "app*" matches apple. 
-            # User query might need processing.
-            
-            # Simple sanitization and wildcard appending
-            sanitized = query.replace('"', '""') # cleaning
-            if not sanitized.strip():
-                 return []
-                 
-            # Construct FTS query string. 
-            # Using standard MATCH. 
-            # We want partial match support -> "term*"
-            fts_query = f'"{sanitized}"*' 
-            
-            sql = """
-                SELECT rowid, title, rank 
-                FROM notes_fts 
-                WHERE notes_fts MATCH ? 
-                ORDER BY rank
-            """
-            cursor.execute(sql, (fts_query,))
-            rows = cursor.fetchall()
-        except sqlite3.OperationalError:
-            # Fallback if FTS table not ready or bad query syntax
-            return []
+             # We use snippet() function for context
+             # snippet(table, column_index, start_marker, end_marker, ellipses, max_tokens)
+             # Column 2 is content (0=title, 1=content? No, schema: rowid, title, content? FTS table is virtual.)
+             # notes_fts columns: title, content.
+             # snippet(notes_fts, 1, '<b>', '</b>', '...', 20) -> Snippet of content column
+             
+             sql = """
+                 SELECT rowid, title, snippet(notes_fts, 1, '<b>', '</b>', '...', 15) as snip, rank
+                 FROM notes_fts 
+                 WHERE notes_fts MATCH ? 
+                 ORDER BY rank
+             """
+             cursor.execute(sql, (fts_query,))
+             rows = cursor.fetchall()
+             return rows
+        except sqlite3.OperationalError as e:
+             print(f"FTS Error: {e}")
+             return []
         finally:
-            conn.close()
-            
-        return rows
+             conn.close()

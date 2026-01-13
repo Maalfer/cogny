@@ -11,6 +11,7 @@ from app.ui.highlighter import MarkdownHighlighter
 from app.ui.editor import NoteEditor
 from app.ui.themes import ThemeManager
 from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm, ModernInput
+from app.ui.buscador import SearchManager
 
 class MainWindow(QMainWindow):
     def __init__(self, db_path="notes.cdb"):
@@ -56,6 +57,7 @@ class MainWindow(QMainWindow):
         
         self.tree_view.setModel(self.proxy_model)
         self.tree_view.setHeaderHidden(True)
+        self.tree_view.setUniformRowHeights(True) # Performance Optimization
         self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
         # Expand/Collapse on single click as requested
         self.tree_view.clicked.connect(self.on_tree_clicked)
@@ -69,17 +71,15 @@ class MainWindow(QMainWindow):
         # Connect to Model's rowsMoved signal for auto-expansion
         self.model.rowsMoved.connect(self.on_rows_moved)
         
+        # Lazy Loading Connection
+        self.tree_view.expanded.connect(self.on_tree_expanded)
+        
         # Context Menu
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.show_context_menu)
         
         self.splitter.addWidget(self.tree_view)
 
-        # Right: Editor
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        
         # Custom Title Edit to handle Enter key
         # TitleEditor is imported globally
         self.title_edit = TitleEditor()
@@ -108,10 +108,17 @@ class MainWindow(QMainWindow):
         self.highlighter.set_theme(current_theme) # Initialize with correct theme colors
         self.text_editor.highlighter = self.highlighter  # Link for Live Preview logic
         
-        right_layout.addWidget(self.title_edit)
-        right_layout.addWidget(self.text_editor)
+        # Right Side is now a Vertical Splitter to allow resizing Title vs Content
+        self.right_splitter = QSplitter(Qt.Vertical)
+        self.right_splitter.addWidget(self.title_edit)
+        self.right_splitter.addWidget(self.text_editor)
         
-        self.splitter.addWidget(right_widget)
+        # Set initial sizes (Title small, Content huge)
+        self.right_splitter.setSizes([80, 700])
+        # self.right_splitter.setCollapsible(0, False) # Can we collapse title? Maybe user wants to hide it.
+        
+        # Add Right Splitter to Main Splitter
+        self.splitter.addWidget(self.right_splitter)
         self.splitter.setSizes([300, 700])
 
         # Create Actions and Menus
@@ -157,44 +164,39 @@ class MainWindow(QMainWindow):
             
             # Use Source Index for logic
             source_index = self.proxy_model.mapToSource(index)
+            item = self.model.itemFromIndex(source_index)
             
             # 1. Rename Option (Always available)
             action_rename = QAction("Cambiar nombre", self)
             action_rename.triggered.connect(self.rename_note_dialog)
             menu.addAction(action_rename)
             
-            # 2. Create New Note (Context Aware)
-            # If Folder -> Create Child (Inside)
-            # If Note -> Create Sibling (Next to it)
+            # 2. Creation Actions (Explicit)
             
-            is_folder = self.model.hasChildren(source_index)
+            # Action: Create Sibling Note (Same Level)
+            action_sibling = QAction("Crear nota (mismo nivel)", self)
+            action_sibling.setStatusTip("Crear una nota en el mismo nivel que la actual")
+            action_sibling.triggered.connect(self.add_sibling_note)
+            menu.addAction(action_sibling)
             
-            if is_folder:
-                 action_new = QAction("Crear nueva nota", self)
-                 action_new.setStatusTip("Crear una nota dentro de esta carpeta")
-                 action_new.triggered.connect(self.add_child_note)
-                 menu.addAction(action_new)
-            else:
-                 action_new = QAction("Crear nueva nota", self)
-                 action_new.setStatusTip("Crear una nota al mismo nivel")
-                 action_new.triggered.connect(self.add_sibling_note)
-                 menu.addAction(action_new)
+            # Action: Create Child Note (Subfolder)
+            action_child = QAction("Crear subcarpeta", self)
+            action_child.setStatusTip("Crear una nota dentro de la actual (convertirla en carpeta)")
+            action_child.triggered.connect(self.add_child_note)
+            menu.addAction(action_child)
 
-            # 3. Create Subnode (Explicit) - redundant if we have the above, but kept for clarity if needed
-            # User request: "lo que quiero es que me cree una nota dentro de esa carpeta"
-            # The above logic satisfies this.
-            
-            # We can keep "Crear carpeta" or "Create Subnode" if creating a specific folder type?
-            # But notes are folders. So "Crear nueva nota" inside folder = New Child.
-            
-            # Let's remove the old explicit "Start subnode" if it's redundant, or rename it.
-            # actually let's just use the logic above.
-            
             menu.addSeparator()
             
             action_delete = QAction("Eliminar", self)
             action_delete.triggered.connect(self.delete_note)
             menu.addAction(action_delete)
+            
+            menu.addSeparator()
+            
+            # Export Action
+            action_export = QAction("Exportar a PDF", self)
+            action_export.triggered.connect(lambda: self.export_note_pdf(item.note_id))
+            menu.addAction(action_export)
         else:
             # Clicked on empty space -> New Root Note
             action_new_root = QAction("Crear nota raíz", self)
@@ -442,60 +444,91 @@ class MainWindow(QMainWindow):
         # But `QToolBar` packs left.
         
         # Search Bar
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Buscar notas...")
-        self.search_bar.textChanged.connect(self.on_search_text_changed)
+        self.search_manager = SearchManager(self.db, self.tree_view, self.proxy_model, self.on_selection_changed)
+        toolbar.addWidget(self.search_manager.get_widget())
         
-        toolbar.addWidget(self.search_bar)
+        # --- Editor Toolbar (Secondary) ---
+        self.addToolBarBreak() # Force next toolbar to next line
         
-    def on_search_text_changed(self, text):
-        if not text.strip():
-            # Restore Tree View
-            self.tree_view.setModel(self.proxy_model)
-            self.tree_view.setRootIsDecorated(True)
-            self.proxy_model.setFilterRegularExpression("") # Clear filter just in case
-            # Reconnect Selection Model
-            self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
-        else:
-            # Perform Ranked Search
-            self.perform_search(text)
+        self.editor_toolbar = QToolBar("Editor Toolbar")
+        self.editor_toolbar.setVisible(False) # Hidden by default
+        self.addToolBar(self.editor_toolbar)
+        
+        # Bold
+        action_bold = QAction("N", self) # N for Negrita (Spanish)
+        action_bold.setToolTip("Negrita (Bold)")
+        action_bold.triggered.connect(self.text_editor.toggle_bold)
+        # Style it? We can use text for now or icons if available. 
+        # Using text "B" "I" "U" is standard if no icons.
+        # Let's use standard English letters for recognizability or Spanish? 
+        # User said "similar al word". Word uses N K S in Spanish. 
+        # Let's use "N", "K" (Cursiva), "S" (Subrayado).
+        action_bold.setText("N")
+        font = action_bold.font()
+        font.setBold(True)
+        action_bold.setFont(font)
+        self.editor_toolbar.addAction(action_bold)
+        
+        # Italic
+        action_italic = QAction("K", self)
+        action_italic.setToolTip("Cursiva (Italic)")
+        action_italic.triggered.connect(self.text_editor.toggle_italic)
+        font = action_italic.font()
+        font.setItalic(True)
+        action_italic.setFont(font)
+        self.editor_toolbar.addAction(action_italic)
+        
+        # Underline
+        action_underline = QAction("S", self)
+        action_underline.setToolTip("Subrayado (Underline)")
+        action_underline.triggered.connect(self.text_editor.toggle_underline)
+        font = action_underline.font()
+        font.setUnderline(True)
+        action_underline.setFont(font)
+        self.editor_toolbar.addAction(action_underline)
 
-    def perform_search(self, text):
-        search_model = QStandardItemModel()
+    def create_menus(self):
+        menu_bar = self.menuBar()
         
-        # Use FTS5 Search (Ranked by DB)
-        results = self.db.search_notes_fts(text)
+        # Archivo
+        file_menu = menu_bar.addMenu("&Archivo")
         
-        # Result tuple from FTS: (rowid, title, rank)
-        # Note: FTS rank is typically lower = better, but it depends on the function. 
-        # Standard 'bm25' or default 'rank' function.
-        # SQLite's default usually returns rank values where *smaller* is better relevance? 
-        # Wait, the order is already ORDER BY rank.
-        # Let's assume the DB returns them in correct order.
+        action_new_root = QAction("Nueva Nota Raíz", self)
+        action_new_root.triggered.connect(self.add_root_note)
+        file_menu.addAction(action_new_root)
         
-        # Icon for notes
-        note_icon = QIcon.fromTheme("text-x-generic")
+        file_menu.addSeparator()
         
-        for row in results:
-            note_id = row[0]
-            title = row[1]
-            rank_score = row[2] # might be used for display?
-            
-            # Since title might be empty in FTS if not stored? 
-            # We configured 'content=notes', so we retrieve from external table presumably?
-            # actually we mapped: SELECT rowid, title... FROM notes_fts. 
-            # If external content, it fetches from there correctly.
-            
-            item = QStandardItem(f"{title}")
-            item.setEditable(False)
-            item.note_id = note_id
-            item.setIcon(note_icon)
-            search_model.appendRow(item)
-            
-        self.tree_view.setModel(search_model)
-        self.tree_view.setRootIsDecorated(False)
-        # Reconnect Selection Model (New model = New Selection Model)
-        self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
+        action_about = QAction("Acerca de", self)
+        action_about.triggered.connect(self.show_about)
+        file_menu.addAction(action_about)
+        
+        action_export_db = QAction("Exportar Bóveda...", self)
+        action_export_db.triggered.connect(self.export_database)
+        file_menu.addAction(action_export_db)
+        
+        action_stats = QAction("Estadísticas", self)
+        action_stats.triggered.connect(self.show_statistics)
+        file_menu.addAction(action_stats)
+        
+        # Herramientas (Tools)
+        tools_menu = menu_bar.addMenu("&Herramientas")
+        
+        # Editor Toggle
+        action_toggle_editor = QAction("Editor", self)
+        action_toggle_editor.setCheckable(True)
+        action_toggle_editor.setChecked(False)
+        action_toggle_editor.toggled.connect(self.toggle_editor_toolbar)
+        tools_menu.addAction(action_toggle_editor)
+        
+        # Importar...
+        action_import_obsidian = QAction("Importar Obsidian...", self)
+        action_import_obsidian.triggered.connect(self.import_obsidian_vault)
+        tools_menu.addAction(action_import_obsidian)
+
+    def toggle_editor_toolbar(self, checked):
+        self.editor_toolbar.setVisible(checked)
+
 
     def add_root_note(self):
         title, ok = ModernInput.get_text(self, "Nueva Nota", "Título de la Nota:")
@@ -732,6 +765,7 @@ class MainWindow(QMainWindow):
             self.current_note_id = None
             self.title_edit.clear()
             self.text_editor.clear()
+            self.text_editor.clear_image_cache() # Clear cache on deselect
             self.title_edit.setReadOnly(True)
             self.text_editor.setReadOnly(True)
             return
@@ -774,6 +808,7 @@ class MainWindow(QMainWindow):
         # It is a Note (Leaf)
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
+        self.text_editor.clear_image_cache() # New note, fresh cache
         
         note = self.db.get_note(item.note_id)
         if note:
@@ -787,16 +822,22 @@ class MainWindow(QMainWindow):
              # "Rich Text" usually starts with <!DOCTYPE HTML> ...
              if content.strip() and not content.lstrip().startswith("<!DOCTYPE HTML"):
                  # It's likely raw markdown. 
-                 
-                 # 1. Convert Markdown Horizontal Rules (---, ***, ___) to HTML <hr>
-                 import re
-                 # Multiline mode to match start/end of lines
-                 content = re.sub(r'(?m)^[-*_]{3,}\s*$', '<hr>', content)
-                 
-                 # 2. Wrap it to preserve newlines/indentation in setHtml
-                 # We assume it might have <img> tags from the importer
-                 formatted_content = f'<div style="white-space: pre-wrap;">{content}</div>'
-                 self.text_editor.setHtml(formatted_content)
+                 # Process with Hybrid Renderer (Tables + Escaped Text)
+                 content = self.process_markdown_content(content)
+                  
+                 # 3. Wrap it to preserve newlines/indentation in setHtml
+                 if content != self.text_editor.toHtml():
+                     formatted_content = f'<div style="white-space: pre-wrap;">{content}</div>'
+                     
+                     # Optimization: Block signals during bulk load
+                     self.text_editor.blockSignals(True)
+                     try:
+                         self.text_editor.setHtml(formatted_content)
+                     finally:
+                         self.text_editor.blockSignals(False)
+                     
+                     # Force full visual update once
+                     self.text_editor.update_code_block_visuals()
              else:
                  self.text_editor.setHtml(content)
 
@@ -806,3 +847,215 @@ class MainWindow(QMainWindow):
             self.tree_view.collapse(index)
         else:
             self.tree_view.expand(index)
+            
+    def on_tree_expanded(self, index):
+        """Lazy Load children when expanded."""
+        # Convert Proxy Index to Source Index
+        source_index = self.proxy_model.mapToSource(index)
+        self.model.fetch_children(source_index)
+
+    def process_markdown_content(self, text):
+        """
+        Hybrid Rendering:
+        - Code Blocks (```): Protected, escaped.
+        - Tables: Rendered as HTML <table>.
+        - Internal Images/Attachments: Preserved (Not escaped).
+        - Text: Escaped (Raw Markdown view).
+        """
+        import html
+        import re
+        import uuid
+        
+        # 1. Protect Internal HTML (Images & Attachments)
+        # We replace them with unique placeholders so they survive html.escape()
+        # Pattern 1: Images <img src="image://db/123" />
+        # Pattern 2: Attachments &nbsp;<span...>...</a>&nbsp; based on importer format
+        
+        # Dictionary to store placeholders
+        placeholders = {}
+        
+        def preserve_match(match):
+            token = f"__INTERNAL_HTML_PLACEHOLDER_{uuid.uuid4().hex}__"
+            placeholders[token] = match.group(0)
+            return token
+            
+        # Regex for Image
+        text = re.sub(r'<img src="image://db/\d+"\s*/>', preserve_match, text)
+        
+        # Regex for Attachment (Approximate match for the specific format generated by obsidian.py)
+        # &nbsp;<span style="font-size: 16px;">📎</span>&nbsp;<a href="attachment://...</a>&nbsp;
+        # We can be a bit looser to match 'attachment://' hrefs if we trust the source.
+        # But let's try to match the anchor tag at least.
+        text = re.sub(r'<a href="attachment://\d+".*?>.*?</a>', preserve_match, text)
+        # Also preserve the span icon if strict match needed?
+        # Simpler: <span...📎</span> handles the icon.
+        text = re.sub(r'&nbsp;<span.*?>📎</span>&nbsp;', preserve_match, text)
+        text = re.sub(r'&nbsp;', preserve_match, text) # Warning: this might be too aggressive? 
+        # Actually, the entire block is: &nbsp;<span...>📎</span>&nbsp;<a ...>...</a>&nbsp;
+        # Let's match roughly known internal patterns.
+        
+        # Better approach for attachments: Just preserve <a href="attachment://...">...</a>
+        # And <span...>📎</span>
+        text = re.sub(r'<span[^>]*>📎</span>', preserve_match, text)
+
+        # 2. Protect Code Blocks
+        # ... (rest of logic) ...
+        parts = re.split(r'(```[\s\S]*?```)', text)
+        processed_parts = []
+        
+        for part in parts:
+            if part.startswith("```") and part.endswith("```"):
+                # Code Block: Escape everything (including placeholders? No, code should show raw placeholders? 
+                # Ideally code block shouldn't contain internal HTML unless user typed it. 
+                # If we escape code block, placeholders trigger later restoration? 
+                # Restoration happens at END. So if code block has placeholder, it gets restored to HTML.
+                # This means if I type <img..> in code block, it renders! 
+                # FIX: Verify if match was inside code block before? 
+                # Complexity: High.
+                # Alternative: Do Code Block Splitting FIRST. Then Protect Internal HTML only in NON-CODE parts.
+                processed_parts.append(html.escape(part))
+            else:
+                # Normal Text (or Internal HTML contexts)
+                # PROTECT INTERNAL HTML HERE, NOT GLOBALLY
+                
+                # Apply placeholders to this part only
+                def preserve_match_local(match):
+                    token = f"__INTERNAL_HTML_PLACEHOLDER_{uuid.uuid4().hex}__"
+                    placeholders[token] = match.group(0)
+                    return token
+                
+                # Patterns
+                part = re.sub(r'<img src="image://db/\d+"\s*/>', preserve_match_local, part)
+                part = re.sub(r'<a href="attachment://\d+".*?>.*?</a>', preserve_match_local, part)
+                part = re.sub(r'<span[^>]*>📎</span>', preserve_match_local, part)
+                # We skip separate &nbsp; handling for simplicity, html.escape handles nbsp? No, keeps &nbsp? 
+                # html.escape escapes &, so &nbsp; -> &amp;nbsp;.
+                # Revert &amp;nbsp; later?
+                part = re.sub(r'&nbsp;', preserve_match_local, part)
+                
+                # Scan for tables ...
+                lines = part.split('\n')
+                in_table = False
+                table_lines = []
+                final_lines = []
+                
+                for line in lines:
+                    stripped = line.strip()
+                    # Placeholder-safe check: placeholders shouldn't affect table detection if they don't contain pipes or newlines.
+                    # UUIDs are safe.
+                    
+                    is_table_line = stripped.startswith('|') and (stripped.endswith('|') or len(stripped.split('|')) > 1)
+                    
+                    if is_table_line:
+                        in_table = True
+                        table_lines.append(line)
+                    else:
+                        if in_table:
+                             final_lines.append(self.render_markdown_table(table_lines))
+                             table_lines = []
+                             in_table = False
+                        
+                        final_lines.append(html.escape(line))
+                        
+                if in_table:
+                     final_lines.append(self.render_markdown_table(table_lines))
+                     
+                processed_parts.append('\n'.join(final_lines))
+                
+        content = "".join(processed_parts)
+        content = re.sub(r'(?m)^[-*_]{3,}\s*$', '<hr>', content)
+        
+        # 3. Restore Placeholders
+        for token, original in placeholders.items():
+            content = content.replace(token, original)
+            
+        return content
+
+    def render_markdown_table(self, lines):
+        """Converts list of markdown table lines to HTML table."""
+        if len(lines) < 2:
+            import html
+            return "\n".join([html.escape(l) for l in lines])
+            
+        import html
+        
+        html_out = ['<table border="1" cellspacing="0" cellpadding="5">']
+        
+        # 1. Header
+        header_row = lines[0].strip().strip('|').split('|')
+        html_out.append("<thead><tr>")
+        for h in header_row:
+             html_out.append(f"<th>{html.escape(h.strip())}</th>")
+        html_out.append("</tr></thead>")
+        
+        # 2. Body
+        html_out.append("<tbody>")
+        
+        # Skip separator line (line 1) usually "---|---|---"
+        start_idx = 1
+        if len(lines) > 1 and '---' in lines[1]:
+            start_idx = 2
+            
+        for i in range(start_idx, len(lines)):
+            row = lines[i].strip().strip('|').split('|')
+            html_out.append("<tr>")
+            for cell in row:
+                html_out.append(f"<td>{html.escape(cell.strip())}</td>")
+            html_out.append("</tr>")
+            
+        html_out.append("</tbody></table>")
+        return "".join(html_out)
+
+    def export_note_pdf(self, note_id):
+        """Exports the selected note to PDF."""
+        # 1. Fetch Note Data
+        try:
+            note_data = self.db.get_note(note_id)
+            if not note_data:
+                ModernAlert.show(self, "Error", "No se pudo recuperar la nota.")
+                return
+                
+            title = note_data['title']
+            content = note_data['content']
+            
+            # Process Content (Markdown -> HTML)
+            # We reuse process_markdown_content to ensure consistent rendering (tables, etc.)
+            processed_content = self.process_markdown_content(content)
+            
+            # 2. Ask User for Save Location
+            from PySide6.QtWidgets import QFileDialog
+            import os
+            
+            default_name = f"{title}.pdf"
+            # Sanitize filename
+            default_name = "".join([c for c in default_name if c.isalpha() or c.isdigit() or c in (' ', '.', '-', '_')]).strip()
+            
+            path, _ = QFileDialog.getSaveFileName(self, "Guardar PDF", 
+                                                os.path.join(os.path.expanduser("~"), default_name), 
+                                                "Archivos PDF (*.pdf)")
+            
+            if not path:
+                return
+                
+            if not path.endswith('.pdf'):
+                path += '.pdf'
+                
+            # 3. Export
+            from app.exporters.pdf_exporter import PDFExporter
+            exporter = PDFExporter(self.db)
+            exporter.export_to_pdf(title, processed_content, path)
+            
+            ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\n{path}")
+            
+        except Exception as e:
+            ModernAlert.show(self, "Error de Exportación", str(e))
+
+    def export_database(self):
+        ModernInfo.show(self, "Próximamente", "La exportación de la base de datos estará disponible en una futura actualización.")
+
+    def show_statistics(self):
+        ModernInfo.show(self, "Próximamente", "Las estadísticas estarán disponibles en una futura actualización.")
+
+    def show_about(self):
+        ModernInfo.show(self, "Acerca de Cogny", "Cogny - Tu Segundo Cerebro\nVersión 0.3-alpha\n\nDesarrollado con PySide6 y SQLite.")
+

@@ -65,6 +65,23 @@ class ThemeManager:
                 margin-top: 20px;
                 margin-bottom: 20px;
             }}
+            /* Table Styling (Dark) */
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+                margin-top: 15px;
+                margin-bottom: 15px;
+            }}
+            th, td {{
+                border: 1px solid #454545;
+                padding: 8px;
+                text-align: left;
+            }}
+            th {{
+                background-color: #2D2D2D;
+                font-weight: bold;
+            }}
+            
             /* Inline Title Style */
             QPlainTextEdit#TitleEdit {{
                 font-size: 28px;
@@ -140,6 +157,22 @@ class ThemeManager:
                 height: 2px;
                 margin-top: 20px;
                 margin-bottom: 20px;
+            }}
+            /* Table Styling (Light) */
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+                margin-top: 15px;
+                margin-bottom: 15px;
+            }}
+            th, td {{
+                border: 1px solid #C0C0C0;
+                padding: 8px;
+                text-align: left;
+            }}
+            th {{
+                background-color: #EFEFEF;
+                font-weight: bold;
             }}
             /* Inline Title Style */
             QPlainTextEdit#TitleEdit {{

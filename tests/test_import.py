@@ -3,7 +3,7 @@ import unittest
 import sys
 import os
 import shutil
-from PySide6.QtWidgets import QApplication
+# from PySide6.QtWidgets import QApplication
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -11,12 +11,12 @@ from app.database.manager import DatabaseManager
 from app.importers.obsidian import ObsidianImporter
 
 class TestObsidianImport(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        if not QApplication.instance():
-            cls.app = QApplication([])
-        else:
-            cls.app = QApplication.instance()
+    # @classmethod
+    # def setUpClass(cls):
+    #     if not QApplication.instance():
+    #         cls.app = QApplication([])
+    #     else:
+    #         cls.app = QApplication.instance()
 
     def setUp(self):
         self.db_name = "test_import.cdb"
@@ -84,7 +84,12 @@ class TestObsidianImport(unittest.TestCase):
         # 4. Verify Content Replacement
         cursor.execute("SELECT content FROM notes WHERE title = 'NoteWithImage'")
         content = cursor.fetchone()[0]
-        self.assertIn("image://db/", content)
+        
+        # Strict check: Ensure format is exactly <img src="image://db/NUMBER" /> 
+        # This format is critical for MainWindow to detect and preserve it.
+        import re
+        self.assertTrue(re.search(r'<img src="image://db/\d+"\s*/>', content), 
+                        f"Content does not contain valid image tag. Content: {content}")
         
         # 5. Verify FTS
         # Search for "Markdown" (in Note1)

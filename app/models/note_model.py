@@ -1,4 +1,4 @@
-from PySide6.QtGui import QStandardItemModel, QIcon
+from PySide6.QtGui import QStandardItemModel, QIcon, QStandardItem
 from PySide6.QtCore import Qt, QMimeData, QByteArray, QDataStream, QIODevice
 from typing import Optional, Dict
 from app.models.note_item import NoteItem
@@ -11,41 +11,84 @@ class NoteTreeModel(QStandardItemModel):
         self.note_items: Dict[int, NoteItem] = {}
 
     def load_notes(self):
-        """Reloads the entire tree from the database."""
+        """Reloads the roots from the database (Lazy Loading)."""
         self.clear()
         self.setHorizontalHeaderLabels(["Notes"])
         self.note_items = {}
         
         conn = self.db._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, parent_id, title FROM notes ORDER BY parent_id NULLS FIRST, title")
-        rows = cursor.fetchall()
+        
+        # 1. Get Roots
+        cursor.execute("SELECT id, title FROM notes WHERE parent_id IS NULL ORDER BY title")
+        roots = cursor.fetchall()
+        
+        # 2. Get Set of Parent IDs (to know which roots have children)
+        # Faster than counting for each.
+        cursor.execute("SELECT DISTINCT parent_id FROM notes WHERE parent_id IS NOT NULL")
+        parents_with_children = {row[0] for row in cursor.fetchall()}
+        
         conn.close()
 
-        temp_items = {}
-        roots = []
-        
-        for r in rows:
-            nid, pid, title = r
+        # 3. Create Root Items
+        for r in roots:
+            nid = r['id']
+            title = r['title']
             item = NoteItem(nid, title)
-            temp_items[nid] = {'item': item, 'parent_id': pid}
             self.note_items[nid] = item
             
-        for nid, data in temp_items.items():
-            item = data['item']
-            pid = data['parent_id']
+            # Check if it has children -> Add Dummy
+            if nid in parents_with_children:
+                item.appendRow(QStandardItem("Loading..."))
+                item.setData(True, Qt.UserRole + 1) # Custom Role: HasUnfetchedChildren
             
-            if pid is None:
-                roots.append(item)
-            elif pid in self.note_items:
-                self.note_items[pid].appendRow(item)
-            else:
-                roots.append(item)
-                
-        for root in roots:
-            self.invisibleRootItem().appendRow(root)
+            self.invisibleRootItem().appendRow(item)
             
         # Update Icons
+        self.refresh_icons()
+
+    def fetch_children(self, parent_index):
+        """Fetches children for a node if they haven't been loaded yet."""
+        item = self.itemFromIndex(parent_index)
+        if not item:
+            return
+            
+        # Check flag
+        if not item.data(Qt.UserRole + 1):
+             return # Already loaded or no children
+             
+        # Clear Dummy "Loading..."
+        item.removeRow(0)
+        
+        # Fetch Children
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        
+        # Determine children
+        pid = item.note_id
+        cursor.execute("SELECT id, title FROM notes WHERE parent_id = ? ORDER BY title", (pid,))
+        children = cursor.fetchall()
+        
+        # Determine which children are also parents
+        cursor.execute("SELECT DISTINCT parent_id FROM notes WHERE parent_id IN (SELECT id FROM notes WHERE parent_id = ?)", (pid,))
+        grandparents = {row[0] for row in cursor.fetchall()}
+        
+        conn.close()
+        
+        for r in children:
+            nid = r['id']
+            title = r['title']
+            child_item = NoteItem(nid, title)
+            self.note_items[nid] = child_item
+            
+            if nid in grandparents:
+                child_item.appendRow(QStandardItem("Loading..."))
+                child_item.setData(True, Qt.UserRole + 1)
+                
+            item.appendRow(child_item)
+            
+        # Mark as fetched
+        item.setData(False, Qt.UserRole + 1)
         self.refresh_icons()
 
     def refresh_icons(self):

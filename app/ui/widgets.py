@@ -10,19 +10,8 @@ class TitleEditor(QPlainTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setTabChangesFocus(True)
-        self.textChanged.connect(self.update_height)
-        self.update_height()
-
-    def update_height(self):
-        doc_height = self.document().size().height()
-        margins = self.contentsMargins()
-        new_height = int(doc_height + 35) 
-        if new_height < 60: new_height = 60
-        self.setFixedHeight(new_height)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update_height()
+    # Removed update_height and resizeEvent to allow manual resizing via QSplitter
+    pass
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):

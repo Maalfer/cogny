@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Cogni
+Comment=Hierarchical Note Taking App
+Exec=python3 /home/mario/Escritorio/cogny/main.py
+Icon=/home/mario/Escritorio/cogny/assets/logo.png
+Type=Application
+Categories=Office;Utility;
+Terminal=false
+StartupWMClass=cogny.desktop

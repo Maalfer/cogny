@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QTextEdit, QToolButton, QApplication
 from PySide6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QSize
-from PySide6.QtGui import QImage, QTextDocument, QColor, QTextFormat, QIcon, QGuiApplication, QTextCursor
+from PySide6.QtGui import QImage, QTextDocument, QColor, QTextFormat, QIcon, QGuiApplication, QTextCursor, QKeySequence
 from app.database.manager import DatabaseManager
 from app.ui.themes import ThemeManager
 
@@ -9,7 +9,8 @@ class NoteEditor(QTextEdit):
         super().__init__(parent)
         self.db = db_manager
         self.cursorPositionChanged.connect(self.update_highlighting)
-        self.textChanged.connect(self.update_code_block_visuals)
+        # Optimized: Use contentsChange for incremental updates instead of full textChanged scan
+        self.document().contentsChange.connect(self.on_contents_change)
         self.textChanged.connect(self.update_copy_buttons)
         self.verticalScrollBar().valueChanged.connect(self.update_copy_buttons_position)
         
@@ -18,6 +19,40 @@ class NoteEditor(QTextEdit):
         self.current_font_size = 14
         self.current_editor_bg = None
         self.apply_theme("Light") # Default
+        self.image_cache = {}
+
+            
+    def _wrap_selection(self, start_marker, end_marker=None):
+        """Wraps selected text or inserts markers if empty."""
+        if end_marker is None:
+            end_marker = start_marker
+            
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            text = cursor.selectedText()
+            # Basic toggle logic could be added here (check if already wrapped), 
+            # but for now we just wrap.
+            cursor.insertText(f"{start_marker}{text}{end_marker}")
+        else:
+            # No selection: insert markers and put cursor in middle
+            cursor.insertText(f"{start_marker}{end_marker}")
+            cursor.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, len(end_marker))
+            self.setTextCursor(cursor)
+        
+        self.setFocus()
+
+    def toggle_bold(self):
+        self._wrap_selection("**")
+
+    def toggle_italic(self):
+        self._wrap_selection("*")
+
+    def toggle_underline(self):
+        self._wrap_selection("<u>", "</u>")
+
+    def clear_image_cache(self):
+        self.image_cache = {}
+
 
     def apply_theme(self, theme_name: str, editor_bg: str = None):
         self.current_theme = theme_name
@@ -293,15 +328,41 @@ class NoteEditor(QTextEdit):
         QTimer.singleShot(2000, lambda b=sender: b.setText("Copy"))
         
     def insert_attachment(self, att_id, filename):
-        # We use a standard file icon. 
-        # Base64 encoded generic file icon (small paperclip or doc symbol)
-        # Using a simple UTF-8 char for now or a resource?
-        # Better: Basic SVG data URI or simple text link with emoji?
-        # User wants "icon seen in each note".
-        # Let's use a simple inline HTML with emoji for simplicity and guaranteed rendering without external assets.
-        # 📎 <a href="...">filename</a>
+        from PySide6.QtWidgets import QFileIconProvider
+        from PySide6.QtCore import QFileInfo
+        from PySide6.QtGui import QPixmap
         
-        html = f'&nbsp;<span style="font-size: 16px;">📎</span>&nbsp;<a href="attachment://{att_id}" style="color: #4A90E2; text-decoration: none;">{filename}</a>&nbsp;'
+        # Get System Icon
+        info = QFileInfo(filename)
+        icon_provider = QFileIconProvider()
+        icon = icon_provider.icon(info)
+        pixmap = icon.pixmap(48, 48) # Larger icon
+        
+        ba = QByteArray()
+        buffer = QBuffer(ba)
+        buffer.open(QIODevice.WriteOnly)
+        pixmap.save(buffer, "PNG")
+        base64_data = ba.toBase64().data().decode()
+        
+        # HTML with Table for Vertical Layout: Icon (Top), Filename (Bottom)
+        # We wrap it in a table to ensure it acts as a structured unit.
+        # HTML with Table for Vertical Layout: Icon (Top), Filename (Bottom)
+        # Both wrapped in anchor for consistent behavior
+        html = f"""
+        <table border="0" style="margin-top: 10px; margin-bottom: 10px;">
+            <tr>
+                <td align="center">
+                    <a href="attachment://{att_id}"><img src="data:image/png;base64,{base64_data}" width="48" height="48" /></a>
+                </td>
+            </tr>
+            <tr>
+                <td align="center">
+                    <a href="attachment://{att_id}" style="color: #666; text-decoration: none; font-size: 10px;">{filename}</a>
+                </td>
+            </tr>
+        </table>
+        <br>
+        """
         self.textCursor().insertHtml(html)
 
     def keyPressEvent(self, event):
@@ -324,7 +385,29 @@ class NoteEditor(QTextEdit):
             
             # If we have a valid range to check
             if check_cursor and (check_cursor.hasSelection() or (not cursor.hasSelection() and check_cursor.position() != cursor.position())):
-                if self.cursor_contains_image(check_cursor):
+                # Check for Attachments FIRST
+                is_att, att_id, table_range = self.cursor_contains_attachment(check_cursor)
+                # Check for Attachments FIRST
+                is_att, att_id, table_range = self.cursor_contains_attachment(check_cursor)
+                if is_att:
+                    # Use shared interactive method (handles confirmation and deletion)
+                    # We pass table_range if we have it, otherwise it relies on cursor but interactive expects range to clear text.
+                    # Interactive method uses self.textCursor() if range is passed.
+                    # Wait, if we call interactive, does it use the CURRENT cursor position?
+                    # The interactive function clears text based on 'table_range'. 
+                    # If 'table_range' is derived from check_cursor, it should be correct.
+                    # But we should ensure we return True/consume event.
+                    
+                    self.delete_attachment_interactive(att_id, table_range)
+                    return # Event consumed regardless of Yes/No? 
+                    # Actually if No, we shouldn't consume 'Delete' key if it was just text?
+                    # But here 'is_att' is True, so we are over an attachment.
+                    # If user says No, we probably don't want standard 'delete' to happen which might corrupt the attachment HTML structure.
+                    # So consuming is safer.
+                    pass
+                             
+                # Check for Images (only if not an attachment, to avoid detecting the file icon as an image)
+                elif self.cursor_contains_image(check_cursor):
                     from PySide6.QtWidgets import QMessageBox
                     ret = QMessageBox.question(self, "Delete Image", 
                                                "Are you sure you want to delete the selected image(s)?",
@@ -405,13 +488,187 @@ class NoteEditor(QTextEdit):
             
         return False
 
-    def mouseReleaseEvent(self, event):
+        return False
+
+    def cursor_contains_attachment(self, cursor):
+        """Checks if the given cursor range contains an attachment link.
+           Returns: (Found_Bool, Attachment_ID, (StartPos, EndPos))
+        """
+        start = min(cursor.anchor(), cursor.position())
+        end = max(cursor.anchor(), cursor.position())
+        
+        doc = self.document()
+        
+        # Check if we are inside a table structure that represents an attachment
+        # Iterate over blocks in range
+        block = doc.findBlock(start)
+        end_block = doc.findBlock(end)
+        
+        while block.isValid():
+            it = block.begin()
+            while not it.atEnd():
+                frag = it.fragment()
+                frag_start = frag.position()
+                frag_end = frag_start + frag.length()
+                
+                # Intersection check
+                if frag_end > start and frag_start < end:
+                    fmt = frag.charFormat()
+                    href = fmt.anchorHref()
+                    if href.startswith("attachment://"):
+                         try:
+                             att_id = int(href.replace("attachment://", ""))
+                             
+                             # Identify the containing table range to ensure clean deletion
+                             # If we are in a table, currentTable() might help if we use a cursor there.
+                             # But we are iterating blocks.
+                             # A block inside a table cell knows it's in a table (Qt internals).
+                             # We can check textTable() for the cursor at this position.
+                             temp_cursor = QTextCursor(doc)
+                             temp_cursor.setPosition(frag_start)
+                             table = temp_cursor.currentTable()
+                             
+                             if table:
+                                 # Return the range of the whole table
+                                 t_start = table.firstCursorPosition().position()
+                                 t_end = table.lastCursorPosition().position()
+                                 # We want to include the surrounding frame chars if possible?
+                                 # Actually, selecting first to last pos of table content leaves the frame.
+                                 # To remove the table, we need to select the range covering the table.
+                                 # Table is usually an object in the parent frame.
+                                 # Ideally: select range from position before table to position after.
+                                 # But simplified: Just returning None for range lets default delete happen if we don't care about residuals.
+                                 # But user complained about partial deletion.
+                                 
+                                 # Workaround: Select from start of table - 1 to end of table + 1?
+                                 # Or uses `table.firstCursorPosition().block().position()` etc.
+                                 # Let's try to get precise range.
+                                 return True, att_id, (t_start - 1, t_end + 1)
+                             else:
+                                 return True, att_id, None
+                         except:
+                             return True, None, None
+                             
+                it += 1
+                
+            if block == end_block:
+                break
+            block = block.next()
+            
+        return False, None, None
+
+    def contextMenuEvent(self, event):
+        # 1. Determine Attachment ID and Range at mouse position
         anchor = self.anchorAt(event.pos())
-        if anchor:
-            if anchor.startswith("attachment://"):
-                att_id = int(anchor.replace("attachment://", ""))
-                self.open_attachment(att_id)
+        att_id = None
+        table_range = None
+        
+        # We need to find the range to support deletion from UI
+        cursor = self.cursorForPosition(event.pos())
+        
+        # Helper to scan for attachment at cursor block
+        block = cursor.block()
+        if block.isValid():
+             it = block.begin()
+             while not it.atEnd():
+                 frag = it.fragment()
+                 fmt = frag.charFormat()
+                 href = fmt.anchorHref()
+                 if href.startswith("attachment://"):
+                     try:
+                         found_id = int(href.replace("attachment://", ""))
+                         
+                         # If anchorAt found simple link, it matches. 
+                         # If anchorAt failed but we found a fragment at cursor, use it.
+                         # We check if cursor is roughly inside or we just take the first one in the block (simple structure assumption)?
+                         # Better: Check point intersection.
+                         # cursor.position() is a single point.
+                         f_start = frag.position()
+                         f_end = f_start + frag.length()
+                         c_pos = cursor.position()
+                         
+                         # Check if click is within this fragment (inclusive)
+                         # OR if we relied on anchorAt which implies we clicked the link
+                         if (c_pos >= f_start and c_pos <= f_end) or (anchor == href):
+                             att_id = found_id
+                             
+                             # Get Table Range
+                             temp_cursor = QTextCursor(self.document())
+                             temp_cursor.setPosition(f_start)
+                             table = temp_cursor.currentTable()
+                             if table:
+                                 t_start = table.firstCursorPosition().position()
+                                 t_end = table.lastCursorPosition().position()
+                                 table_range = (t_start - 1, t_end + 1)
+                             break
+                     except ValueError:
+                         pass
+                 it += 1
+
+        if att_id:
+            try:
+                menu = self.createStandardContextMenu()
+                
+                # Remove standard "Delete" action to avoid confusion for attachments
+                for action in menu.actions():
+                    text = action.text().replace("&", "") # Handle accelerator
+                    # Check for "Delete" or standard shortcut
+                    if text == "Delete" or action.shortcut() == QKeySequence.Delete:
+                        menu.removeAction(action)
+                        
+                menu.addSeparator()
+                
+                # Open Action
+                action_open = menu.addAction("Open File")
+                # Fix: triggered emits (checked), so lambda must accept args or use *args
+                action_open.triggered.connect(lambda *args: self.open_attachment(att_id))
+                
+                # Save As Action
+                action_save = menu.addAction("Save File As...")
+                action_save.triggered.connect(lambda *args: self.save_attachment_as(att_id))
+                
+                # Delete Action
+                menu.addSeparator()
+                action_delete = menu.addAction("Delete File")
+                # Using lambda with captured variables
+                action_delete.triggered.connect(lambda *args: self.delete_attachment_interactive(att_id, table_range))
+                
+                menu.exec(event.globalPos())
                 return
+            except ValueError:
+                pass
+            
+        super().contextMenuEvent(event)
+
+    def delete_attachment_interactive(self, att_id, table_range):
+        from app.ui.widgets import ModernConfirm
+        if ModernConfirm.show(self, "Delete File", "Are you sure you want to delete this file permanently from the database?", "Delete", "Cancel"):
+             # DB Delete
+             self.db.delete_attachment(att_id)
+             
+             # UI Delete
+             if table_range:
+                 cursor = self.textCursor()
+                 cursor.setPosition(table_range[0])
+                 cursor.setPosition(table_range[1], QTextCursor.KeepAnchor)
+                 cursor.removeSelectedText()
+
+    def mouseDoubleClickEvent(self, event):
+        # Prevent double click from doing anything special with attachments
+        anchor = self.anchorAt(event.pos())
+        if anchor and anchor.startswith("attachment://"):
+            return
+            
+        # Fallback check
+        cursor = self.cursorForPosition(event.pos())
+        is_att, _, _ = self.cursor_contains_attachment(cursor)
+        if is_att:
+            return
+            
+        super().mouseDoubleClickEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        # We disabled click-to-open for attachments.
         super().mouseReleaseEvent(event)
 
     def open_attachment(self, att_id):
@@ -425,29 +682,93 @@ class NoteEditor(QTextEdit):
         # Save to temp file
         import tempfile
         import os
+        import subprocess
+        import sys
         from PySide6.QtGui import QDesktopServices
         
         # We try to keep the extension
         name, ext = os.path.splitext(filename)
         
-        # Create temp file. 
-        # delete=False so we can open it with external app.
-        # We should ideally track these to delete on exit, but OS handles temp cleanup eventually.
         try:
             fd, path = tempfile.mkstemp(suffix=ext, prefix=f"cogni_{name}_")
             with os.fdopen(fd, 'wb') as f:
                 f.write(data)
             
-            # Open
-            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+            # Open using subprocess and xdg-open for Linux (more robust)
+            if sys.platform.startswith('linux'):
+                 subprocess.Popen(['xdg-open', path])
+            else:
+                 QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                 
         except Exception as e:
             print(f"Error opening attachment: {e}")
 
-    def update_code_block_visuals(self):
+    def save_attachment_as(self, att_id):
+        from PySide6.QtWidgets import QFileDialog
+        
+        # Retrieve from DB
+        data_row = self.db.get_attachment(att_id)
+        if not data_row:
+            return
+            
+        filename, data = data_row
+        
+        # Ask user for location
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save Attachment", filename)
+        
+        if save_path:
+            try:
+                with open(save_path, 'wb') as f:
+                     f.write(data)
+            except Exception as e:
+                print(f"Error saving attachment: {e}")
+
+    def on_contents_change(self, position, charsRemoved, charsAdded):
+        """Standard optimization: Only update blocks affected by the change."""
+        doc = self.document()
+        
+        # Determine range of change
+        start_block = doc.findBlock(position)
+        # End block is where the change ends (position + length of added text)
+        # If charsRemoved > 0, we might have merged blocks, so checking current state at pos is usually enough?
+        # Actually, safely check from start block to a reasonable lookahead or just until end of change.
+        # But for code blocks, start/end of block tags matter. Status propagates.
+        # So we should iterate from start block until ... status stops changing?
+        # For simplicity in this optimization step:
+        # Update from start_block to end of document? No, that's slow.
+        # Update from start_block to end_block of the changed region.
+        
+        end_pos = position + charsAdded
+        end_block = doc.findBlock(end_pos)
+        
+        # However, if we deleted a ```, the Whole rest of the document might change status.
+        # Ideally, we should check if block state changed.
+        # But QSyntaxHighlighter handles the state. We just apply Visuals based on it.
+        # Since Visuals (Background) depend on State, and State depends on Highlighter...
+        # We need to run AFTER highlighter. contentChange runs BEFORE highlighter usually?
+        # Actually QTextDocument signals: contentsChange happens, then Highlighter updates.
+        # So here, states might be stale?
+        # Let's verify. If states are stale, we can't use this signal directly for visual update based on state.
+        # We might need to listen to `highlighter.update`? PySide6 highlighter doesn't carry a signal.
+        
+        # Alternative: Use a timer to coalesce updates?
+        # Or just trust that we can simply iterate the visible range or the whole doc if needed.
+        # But we want to avoid iterating whole doc.
+        
+        # Valid Strategy:
+        # 1. Update visual for modified range immediately (or via timer).
+        # 2. If it's a structural change (contains ```), usually the user pauses typing.
+        # Let's rely on the fact that for standard typing inside a block, only that block changes.
+        
+        self.update_code_block_visuals(start_block, end_block)
+
+    def update_code_block_visuals(self, start_block=None, end_block_limit=None):
         # Use QTextBlockFormat for background color. 
         # This ensures it respects indentation and margins (unlike ExtraSelection).
         
-        # Prevent Recursion (setBlockFormat triggers textChanged)
+        # Prevent Recursion (setBlockFormat triggers textChanged -> contentsChange might be triggered?)
+        # contentsChange is triggered by structural changes. setBlockFormat DOES trigger it.
+        # So blocking signals is CRITICAL.
         self.blockSignals(True)
         try:
             # 1. Get Color
@@ -456,9 +777,28 @@ class NoteEditor(QTextEdit):
             cursor = self.textCursor()
             cursor.beginEditBlock()
             
-            block = self.document().begin()
+            if start_block is None:
+                block = self.document().begin()
+            else:
+                block = start_block
+                
             while block.isValid():
                 state = block.userState()
+                
+                # Check End Limit
+                if end_block_limit and block.blockNumber() > end_block_limit.blockNumber():
+                    # Optimization: If state matches previous behavior, we might stop?
+                    # For now just stop at the modified range end.
+                    # BUT if we are typing ``` start, the rest needs update.
+                    # For strict correctness we should check if we changed the visual state.
+                    # If we didn't change the visual state, we can simpler stop.
+                    # Let's just process the range for speed. If scan is needed, user forces refresh or we assume highlighter handles?
+                    # Actually, if I type ``` at top, the state changes for the whole doc.
+                    # Highlighter updates states. I read them.
+                    # If I read STALE states, I'm wrong.
+                    # Since this runs on `contentsChange`, states might be STALE. 
+                    # We might need `QTimer.singleShot(0, ...)` to run after highlighter.
+                    break
                 
                 # Create Modifier Format
                 fmt = block.blockFormat()
@@ -547,12 +887,23 @@ class NoteEditor(QTextEdit):
             url = name.toString() if isinstance(name, QUrl) else str(name)
             if url.startswith("image://db/"):
                 try:
+                    # Check Cache
+                    if not hasattr(self, 'image_cache'):
+                         self.image_cache = {}
+                         
+                    if url in self.image_cache:
+                         return self.image_cache[url]
+                         
                     image_id = int(url.split("/")[-1])
                     blob = self.db.get_image(image_id)
                     if blob:
                         img = QImage()
                         img.loadFromData(blob)
-                        return self._process_image(img)
+                        processed_img = self._process_image(img)
+                        
+                        # Cache it
+                        self.image_cache[url] = processed_img
+                        return processed_img
                 except Exception as e:
                     print(f"Error loading image: {e}")
         

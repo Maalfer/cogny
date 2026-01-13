@@ -10,6 +10,18 @@ def main():
     app.setOrganizationName("CognyApp")
     app.setApplicationName("Cogni")
     
+    # Linux Desktop Integration
+    # Crucial for wayland/gnome to associate window with .desktop file
+    app.setDesktopFileName("cogny") 
+    
+    # Set Global Icon
+    import os
+    from PySide6.QtGui import QIcon
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(base_dir, "assets", "logo.png")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    
     # Apply Fusion Style
     app.setStyle(QStyleFactory.create("Fusion"))
     
