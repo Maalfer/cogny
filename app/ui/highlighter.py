@@ -1,0 +1,230 @@
+from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QFont, QColor
+from PySide6.QtCore import QRegularExpression
+import pygments
+from pygments import lex
+from pygments.lexers import get_lexer_by_name, guess_lexer
+from pygments.formatters import HtmlFormatter
+from app.ui.themes import ThemeManager
+
+class MarkdownHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.highlighting_rules = []
+        self.active_block = None
+
+        # Headers (# Title)
+        header_format = QTextCharFormat()
+        header_format.setFontWeight(QFont.Bold)
+        header_format.setForeground(QColor("#4A90E2")) 
+        self.highlighting_rules.append((QRegularExpression(r"^#+ .+"), header_format))
+
+        # Bold (**text**)
+        bold_format = QTextCharFormat()
+        bold_format.setFontWeight(QFont.Bold)
+        self.highlighting_rules.append((QRegularExpression(r"\*\*.*?\*\*"), bold_format))
+        
+        # Italic (*text*)
+        italic_format = QTextCharFormat()
+        italic_format.setFontItalic(True)
+        self.highlighting_rules.append((QRegularExpression(r"\*.*?\*"), italic_format))
+        
+        self.code_format = QTextCharFormat()
+        self.code_format.setFontFamilies(["Consolas", "Monospace", "Courier New"])
+        self.code_format.setForeground(QColor("#D0D0D0"))
+        self.code_format = QTextCharFormat()
+        self.code_format.setFontFamilies(["Consolas", "Monospace", "Courier New"])
+        self.code_format.setForeground(QColor("#D0D0D0"))
+        # Background handled by Editor (Block Format)
+        
+        # Hidden format for markup characters
+        self.hidden_format = QTextCharFormat()
+        self.hidden_format.setForeground(QColor("transparent"))
+        self.hidden_format.setFontPointSize(0.1) # Collapse width
+        self.hidden_format.setFontStretch(0) # Minimal stretch
+        
+        # Dynamic Language Registry
+        self.languages = [] 
+        # Map: "python" -> index 0 (so state = 2)
+        
+        self.current_theme = "Light"
+        self.syntax_colors = {}
+        self.set_theme("Light") # Initial
+
+    def set_theme(self, theme_name):
+        self.current_theme = theme_name
+        self.syntax_colors = ThemeManager.get_syntax_colors(theme_name)
+        self.rehighlight()
+
+    def get_color(self, key):
+        return QColor(self.syntax_colors.get(key, self.syntax_colors["default"])) 
+
+    def highlightBlock(self, text):
+        # 0. Check if this block is active
+        is_active = (self.currentBlock() == self.active_block)
+
+        # Basic Markdown Rules (Headers, Bold, Italic) - Keep Live Preview Hiding
+        
+        # ... (Header Hiding Logic) ...
+        # (I will preserve the header/bold logic but only targeting the code part change to reduce diff size logic if possible, 
+        # but replace_file_content replaces range. I'll include the whole method for safety or careful chunks.)
+        
+        # Re-implementing formatting loop for standard markdown to ensure context is kept
+        header_pattern = QRegularExpression(r"^(#+)\s+(.+)")
+        header_match = header_pattern.match(text)
+        if header_match.hasMatch():
+            header_format = QTextCharFormat()
+            header_format.setFontWeight(QFont.Bold)
+            header_format.setForeground(QColor("#4A90E2"))
+            self.setFormat(0, len(text), header_format)
+            if not is_active:
+                self.setFormat(header_match.capturedStart(1), header_match.capturedLength(1), self.hidden_format)
+
+        bold_pattern = QRegularExpression(r"(\*\*)(.*?)(\*\*)")
+        it = bold_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            fmt = QTextCharFormat()
+            fmt.setFontWeight(QFont.Bold)
+            self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+            if not is_active:
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
+                
+        italic_pattern = QRegularExpression(r"(\*)(.*?)(\*)")
+        it = italic_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            fmt = QTextCharFormat()
+            fmt.setFontItalic(True)
+            self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+            if not is_active:
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
+
+
+        # Code Block Logic
+        self.setCurrentBlockState(0)
+
+        start_expression = QRegularExpression(r"^```")
+        
+        previous_state = self.previousBlockState()
+        
+        # STATE MANAGEMENT:
+        # 0 = Markdown Normal
+        # 1 = Generic Code Block
+        # 100 = End of Block (Transient)
+        # N >= 2 = Language specific. Index = N - 2 in self.languages
+        
+        meta_format = QTextCharFormat()
+        meta_format.setForeground(QColor("#808080")) # Gray for delimiters
+        meta_format.setFontFamilies(["Consolas", "Monospace", "JetBrains Mono"])
+        
+        current_state = 0
+        
+        # If previous was code block (and not end), continue
+        if previous_state > 0 and previous_state != 100:
+            current_state = previous_state
+        
+        match = start_expression.match(text)
+        if match.hasMatch():
+            if previous_state <= 0 or previous_state == 100:
+                lang_str = text.strip().replace("```", "").lower().strip()
+                
+                if not lang_str:
+                    current_state = 1
+                else:
+                    try:
+                        if lang_str not in self.languages:
+                            self.languages.append(lang_str)
+                        current_state = self.languages.index(lang_str) + 2
+                    except ValueError:
+                         current_state = 1
+
+                # Format the delimiter line
+                self.setFormat(0, len(text), meta_format)
+                self.setCurrentBlockState(current_state)
+                return
+        
+        if current_state > 0:
+            if text.strip() == "```":
+                # Ending line
+                self.setFormat(0, len(text), meta_format)
+                self.setCurrentBlockState(100) # Signal end state
+                return
+            else:
+                # Inside block
+                self.setFormat(0, len(text), self.code_format)
+                self.highlight_with_pygments(text, current_state)
+                self.setCurrentBlockState(current_state)
+                return
+
+    def highlight_with_pygments(self, text, state):
+        lexer = None
+        
+        if state == 1:
+            # Generic, no highlighting or guess?
+            # Creating a guess lexer is expensive per line.
+            # Just keep plain color or simple one.
+            return
+            
+        lang_idx = state - 2
+        if 0 <= lang_idx < len(self.languages):
+            lang_name = self.languages[lang_idx]
+            try:
+                lexer = get_lexer_by_name(lang_name, stripall=False)
+            except:
+                pass
+        
+        if not lexer:
+            return
+
+        # Token mapping
+        tokens = pygments.lex(text, lexer)
+        
+        index = 0
+        from pygments.token import Keyword, Name, Comment, String, Number, Operator
+        
+        for token, content in tokens:
+            length = len(content)
+            fmt = QTextCharFormat()
+            fmt.setFontFamilies(["Consolas", "Monospace", "JetBrains Mono"])
+            # Background is handled by Editor ExtraSelection usually, but we can enforce it?
+            # No, text char format background overrides editor background usually.
+            # But we want the block background.
+            # Let's LEAVE background transparent here so the Editor's block selection shows through.
+            # UNLESS we want specific token backgrounds. Only text color for now.
+            
+            color_key = "default"
+            
+            if token in Keyword:
+                color_key = "keyword"
+            elif token in String:
+                color_key = "string"
+            elif token in Comment:
+                color_key = "comment"
+            elif token in Name.Function:
+                color_key = "function"
+            elif token in Name.Class:
+                color_key = "class"
+            elif token in Number:
+                color_key = "number"
+            elif token in Operator:
+                color_key = "operator"
+            elif token in Name.Decorator:
+                color_key = "decorator"
+            elif token in Name.Builtin.Pseudo:
+                color_key = "keyword_pseudo"
+            elif token in Name.Builtin:
+                color_key = "function" # Treat builtins like echo/print as functions
+            elif token in Name.Namespace:
+                color_key = "class"
+            elif token in Name.Variable:
+                color_key = "default" # Or specific variable color if we add one
+            
+            fmt.setForeground(self.get_color(color_key))
+            
+            if token in Keyword:
+                 fmt.setFontWeight(QFont.Bold)
+            
+            self.setFormat(index, length, fmt)
+            index += length
