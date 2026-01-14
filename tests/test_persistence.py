@@ -28,20 +28,21 @@ def test_last_note_persistence():
         window1.show()
         
         # Add Note
-        root_id = window1.model.add_note("Persistent Note", None)
-        window1.tree_view.expandAll() # Ensure visible
+        root_id = window1.sidebar.model.add_note("Persistent Note", None)
+        window1.sidebar.tree_view.expandAll() # Ensure visible
         
         # Select it
-        item = window1.model.note_items[root_id]
+        item = window1.sidebar.model.note_items[root_id]
         idx = item.index()
-        window1.tree_view.setCurrentIndex(idx)
+        proxy_idx = window1.sidebar.proxy_model.mapFromSource(idx)
+        window1.sidebar.tree_view.setCurrentIndex(proxy_idx)
         app.processEvents()
         
-        current_id = window1.current_note_id
+        current_id = window1.editor_area.current_note_id
         print(f"Selected Note ID: {current_id}")
         
         if current_id != root_id:
-            print("FAIL: Selection failed.")
+            print(f"FAIL: Selection failed. got {current_id} expected {root_id}")
             return False
             
         # Simulate Close
@@ -56,7 +57,7 @@ def test_last_note_persistence():
         window2.show()
         app.processEvents()
         
-        restored_id = window2.current_note_id
+        restored_id = window2.editor_area.current_note_id
         print(f"Restored Note ID: {restored_id}")
         
         if restored_id == root_id:

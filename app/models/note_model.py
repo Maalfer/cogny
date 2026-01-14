@@ -106,9 +106,12 @@ class NoteTreeModel(QStandardItemModel):
 
     def refresh_icons(self):
         """Updates icons: Explicit Folders or Roots/Parents get Folder Icon."""
-        folder_icon = QIcon.fromTheme("folder")
-        subfolder_icon = QIcon.fromTheme("folder-documents", QIcon.fromTheme("folder")) 
-        note_icon = QIcon.fromTheme("text-x-generic") 
+        from PySide6.QtWidgets import QApplication, QStyle
+        style = QApplication.style()
+        
+        # Use Standard Icons to ensure consistency
+        folder_icon = style.standardIcon(QStyle.SP_DirIcon)
+        note_icon = style.standardIcon(QStyle.SP_FileIcon) 
         
         for item in list(self.note_items.values()):
             try:
@@ -127,7 +130,7 @@ class NoteTreeModel(QStandardItemModel):
                 is_explicit_folder = getattr(item, 'is_folder', False)
                 has_children = item.rowCount() > 0
                 
-                if is_explicit_folder or has_children:
+                if is_explicit_folder:
                     item.setIcon(folder_icon)
                 else:
                     item.setIcon(note_icon)

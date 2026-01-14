@@ -1,6 +1,9 @@
 import unittest
 from PySide6.QtWidgets import QApplication, QMenu
-from PySide6.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex, QPoint
+
+
+
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 from app.ui.main_window import MainWindow
 from app.database.manager import DatabaseManager
@@ -35,12 +38,12 @@ class TestContextMenu(unittest.TestCase):
     def test_add_sibling_note_no_crash(self):
         """Test that add_sibling_note does not crash (name error fix)."""
         # Create a root note
-        self.window.model.add_note("Root Note", None)
+        self.window.sidebar.model.add_note("Root Note", None)
         
         # Select it
-        index = self.window.model.index(0, 0)
-        proxy_index = self.window.proxy_model.mapFromSource(index)
-        self.window.tree_view.setCurrentIndex(proxy_index)
+        index = self.window.sidebar.model.index(0, 0)
+        proxy_index = self.window.sidebar.proxy_model.mapFromSource(index)
+        self.window.sidebar.tree_view.setCurrentIndex(proxy_index)
         
         # Call add_sibling_note directly
         # We need to mock the input dialog or it will block
@@ -49,14 +52,13 @@ class TestContextMenu(unittest.TestCase):
         # The menu error was AFTER the dialog. So we need to bypass dialog.
         
         # Monkey patch ModernInput.get_text
-        original_get_text = self.window.title_edit.__class__.__module__ # wait, imported in main_window
         from app.ui.widgets import ModernInput
         
         original_get_text = ModernInput.get_text
         ModernInput.get_text = lambda parent, title, label, text="": ("Sibling Note", True)
         
         try:
-            self.window.add_sibling_note()
+            self.window.sidebar.add_sibling_note()
             # If it had the 'menu.exec_' error, it would raise NameError here
         except NameError as e:
             self.fail(f"add_sibling_note raised NameError: {e}")
@@ -65,19 +67,25 @@ class TestContextMenu(unittest.TestCase):
              
     def test_context_menu_logic(self):
         """Test that context menu shows correct options for Folder vs Note."""
-        # Create Folder (Note with child)
-        self.window.model.add_note("Folder", None)
-        folder_idx = self.window.model.index(0, 0)
-        folder_item = self.window.model.itemFromIndex(folder_idx)
-        self.window.model.add_note("Child", folder_item.note_id)
+        # 1. Test Folder
+        # Create explicit folder
+        self.window.sidebar.model.add_note("Explicit Folder", None, is_folder=True)
+        folder_id = [k for k in self.window.sidebar.model.note_items.keys() if self.window.sidebar.model.note_items[k].text() == "Explicit Folder"][0]
+        folder_item = self.window.sidebar.model.note_items[folder_id]
         
         # Select Folder
-        proxy_folder = self.window.proxy_model.mapFromSource(folder_idx)
+        folder_idx = folder_item.index()
+        proxy_folder = self.window.sidebar.proxy_model.mapFromSource(folder_idx)
+        self.window.sidebar.tree_view.setCurrentIndex(proxy_folder)
         
         # Mock QMenu.addAction to inspect
         actions = []
-        original_addAction = QMenu.addAction
+        original_exec = QMenu.exec
         
+        # We also need to mock exec because show_context_menu calls it
+        QMenu.exec = lambda self, pos: None
+        
+        original_addAction = QMenu.addAction
         def mock_addAction(self, action):
             actions.append(action.text())
             original_addAction(self, action)
@@ -85,21 +93,48 @@ class TestContextMenu(unittest.TestCase):
         QMenu.addAction = mock_addAction
         
         try:
-            # Trigger context menu logic (without exec)
-            # We can't easily intercept the internal QMenu creation in show_context_menu
-            # unless we mock QMenu class entirely or inspect the method logic.
-            # But show_context_menu creates a generic QMenu().
-            pass 
+            # Trigger context menu
+            # We assume position 0,0 maps to index if we make sure viewport logic works, 
+            # but simplest is calling show_context_menu with a point that maps to the selected index?
+            # Or simpler: Bypass validation logic inside show_context_menu?
+            # NO, show_context_menu uses indexAt(pos). Validating that is hard in unit test without UI render.
+            # However, we can trick it by mocking indexAt?
+            # Or we can refactor show_context_menu to accept explicit index? No, it's slot.
+            
+            # Monkey Patch indexAt
+            original_indexAt = self.window.sidebar.tree_view.indexAt
+            self.window.sidebar.tree_view.indexAt = lambda pos: proxy_folder
+            
+            self.window.sidebar.show_context_menu(QPoint(0,0))
+            
+            # Verify Actions for Folder
+            print("Actions for Folder:", actions)
+            self.assertIn("Crear nota en esta carpeta", actions)
+            self.assertNotIn("Exportar a PDF", actions)
+            
+            # Reset
+            actions.clear()
+            self.window.sidebar.tree_view.indexAt = original_indexAt
+            
+            # 2. Test Note
+            self.window.sidebar.model.add_note("Regular Note", None, is_folder=False)
+            note_id = [k for k in self.window.sidebar.model.note_items.keys() if self.window.sidebar.model.note_items[k].text() == "Regular Note"][0]
+            note_item = self.window.sidebar.model.note_items[note_id]
+            note_idx = note_item.index()
+            proxy_note = self.window.sidebar.proxy_model.mapFromSource(note_idx)
+            
+            # Monkey Patch indexAt for Note
+            self.window.sidebar.tree_view.indexAt = lambda pos: proxy_note
+            
+            self.window.sidebar.show_context_menu(QPoint(0,0))
+            
+            print("Actions for Note:", actions)
+            self.assertIn("Exportar a PDF", actions)
+            self.assertIn("Crear nota (mismo nivel)", actions)
+            
+            # Restore
+            self.window.sidebar.tree_view.indexAt = original_indexAt
+            
         finally:
             QMenu.addAction = original_addAction
-            
-        # Alternative: Check hasChildren logic
-        self.assertTrue(self.window.model.hasChildren(folder_idx))
-        
-        # If hasChildren is True, show_context_menu should add action with statusTip "Crear una nota dentro de esta carpeta"
-        # We can't easily assert the specific QAction created inside the method purely from outside 
-        # without Refactoring show_context_menu to return the menu or factory it.
-        # But the crash test above verifies the main bug.
-
-if __name__ == '__main__':
-    unittest.main()
+            QMenu.exec = original_exec
