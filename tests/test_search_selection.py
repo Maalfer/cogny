@@ -25,6 +25,13 @@ class TestSearchSelection(unittest.TestCase):
         self.db.clear_database()
         self.window = MainWindow(self.db_name)
         
+        # Patch synchronous loader
+        original_loader_cls = self.window.NoteLoaderWorker
+        class SyncLoader(original_loader_cls):
+            def start(self, priority=None):
+                self.run()
+        self.window.NoteLoaderWorker = SyncLoader
+        
         # Add Data
         self.db.add_note("SelectionTest", None, "Content") 
         
@@ -35,7 +42,8 @@ class TestSearchSelection(unittest.TestCase):
             os.remove(self.db_name)
 
     def test_search_icon_and_selection(self):
-        self.window.on_search_text_changed("SelectionTest")
+        # Bypass Debounce Timer for testing
+        self.window.search_manager.perform_smart_search("SelectionTest")
         
         model = self.window.tree_view.model()
         self.assertEqual(model.rowCount(), 1)

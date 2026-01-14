@@ -15,10 +15,10 @@ class MockDB:
         # We mock load_notes so this isn't needed
         return None
         
-    def add_note(self, title, parent_id=None):
+    def add_note(self, title, parent_id=None, is_folder=False):
         nid = self.counter
         self.counter += 1
-        self.notes[nid] = {'title': title, 'parent_id': parent_id}
+        self.notes[nid] = {'title': title, 'parent_id': parent_id, 'is_folder': is_folder}
         return nid
         
     def move_note_to_parent(self, note_id, new_parent_id):

@@ -41,7 +41,10 @@ class ObsidianExporter:
         # check if manager.get_children returns full rows or list of tuples
         # implementation says: SELECT id, title FROM notes ...
         
-        for (note_id, title) in children:
+        for row in children:
+            # Handle 2 or 3 tuple (id, title) or (id, title, is_folder)
+            note_id = row[0]
+            title = row[1]
             # Get full note data (content)
             note_row = self.db.get_note(note_id)
             # note_row is likely (id, parent_id, title, content, created_at, updated_at) - see init_db schema

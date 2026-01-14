@@ -625,11 +625,24 @@ class NoteEditor(QTextEdit):
             try:
                 menu = self.createStandardContextMenu()
                 
-                # ... (Attachment Menu Logic - Existing) ...
-                # Simplified for brevity in replacement, but I must match exact target or reuse existing.
-                # Since I'm using MultiReplace, I can target specific insertion points or full block replacement.
-                # However, I also need to ADD Table logic to context menu.
-                pass 
+                # Attachment Actions
+                action_open = menu.addAction("Open File")
+                action_open.triggered.connect(lambda _: self.open_attachment(att_id))
+                
+                action_save_as = menu.addAction("Save File As...")
+                action_save_as.triggered.connect(lambda _: self.save_attachment_as(att_id))
+                
+                # Remove standard delete if present to avoid confusion
+                for action in menu.actions():
+                    if "Delete" in action.text() or "Eliminar" in action.text():
+                         menu.removeAction(action)
+                         
+                action_delete = menu.addAction("Delete File")
+                # Pass table_range to delete handler to remove text too
+                action_delete.triggered.connect(lambda _: self.delete_attachment_interactive(att_id, table_range))
+                
+                menu.exec(event.globalPos())
+                return 
             except ValueError:
                 pass
                 

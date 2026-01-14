@@ -15,15 +15,29 @@ class TestNoteApp(unittest.TestCase):
         self.db_path = "test_env_notes.cdb"
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
+            
+        # 1. Initialize Window
         self.window = MainWindow(self.db_path)
         
-    def tearDown(self):
-        self.window.close()
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        # 2. Patch Worker to be Synchronous
+        # We replace start() with a method that runs run() immediately in main thread?
+        # NoteLoaderWorker run() emits finished signal.
+        # But run() does DB IO.
+        # Ideally we replace NoteLoaderWorker class on the instance or class.
+        
+        # Monkey Patch the class inside the method or globally?
+        # Better: create a MockWorker that runs synchronously.
+        
+        original_loader_cls = self.window.NoteLoaderWorker
+        
+        class SyncLoader(original_loader_cls):
+            def start(self, priority=None):
+                self.run() # Run synchronously
+                
+        self.window.NoteLoaderWorker = SyncLoader
 
     def test_window_title(self):
-        self.assertEqual(self.window.windowTitle(), "Cogni")
+        self.assertEqual(self.window.windowTitle(), "Cogny")
         
     def test_add_root_note(self):
         # Programmatically call add note logic since QInputDialog blocks
@@ -61,14 +75,15 @@ class TestNoteApp(unittest.TestCase):
         # Test Selection and Editing
         # Select Child
         index = self.window.model.indexFromItem(child_item)
-        self.window.tree_view.setCurrentIndex(index)
+        proxy_index = self.window.proxy_model.mapFromSource(index)
+        self.window.tree_view.setCurrentIndex(proxy_index)
         
         # Check Editor Title (loaded from DB)
-        self.assertEqual(self.window.title_edit.text(), "Child")
+        self.assertEqual(self.window.title_edit.toPlainText(), "Child")
         
         # Edit Content
         self.window.text_editor.setPlainText("Hello World")
-        self.window.title_edit.setText("Child Renamed")
+        self.window.title_edit.setPlainText("Child Renamed")
         
         # Save
         self.window.save_current_note()
@@ -134,7 +149,7 @@ class TestNoteApp(unittest.TestCase):
         # Let's rely on manual setting of current_note_id + on_selection_changed trigger simulation for unit test
         
         self.window.current_note_id = note1_id
-        self.window.title_edit.setText("Modified Note 1")
+        self.window.title_edit.setPlainText("Modified Note 1")
         # We need to simulate the editor content change
         self.window.text_editor.setHtml("Modified Content")
         
@@ -171,7 +186,8 @@ class TestNoteApp(unittest.TestCase):
         # Select
         root_item = self.window.model.item(0)
         index = self.window.model.indexFromItem(root_item)
-        self.window.tree_view.setCurrentIndex(index)
+        proxy_index = self.window.proxy_model.mapFromSource(index)
+        self.window.tree_view.setCurrentIndex(proxy_index)
         
         # Helper to simulate delete without blocking popup
         # We can mock QMessageBox or just call the logic that triggers delete if we separated it.
@@ -424,9 +440,10 @@ print("Hello World")
         
         self.assertIsNotNone(item_found)
         index = self.window.model.indexFromItem(item_found)
+        proxy_index = self.window.proxy_model.mapFromSource(index)
         
         # 3. Trigger Load
-        self.window.on_selection_changed(index, QModelIndex())
+        self.window.on_selection_changed(proxy_index, QModelIndex())
         
         # 4. Check Editor Content
         loaded_inv = self.window.text_editor.toPlainText()

@@ -222,7 +222,7 @@ class TestAttachmentHandling(unittest.TestCase):
                             # Signal mock helper
                             actions = {}
                             
-                            def add_action_side_effect(text):
+                            def add_action_side_effect(text, *args):
                                 action_mock = MagicMock()
                                 actions[text] = action_mock
                                 return action_mock
