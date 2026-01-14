@@ -70,7 +70,7 @@ class EditorArea(QWidget):
         # Cancel previous loader
         if self.note_loader and self.note_loader.isRunning():
             self.note_loader.cancel()
-            self.note_loader.wait(50)
+            self.note_loader.wait() # Wait for thread to finish to prevent crash
             self.note_loader.deleteLater()
             self.note_loader = None
             

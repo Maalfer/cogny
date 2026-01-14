@@ -41,7 +41,7 @@ class ObsidianImporter:
                 if progress_callback: progress_callback(f"Creando carpeta: {d}")
                 
                 # Create Folder Note
-                note_id = self.db.add_note(d, parent_id, "")
+                note_id = self.db.add_note(d, parent_id, "", is_folder=True)
                 dir_map[full_path] = note_id
 
             files.sort()

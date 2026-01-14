@@ -68,8 +68,10 @@ class TestObsidianImport(unittest.TestCase):
         self.assertGreaterEqual(count, 4)
         
         # 2. Verify Hierarchy
-        cursor.execute("SELECT id FROM notes WHERE title = 'Folder1'")
-        folder_id = cursor.fetchone()[0]
+        cursor.execute("SELECT id, is_folder FROM notes WHERE title = 'Folder1'")
+        folder_data = cursor.fetchone()
+        folder_id = folder_data[0]
+        self.assertTrue(bool(folder_data[1]), "Folder1 should have is_folder=1")
         
         cursor.execute("SELECT parent_id FROM notes WHERE title = 'SubNote1'")
         subnote_parent = cursor.fetchone()[0]
