@@ -21,17 +21,39 @@ class DatabaseManager:
         """Initialize the database tables."""
         conn = self._get_connection()
         cursor = conn.cursor()
+        
+        # Enable column addition for existing tables if needed
+        # SQLite supports adding columns directly, but we check if we need to migrate first.
+        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 parent_id INTEGER,
                 title TEXT NOT NULL,
                 content TEXT,
+                is_folder BOOLEAN DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (parent_id) REFERENCES notes (id) ON DELETE CASCADE
             )
         """)
+        
+        # Migration: Check if is_folder column exists (for existing DBs)
+        cursor.execute("PRAGMA table_info(notes)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if "is_folder" not in columns:
+            print("Migrating Database: Adding is_folder column...")
+            cursor.execute("ALTER TABLE notes ADD COLUMN is_folder BOOLEAN DEFAULT 0")
+            
+            # Auto-migrate implicit folders (notes with children)
+            print("Migrating Implicit Folders...")
+            cursor.execute("""
+                UPDATE notes 
+                SET is_folder = 1 
+                WHERE id IN (SELECT DISTINCT parent_id FROM notes WHERE parent_id IS NOT NULL)
+            """)
+            conn.commit()
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,19 +75,11 @@ class DatabaseManager:
         """)
         
         # Performance Indices
-        # Composite Index for Tree View: Filters by parent AND sorts by title in one go.
-        # This makes "Opening Folders" instantaneous and sorting essentially free.
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent_title ON notes(parent_id, title);")
-        
-        # We don't strictly need idx_notes_parent anymore if we have the composite one starting with parent_id,
-        # but existing DBs might have it. SQLite chooses the best one.
-        # cursor.execute("DROP INDEX IF EXISTS idx_notes_parent;") # Optional cleanup? Better keep for safety or drop if we are sure.
-        
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_images_note ON images(note_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);")
         
         # FTS5 Virtual Table for Fast Search
-        # We use external content table 'notes' to save space.
         cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
                 title, 
@@ -211,8 +225,6 @@ class DatabaseManager:
         
         # 4. Integrity Check
         cursor.execute("PRAGMA integrity_check")
-        # row = cursor.fetchone()
-        # if row[0] != 'ok': ... (We just run it to let SQLite fix internal page issues if possible? No, it just checks. REINDEX helps.)
         
         conn.commit()
         conn.close()
@@ -237,14 +249,14 @@ class DatabaseManager:
         conn.commit()
         conn.close()
 
-    def add_note(self, title: str, parent_id: Optional[int] = None, content: str = "") -> int:
+    def add_note(self, title: str, parent_id: Optional[int] = None, content: str = "", is_folder: bool = False) -> int:
         """Add a new note and return its ID."""
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO notes (title, parent_id, content) VALUES (?, ?, ?)",
-                (title, parent_id, content)
+                "INSERT INTO notes (title, parent_id, content, is_folder) VALUES (?, ?, ?, ?)",
+                (title, parent_id, content, 1 if is_folder else 0)
             )
             note_id = cursor.lastrowid
             conn.commit()
@@ -300,9 +312,9 @@ class DatabaseManager:
         try:
             cursor = conn.cursor()
             if parent_id is None:
-                cursor.execute("SELECT id, title FROM notes WHERE parent_id IS NULL")
+                cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id IS NULL")
             else:
-                cursor.execute("SELECT id, title FROM notes WHERE parent_id = ?", (parent_id,))
+                cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id = ?", (parent_id,))
             rows = cursor.fetchall()
             return rows
         finally:

@@ -166,34 +166,31 @@ class MainWindow(QMainWindow):
             source_index = self.proxy_model.mapToSource(index)
             item = self.model.itemFromIndex(source_index)
             
-            # 1. Rename Option (Always available)
+            # 1. Rename Option
             action_rename = QAction("Cambiar nombre", self)
             action_rename.triggered.connect(self.rename_note_dialog)
             menu.addAction(action_rename)
             
-            # 2. Creation Actions (Explicit)
+            # 2. Creation Actions
+            is_folder = getattr(item, 'is_folder', False) or item.rowCount() > 0
             
-            # Action: Create Note (Context Aware)
-            # If item is a folder (has children), create child.
-            # If item is a file, create sibling.
-            is_folder = item.rowCount() > 0
-            
+            # Create Note (Child if folder, Sibling if note)
             if is_folder:
                 action_create = QAction("Crear nota en esta carpeta", self)
-                action_create.setStatusTip("Crear una nota dentro de esta carpeta")
                 action_create.triggered.connect(self.add_child_note)
             else:
                 action_create = QAction("Crear nota (mismo nivel)", self)
-                action_create.setStatusTip("Crear una nota en el mismo nivel que la actual")
                 action_create.triggered.connect(self.add_sibling_note)
-                
             menu.addAction(action_create)
-            
-            # Action: Create Child Note (Subfolder)
-            action_child = QAction("Crear subcarpeta", self)
-            action_child.setStatusTip("Crear una nota dentro de la actual (convertirla en carpeta)")
-            action_child.triggered.connect(self.add_child_note)
-            menu.addAction(action_child)
+
+            # Create Folder (Child if folder, Sibling if note)
+            if is_folder:
+                 action_create_folder = QAction("Crear subcarpeta", self)
+                 action_create_folder.triggered.connect(self.add_child_folder)
+            else:
+                 action_create_folder = QAction("Crear carpeta (mismo nivel)", self)
+                 action_create_folder.triggered.connect(self.add_sibling_folder)
+            menu.addAction(action_create_folder)
 
             menu.addSeparator()
             
@@ -208,10 +205,14 @@ class MainWindow(QMainWindow):
             action_export.triggered.connect(lambda: self.export_note_pdf(item.note_id))
             menu.addAction(action_export)
         else:
-            # Clicked on empty space -> New Root Note
+            # Clicked on empty space
             action_new_root = QAction("Crear nota raíz", self)
             action_new_root.triggered.connect(self.add_root_note)
             menu.addAction(action_new_root)
+            
+            action_new_folder = QAction("Crear carpeta raíz", self)
+            action_new_folder.triggered.connect(self.add_root_folder)
+            menu.addAction(action_new_folder)
             
         menu.exec(self.tree_view.viewport().mapToGlobal(position))
 
@@ -275,9 +276,17 @@ class MainWindow(QMainWindow):
         self.act_new_root.setStatusTip("Crear una nueva nota de nivel raíz")
         self.act_new_root.triggered.connect(self.add_root_note)
 
+        self.act_new_folder_root = QAction("Nueva Carpeta Raíz", self)
+        self.act_new_folder_root.setStatusTip("Crear una nueva carpeta de nivel raíz")
+        self.act_new_folder_root.triggered.connect(self.add_root_folder)
+
         self.act_new_child = QAction("Nueva Nota Hija", self)
         self.act_new_child.setStatusTip("Crear una nota hija para la nota seleccionada")
         self.act_new_child.triggered.connect(self.add_child_note)
+        
+        self.act_new_folder_child = QAction("Nueva Carpeta Hija", self)
+        self.act_new_folder_child.setStatusTip("Crear una carpeta hija")
+        self.act_new_folder_child.triggered.connect(self.add_child_folder)
         
         self.act_import_obsidian = QAction("Importar Bóveda Obsidian...", self)
         self.act_import_obsidian.setStatusTip("Importar una bóveda completa de Obsidian (Borra los datos actuales)")
@@ -393,7 +402,10 @@ class MainWindow(QMainWindow):
         # File Menu
         file_menu = menubar.addMenu("&Archivo")
         file_menu.addAction(self.act_new_root)
+        file_menu.addAction(self.act_new_folder_root)
+        file_menu.addSeparator()
         file_menu.addAction(self.act_new_child)
+        file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
         file_menu.addAction(self.act_import_obsidian)
         file_menu.addSeparator()
@@ -497,6 +509,44 @@ class MainWindow(QMainWindow):
         title, ok = ModernInput.get_text(self, "Nueva Nota", "Título de la Nota:")
         if ok and title:
             self.model.add_note(title, None)
+
+    def add_root_folder(self):
+        title, ok = ModernInput.get_text(self, "Nueva Carpeta", "Nombre de la Carpeta:")
+        if ok and title:
+            self.model.add_note(title, None, is_folder=True)
+
+    def add_child_folder(self):
+        index = self.tree_view.currentIndex()
+        if not index.isValid():
+            ModernAlert.show(self, "Sin Selección", "Por favor seleccione un elemento padre primero.")
+            return
+
+        source_index = self.proxy_model.mapToSource(index)
+        item = self.model.itemFromIndex(source_index)
+        
+        title, ok = ModernInput.get_text(self, "Nueva Subcarpeta", "Nombre de la Subcarpeta:")
+        if ok and title:
+            self.model.add_note(title, item.note_id, is_folder=True)
+            self.tree_view.expand(index)
+
+    def add_sibling_folder(self):
+        index = self.tree_view.currentIndex()
+        if not index.isValid():
+            self.add_root_folder()
+            return
+            
+        source_index = self.proxy_model.mapToSource(index)
+        item = self.model.itemFromIndex(source_index)
+        
+        parent = item.parent()
+        parent_id = None
+        if parent:
+             if hasattr(parent, "note_id"):
+                 parent_id = parent.note_id
+        
+        title, ok = ModernInput.get_text(self, "Nueva Carpeta", "Nombre de la Carpeta:")
+        if ok and title:
+            self.model.add_note(title, parent_id, is_folder=True)
 
     def add_child_note(self):
         index = self.tree_view.currentIndex()
@@ -940,12 +990,14 @@ class MainWindow(QMainWindow):
             
         self.current_note_id = item.note_id
         
-        # Check if it has children (Folder Behavior)
-        if item.rowCount() > 0:
-            # It is a folder
+        # Check Explicit Folder OR Implicit Folder (Children)
+        is_explicit_folder = getattr(item, 'is_folder', False)
+        
+        if is_explicit_folder or item.rowCount() > 0:
+            # It is a folder (Explicit or Implicit)
             self.title_edit.setPlainText(item.text())
             self.title_edit.setReadOnly(True) 
-            self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {item.text()}</h1><p style='color: gray; text-align: center;'>Selecciona una sub-nota para editar.</p>")
+            self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {item.text()}</h1><p style='color: gray; text-align: center;'>Esta es una carpeta. Crea o selecciona una nota dentro de ella.</p>")
             self.text_editor.setReadOnly(True)
             return
 
@@ -1190,8 +1242,14 @@ class MainWindow(QMainWindow):
                 
             # 3. Export
             from app.exporters.pdf_exporter import PDFExporter
+            
+            # Get Current Theme
+            settings = QSettings()
+            current_theme = settings.value("theme", "Dark")
+            
             exporter = PDFExporter(self.db)
-            exporter.export_to_pdf(title, processed_content, path)
+            # Pass RAW content, let exporter handle rendering
+            exporter.export_to_pdf(title, content, path, theme_name=current_theme)
             
             ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\n{path}")
             

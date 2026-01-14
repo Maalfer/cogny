@@ -19,8 +19,8 @@ class NoteTreeModel(QStandardItemModel):
         conn = self.db._get_connection()
         cursor = conn.cursor()
         
-        # 1. Get Roots
-        cursor.execute("SELECT id, title FROM notes WHERE parent_id IS NULL ORDER BY title")
+        # 1. Get Roots (Now including is_folder)
+        cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id IS NULL ORDER BY title")
         roots = cursor.fetchall()
         
         # 2. Get Set of Parent IDs (to know which roots have children)
@@ -34,11 +34,21 @@ class NoteTreeModel(QStandardItemModel):
         for r in roots:
             nid = r['id']
             title = r['title']
-            item = NoteItem(nid, title)
+            is_folder = bool(r['is_folder'])
+            
+            # Pass is_folder to NoteItem
+            item = NoteItem(nid, title, is_folder)
             self.note_items[nid] = item
             
             # Check if it has children -> Add Dummy
-            if nid in parents_with_children:
+            # OR if it is explicitly a folder -> Add Dummy (to allow expansion even if empty? 
+            # Well, if explicit folder is empty, we still want it to be expandable? 
+            # Actually, standard behavior is folders are always expandable or show empty inside. 
+            # If we don't add dummy, it won't have expand arrow.
+            # So if is_folder is True, we add dummy if rowCount is 0?
+            # Let's add dummy if (has_children OR is_folder) to allow attempting expansion.
+            # But if fetch_children finds nothing for an explicit folder, we remove dummy and it shows empty.
+            if nid in parents_with_children or is_folder:
                 item.appendRow(QStandardItem("Loading..."))
                 item.setData(True, Qt.UserRole + 1) # Custom Role: HasUnfetchedChildren
             
@@ -58,7 +68,8 @@ class NoteTreeModel(QStandardItemModel):
              return # Already loaded or no children
              
         # Clear Dummy "Loading..."
-        item.removeRow(0)
+        if item.rowCount() > 0:
+             item.removeRow(0)
         
         # Fetch Children
         conn = self.db._get_connection()
@@ -66,7 +77,7 @@ class NoteTreeModel(QStandardItemModel):
         
         # Determine children
         pid = item.note_id
-        cursor.execute("SELECT id, title FROM notes WHERE parent_id = ? ORDER BY title", (pid,))
+        cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id = ? ORDER BY title", (pid,))
         children = cursor.fetchall()
         
         # Determine which children are also parents
@@ -78,10 +89,12 @@ class NoteTreeModel(QStandardItemModel):
         for r in children:
             nid = r['id']
             title = r['title']
-            child_item = NoteItem(nid, title)
+            is_folder = bool(r['is_folder'])
+            
+            child_item = NoteItem(nid, title, is_folder)
             self.note_items[nid] = child_item
             
-            if nid in grandparents:
+            if nid in grandparents or is_folder:
                 child_item.appendRow(QStandardItem("Loading..."))
                 child_item.setData(True, Qt.UserRole + 1)
                 
@@ -92,43 +105,57 @@ class NoteTreeModel(QStandardItemModel):
         self.refresh_icons()
 
     def refresh_icons(self):
-        """Updates icons: Roots & Parents=Folder, Leafs=Note"""
+        """Updates icons: Explicit Folders or Roots/Parents get Folder Icon."""
         folder_icon = QIcon.fromTheme("folder")
         subfolder_icon = QIcon.fromTheme("folder-documents", QIcon.fromTheme("folder")) 
         note_icon = QIcon.fromTheme("text-x-generic") 
         
-        # Use list(values) to avoid runtime error if dict changes size (though it shouldn't here)
-        # Handle C++ object deleted error gracefully
         for item in list(self.note_items.values()):
             try:
                 # helper to check if C++ object exists
                 if not item.index().isValid() and item != self.invisibleRootItem():
-                     # Sometimes valid python wrapper but deleted C++ item?
-                     # item.parent() will raise RuntimeError
                      pass
 
-                is_root = (item.parent() is None or item.parent() == self.invisibleRootItem())
+                # If explicit folder -> Folder Icon
+                # If implicit folder (has children) -> Folder Icon (Backward compat/User preference)
+                # If root -> Folder Icon (if desired, or just Note icon if it's a root note?)
+                # User requested explicit folders.
+                # Let's say: Is Folder -> Folder Icon.
+                # Has Children -> Folder Icon (Implicit).
+                # Else -> Note Icon.
+                
+                is_explicit_folder = getattr(item, 'is_folder', False)
                 has_children = item.rowCount() > 0
                 
-                if is_root:
+                if is_explicit_folder or has_children:
                     item.setIcon(folder_icon)
-                elif has_children:
-                    item.setIcon(subfolder_icon)
                 else:
                     item.setIcon(note_icon)
             except RuntimeError:
                 # NoteItem already deleted
                 continue
 
-    def add_note(self, title: str, parent_id: Optional[int]) -> int:
-        new_id = self.db.add_note(title, parent_id)
-        new_item = NoteItem(new_id, title)
+    def add_note(self, title: str, parent_id: Optional[int], is_folder: bool = False) -> int:
+        new_id = self.db.add_note(title, parent_id, is_folder=is_folder)
+        new_item = NoteItem(new_id, title, is_folder)
         self.note_items[new_id] = new_item
+        
+        # If it's a folder, give it a dummy item so it looks expandable?
+        if is_folder:
+             # We mark it as "loaded" initially but empty? 
+             # Or "unfetched"?
+             # Since we just added it, we know it's empty.
+             # But to show arrow, we might need a dummy? 
+             # No, empty folders don't have arrows usually.
+             pass
         
         if parent_id is None:
             self.invisibleRootItem().appendRow(new_item)
         elif parent_id in self.note_items:
-            self.note_items[parent_id].appendRow(new_item)
+            parent = self.note_items[parent_id]
+            parent.appendRow(new_item)
+            # Ensure parent icon updates if it was a note
+            self.refresh_icons()
             
         self.refresh_icons()
         return new_id
