@@ -383,7 +383,8 @@ class MainWindow(QMainWindow):
         self.addToolBarBreak() # Force next toolbar to next line
         
         self.editor_toolbar = QToolBar("Editor Toolbar")
-        self.editor_toolbar.setVisible(False) # Hidden by default
+        self.editor_toolbar = QToolBar("Editor Toolbar")
+        self.editor_toolbar.setVisible(True) # Visible by default
         self.addToolBar(self.editor_toolbar)
         
         # Bold
@@ -416,6 +417,14 @@ class MainWindow(QMainWindow):
         action_underline.setFont(font)
         self.editor_toolbar.addAction(action_underline)
 
+        self.editor_toolbar.addSeparator()
+
+        # Insert Table
+        action_table = QAction("Tabla", self)
+        action_table.setToolTip("Insertar Tabla (2x2)")
+        action_table.triggered.connect(lambda: self.text_editor.insert_table(2, 2))
+        self.editor_toolbar.addAction(action_table)
+
     def create_menus(self):
         menubar = self.menuBar()
 
@@ -445,6 +454,15 @@ class MainWindow(QMainWindow):
         
         # View Menu
         view_menu = menubar.addMenu("&Ver")
+        
+        # Toolbar Toggle
+        self.act_toggle_toolbar = QAction("Barra de Formato", self, checkable=True)
+        self.act_toggle_toolbar.setStatusTip("Mostrar/Ocultar barra de herramientas de formato")
+        self.act_toggle_toolbar.setChecked(True)
+        self.act_toggle_toolbar.triggered.connect(self.toggle_editor_toolbar)
+        view_menu.addAction(self.act_toggle_toolbar)
+        view_menu.addSeparator()
+        
         view_menu.addAction(self.act_zoom_in)
         view_menu.addAction(self.act_zoom_out)
         view_menu.addSeparator()
@@ -873,35 +891,89 @@ class MainWindow(QMainWindow):
             proxy_dest = self.proxy_model.mapFromSource(destination)
             self.tree_view.expand(proxy_dest)
 
+
+    class NoteLoaderWorker(QThread):
+        finished = Signal(dict)
+        error = Signal(str)
+
+        def __init__(self, db_manager, note_id):
+            super().__init__()
+            self.db = db_manager
+            self.note_id = note_id
+            self.is_cancelled = False
+
+        def run(self):
+            if self.is_cancelled: return
+            try:
+                # 1. Fetch Note
+                note = self.db.get_note(self.note_id)
+                if not note: 
+                    self.finished.emit(None)
+                    return
+                
+                if self.is_cancelled: return
+
+                # 2. Pre-process content (simulate or perform heavy regex)
+                title = note[2]
+                content = note[3] if note[3] else ""
+                
+                result = {
+                    "note_id": self.note_id,
+                    "title": title,
+                    "content": content,
+                    "is_markdown": False,
+                    "processed_content": content
+                }
+                
+                # Check format
+                if content.strip() and not content.lstrip().startswith("<!DOCTYPE HTML"):
+                    result["is_markdown"] = True
+                    # We return raw content and let main thread process it or helper
+                    pass 
+
+                self.finished.emit(result)
+            except Exception as e:
+                self.error.emit(str(e))
+
+        def cancel(self):
+            self.is_cancelled = True
+
     def on_selection_changed(self, current, previous):
         # Auto-save previous note if active
         if self.current_note_id is not None:
              self.save_current_note()
-             
-        if not current.isValid():
-            self.current_note_id = None
-            self.title_edit.clear()
-            self.text_editor.clear()
-            self.text_editor.clear_image_cache() # Clear cache on deselect
-            self.title_edit.setReadOnly(True)
-            self.text_editor.setReadOnly(True)
-            return
 
-        # Determine if we are in Proxy Model (Tree) or Standard Model (Search)
-        model = self.tree_view.model()
+        # Cancel previous loader if running
+        if hasattr(self, "note_loader") and self.note_loader and self.note_loader.isRunning():
+            self.note_loader.cancel()
+            self.note_loader.wait(50) # Wait brief time, then ignore
+            self.note_loader.deleteLater()
+            self.note_loader = None
+            
+        index = self.tree_view.currentIndex()
+        if not index.isValid():
+            # Try to get from selection model directly if index is invalid
+             index = current
+             
+        if not index.isValid():
+             return
+
+        # Map Proxy Index to Source Index
+        source_index = self.proxy_model.mapToSource(index)
+        item = self.model.itemFromIndex(source_index)
         
-        if isinstance(model, QSortFilterProxyModel):
-            # Map Proxy Index to Source Index
-            source_index = self.proxy_model.mapToSource(current)
-            if not source_index.isValid():
-                return
-            item = self.model.itemFromIndex(source_index)
-        else:
-            # Standard Model (Search Results)
-            item = model.itemFromIndex(current)
+        # If using Search Model (no proxy mapping needed if it's not the main model)
+        if not item:
+            # Maybe search model?
+            model = index.model()
+            if isinstance(model, QSortFilterProxyModel):
+                 source_index = model.mapToSource(index)
+                 item = self.model.itemFromIndex(source_index)
+            else:
+                 # Standard Model (Search Results)
+                 item = model.itemFromIndex(current) if current.isValid() else None
             
         if not item:
-            # Defensive check fixes AttributeError: 'NoneType' object has no attribute 'note_id'
             return
             
         self.current_note_id = item.note_id
@@ -910,53 +982,50 @@ class MainWindow(QMainWindow):
         if item.rowCount() > 0:
             # It is a folder
             self.title_edit.setPlainText(item.text())
-            self.title_edit.setReadOnly(True) # Cannot edit title of folder from here? User said "cannot write in them".
-            
-            # Show placeholder in editor
+            self.title_edit.setReadOnly(True) 
             self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {item.text()}</h1><p style='color: gray; text-align: center;'>Selecciona una sub-nota para editar.</p>")
             self.text_editor.setReadOnly(True)
-            
-            # Ensure it's expanded? User said "click displays notes inside".
-            # on_tree_clicked handles toggle, but selection via arrow keys might not.
-            # Let's enforce expansion on selection? Maybe annoying if navigating.
-            # Stick to on_tree_clicked for expansion toggle.
             return
 
         # It is a Note (Leaf)
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
-        self.text_editor.clear_image_cache() # New note, fresh cache
+        self.text_editor.clear_image_cache() 
         
-        note = self.db.get_note(item.note_id)
-        if note:
-             self.title_edit.setPlainText(note[2])
-             # Update current_note_id in editor BEFORE setting text, so if they paste immediately it works
-             self.text_editor.current_note_id = self.current_note_id
-             
-             content = note[3] if note[3] else ""
-             
-             # Check if content is likely Raw Markdown (imported) vs Rich Text HTML (saved by app)
-             # "Rich Text" usually starts with <!DOCTYPE HTML> ...
-             if content.strip() and not content.lstrip().startswith("<!DOCTYPE HTML"):
-                 # It's likely raw markdown. 
-                 # Process with Hybrid Renderer (Tables + Escaped Text)
-                 content = self.process_markdown_content(content)
-                  
-                 # 3. Wrap it to preserve newlines/indentation in setHtml
-                 if content != self.text_editor.toHtml():
-                     formatted_content = f'<div style="white-space: pre-wrap;">{content}</div>'
-                     
-                     # Optimization: Block signals during bulk load
-                     self.text_editor.blockSignals(True)
-                     try:
-                         self.text_editor.setHtml(formatted_content)
-                     finally:
-                         self.text_editor.blockSignals(False)
-                     
-                     # Force full visual update once
-                     self.text_editor.update_code_block_visuals()
-             else:
-                 self.text_editor.setHtml(content)
+        # UI State: Loading
+        self.statusBar().showMessage(f"Cargando nota: {item.text()}...", 0)
+        self.title_edit.setPlainText("Cargando...")
+        self.text_editor.setHtml("<h2 style='color: gray; text-align: center;'>Cargando contenido...</h2>")
+        
+        # Start Worker
+        self.note_loader = self.NoteLoaderWorker(self.db, item.note_id)
+        self.note_loader.finished.connect(self.on_note_loaded)
+        self.note_loader.start()
+
+    def on_note_loaded(self, result):
+        self.statusBar().clearMessage()
+        
+        if not result or result["note_id"] != self.current_note_id:
+            # Result stale or empty
+            return
+            
+        self.title_edit.setPlainText(result["title"])
+        self.text_editor.current_note_id = result["note_id"]
+        
+        content = result["content"]
+        
+        if result["is_markdown"]:
+             content = self.process_markdown_content(content)
+             if content != self.text_editor.toHtml():
+                 formatted = f'<div style="white-space: pre-wrap;">{content}</div>'
+                 self.text_editor.blockSignals(True)
+                 try:
+                     self.text_editor.setHtml(formatted)
+                 finally:
+                     self.text_editor.blockSignals(False)
+                 self.text_editor.update_code_block_visuals()
+        else:
+             self.text_editor.setHtml(content)
 
     def on_tree_clicked(self, index):
         """Toggle expansion on single click."""
