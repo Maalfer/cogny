@@ -908,17 +908,22 @@ class MainWindow(QMainWindow):
         finished = Signal(dict)
         error = Signal(str)
 
-        def __init__(self, db_manager, note_id):
+        def __init__(self, db_path, note_id):
             super().__init__()
-            self.db = db_manager
+            self.db_path = db_path
             self.note_id = note_id
             self.is_cancelled = False
 
         def run(self):
             if self.is_cancelled: return
+            
+            # Create a dedicated DB connection for this thread
+            from app.database.manager import DatabaseManager
+            db = DatabaseManager(self.db_path)
+            
             try:
                 # 1. Fetch Note
-                note = self.db.get_note(self.note_id)
+                note = db.get_note(self.note_id)
                 if not note: 
                     self.finished.emit(None)
                     return
@@ -946,6 +951,14 @@ class MainWindow(QMainWindow):
                 self.finished.emit(result)
             except Exception as e:
                 self.error.emit(str(e))
+            finally:
+                # Close connection implicitly by letting logic end, 
+                # but explicit close might be better if DatabaseManager has close()
+                # Our DatabaseManager uses 'init_db' connection which is per-instance? 
+                # check _get_connection usage. 
+                # DatabaseManager.__init__ calls init_db.
+                # If DatabaseManager doesn't keep self.conn, we are fine.
+                pass
 
         def cancel(self):
             self.is_cancelled = True
@@ -1012,7 +1025,7 @@ class MainWindow(QMainWindow):
         self.text_editor.setHtml("<h2 style='color: gray; text-align: center;'>Cargando contenido...</h2>")
         
         # Start Worker
-        self.note_loader = self.NoteLoaderWorker(self.db, item.note_id)
+        self.note_loader = self.NoteLoaderWorker(self.db.db_path, item.note_id)
         self.note_loader.finished.connect(self.on_note_loaded)
         self.note_loader.start()
 

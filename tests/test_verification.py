@@ -31,6 +31,16 @@ class TestNoteApp(unittest.TestCase):
         original_loader_cls = self.window.NoteLoaderWorker
         
         class SyncLoader(original_loader_cls):
+            def __init__(self, db_path, note_id):
+                 # Call original init but pass mock DB or None since we shadow run?
+                 # Actually original __init__ sets self.db_path.
+                 # We can just call super using correct args
+                 super().__init__(db_path, note_id)
+                 # We might need to override run() to use 'db_path' correct or just rely on original logic?
+                 # If we use original run(), it creates DatabaseManager(db_path).
+                 # In test, db_path is potentially a temp file string.
+                 # Does `test_verification` use a real file path? Yes, `test_env_notes.cdb`.
+                 
             def start(self, priority=None):
                 self.run() # Run synchronously
                 
@@ -194,14 +204,9 @@ class TestNoteApp(unittest.TestCase):
         # Logic is inside delete_note().
         # We can monkeypatch QMessageBox.question
         
-        from PySide6.QtWidgets import QMessageBox
-        original_question = QMessageBox.question
-        QMessageBox.question = lambda *args: QMessageBox.Yes
-        
-        try:
+        from unittest.mock import patch
+        with patch('app.ui.widgets.ModernConfirm.show', return_value=True):
             self.window.delete_note()
-        finally:
-            QMessageBox.question = original_question
             
         # Verify Gone logic
         self.assertEqual(self.window.model.rowCount(), 0)

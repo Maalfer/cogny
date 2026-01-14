@@ -1,5 +1,6 @@
 import sqlite3
 from typing import List, Optional, Tuple
+import contextlib
 
 class DatabaseManager:
     def __init__(self, db_path: str = "notes.cdb"):
@@ -17,150 +18,207 @@ class DatabaseManager:
         
         return conn
 
+    def transaction(self):
+        """Helper to ensure connection closing and commit/rollback."""
+        from contextlib import contextmanager
+        @contextmanager
+        def _transaction():
+            conn = self._get_connection()
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+        return _transaction()
+
+    def backup_database(self):
+        """Creates a backup of the database file."""
+        import shutil
+        import os
+        import time
+        
+        if not os.path.exists(self.db_path):
+            return
+
+        backup_dir = os.path.join(os.path.dirname(self.db_path), "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Limit backups? (Keep last 5)
+        # For now, simplistic backup on startup
+        timestamp = int(time.time())
+        backup_path = os.path.join(backup_dir, f"notes_{timestamp}.bak")
+        
+        try:
+            # Copy file (using efficient copy)
+            shutil.copy2(self.db_path, backup_path)
+            
+            # Cleanup old backups
+            backups = sorted([f for f in os.listdir(backup_dir) if f.startswith("notes_") and f.endswith(".bak")])
+            if len(backups) > 5:
+                for old in backups[:-5]:
+                    os.remove(os.path.join(backup_dir, old))
+                    
+        except Exception as e:
+            print(f"Backup failed: {e}")
+
+    def check_integrity(self):
+        """Checks DB integrity and attempts recovery if corrupt."""
+        import os
+        if not os.path.exists(self.db_path):
+            return
+
+        try:
+            with contextlib.closing(self._get_connection()) as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA integrity_check;")
+                result = cursor.fetchone()[0]
+                if result != "ok":
+                    print(f"Database Corruption Detected: {result}")
+                    # Todo: Restore from backup?
+                    # For now just warn
+        except Exception as e:
+            print(f"Integrity Check Failed: {e}")
+
     def init_db(self):
         """Initialize the database tables."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        # 1. Backup before potential migration
+        self.backup_database()
         
-        # Enable column addition for existing tables if needed
-        # SQLite supports adding columns directly, but we check if we need to migrate first.
+        # 2. Check Integrity
+        self.check_integrity()
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                parent_id INTEGER,
-                title TEXT NOT NULL,
-                content TEXT,
-                is_folder BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (parent_id) REFERENCES notes (id) ON DELETE CASCADE
-            )
-        """)
-        
-        # Migration: Check if is_folder column exists (for existing DBs)
-        cursor.execute("PRAGMA table_info(notes)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if "is_folder" not in columns:
-            print("Migrating Database: Adding is_folder column...")
-            cursor.execute("ALTER TABLE notes ADD COLUMN is_folder BOOLEAN DEFAULT 0")
+        # 3. Init
+        with self.transaction() as conn:
+            cursor = conn.cursor()
             
-            # Auto-migrate implicit folders (notes with children)
-            print("Migrating Implicit Folders...")
+            # Enable column addition for existing tables if needed
+            # SQLite supports adding columns directly, but we check if we need to migrate first.
+            
             cursor.execute("""
-                UPDATE notes 
-                SET is_folder = 1 
-                WHERE id IN (SELECT DISTINCT parent_id FROM notes WHERE parent_id IS NOT NULL)
+                CREATE TABLE IF NOT EXISTS notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    parent_id INTEGER,
+                    title TEXT NOT NULL,
+                    content TEXT,
+                    is_folder BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (parent_id) REFERENCES notes (id) ON DELETE CASCADE
+                )
             """)
-            conn.commit()
+            
+            # Migration: Check if is_folder column exists (for existing DBs)
+            cursor.execute("PRAGMA table_info(notes)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if "is_folder" not in columns:
+                print("Migrating Database: Adding is_folder column...")
+                cursor.execute("ALTER TABLE notes ADD COLUMN is_folder BOOLEAN DEFAULT 0")
+                
+                # Auto-migrate implicit folders (notes with children)
+                print("Migrating Implicit Folders...")
+                cursor.execute("""
+                    UPDATE notes 
+                    SET is_folder = 1 
+                    WHERE id IN (SELECT DISTINCT parent_id FROM notes WHERE parent_id IS NOT NULL)
+                """)
+                # conn.commit() # Handled by transaction
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS images (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                note_id INTEGER,
-                data BLOB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS attachments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                note_id INTEGER,
-                filename TEXT NOT NULL,
-                data BLOB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE
-            )
-        """)
-        
-        # Performance Indices
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent_title ON notes(parent_id, title);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_images_note ON images(note_id);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);")
-        
-        # FTS5 Virtual Table for Fast Search
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-                title, 
-                content, 
-                content='notes', 
-                content_rowid='id'
-            );
-        """)
-        
-        # Triggers to keep FTS in sync
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-                INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
-            END;
-        """)
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-                INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
-            END;
-        """)
-        cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-                INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
-                INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
-            END;
-        """)
-        
-        conn.commit()
-        conn.close()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS images (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    note_id INTEGER,
+                    data BLOB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    note_id INTEGER,
+                    filename TEXT NOT NULL,
+                    data BLOB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE
+                )
+            """)
+            
+            # Performance Indices
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent_title ON notes(parent_id, title);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_images_note ON images(note_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);")
+            
+            # FTS5 Virtual Table for Fast Search
+            cursor.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+                    title, 
+                    content, 
+                    content='notes', 
+                    content_rowid='id'
+                );
+            """)
+            
+            # Triggers to keep FTS in sync
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+                    INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+                END;
+            """)
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+                    INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+                END;
+            """)
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+                    INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+                    INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+                END;
+            """)
 
     def add_image(self, note_id: int, data: bytes) -> int:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO images (note_id, data) VALUES (?, ?)", (note_id, data))
-        image_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return image_id
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO images (note_id, data) VALUES (?, ?)", (note_id, data))
+            return cursor.lastrowid
 
     def get_image(self, image_id: int) -> Optional[bytes]:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT data FROM images WHERE id = ?", (image_id,))
-        row = cursor.fetchone()
-        conn.close()
-        return row[0] if row else None
+        with contextlib.closing(self._get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT data FROM images WHERE id = ?", (image_id,))
+            row = cursor.fetchone()
+            return row[0] if row else None
 
     def cleanup_images(self, note_id: int, present_ids: list[int]):
         """Delete images belonging to note_id that are NOT in present_ids."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        if not present_ids:
-            # Delete all images for this note
-            cursor.execute("DELETE FROM images WHERE note_id = ?", (note_id,))
-        else:
-            # Delete images NOT in the list
-            placeholders = ','.join(['?'] * len(present_ids))
-            query = f"DELETE FROM images WHERE note_id = ? AND id NOT IN ({placeholders})"
-            params = [note_id] + present_ids
-            cursor.execute(query, params)
+        with self.transaction() as conn:
+            cursor = conn.cursor()
             
-        conn.commit()
-        conn.close()
+            if not present_ids:
+                # Delete all images for this note
+                cursor.execute("DELETE FROM images WHERE note_id = ?", (note_id,))
+            else:
+                # Delete images NOT in the list
+                placeholders = ','.join(['?'] * len(present_ids))
+                query = f"DELETE FROM images WHERE note_id = ? AND id NOT IN ({placeholders})"
+                params = [note_id] + present_ids
+                cursor.execute(query, params)
 
     def add_attachment(self, note_id: int, filename: str, data: bytes) -> int:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO attachments (note_id, filename, data) VALUES (?, ?, ?)", (note_id, filename, data))
-        att_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return att_id
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO attachments (note_id, filename, data) VALUES (?, ?, ?)", (note_id, filename, data))
+            return cursor.lastrowid
 
     def get_attachment(self, att_id: int) -> Optional[Tuple[str, bytes]]:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT filename, data FROM attachments WHERE id = ?", (att_id,))
-        row = cursor.fetchone()
-        conn.close()
-        return row if row else None
+        with contextlib.closing(self._get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT filename, data FROM attachments WHERE id = ?", (att_id,))
+            row = cursor.fetchone()
+            return row if row else None
 
     def cleanup_attachments(self, note_id: int, present_ids: list[int]):
         """Delete attachments belonging to note_id that are NOT in present_ids."""
@@ -251,65 +309,48 @@ class DatabaseManager:
 
     def add_note(self, title: str, parent_id: Optional[int] = None, content: str = "", is_folder: bool = False) -> int:
         """Add a new note and return its ID."""
-        conn = self._get_connection()
-        try:
+        with self.transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO notes (title, parent_id, content, is_folder) VALUES (?, ?, ?, ?)",
                 (title, parent_id, content, 1 if is_folder else 0)
             )
-            note_id = cursor.lastrowid
-            conn.commit()
-            return note_id
-        finally:
-            conn.close()
+            return cursor.lastrowid
 
     def update_note_title(self, note_id: int, title: str):
-        conn = self._get_connection()
-        try:
+        with self.transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE notes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (title, note_id)
             )
-            conn.commit()
-        finally:
-            conn.close()
 
     def update_note(self, note_id: int, title: str, content: str):
         """Update a note's title and content."""
-        conn = self._get_connection()
-        try:
+        with self.transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (title, content, note_id)
             )
-            conn.commit()
-        finally:
-            conn.close()
 
     def delete_note(self, note_id: int):
         """Delete a note and its children."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
-        conn.commit()
-        conn.close()
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA foreign_keys = ON")
+            cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
 
     def get_note(self, note_id: int) -> Optional[Tuple]:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
-        row = cursor.fetchone()
-        conn.close()
-        return row
+        with contextlib.closing(self._get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+            row = cursor.fetchone()
+            return row
 
     def get_children(self, parent_id: Optional[int] = None) -> List[Tuple]:
         """Get all notes that are direct children of parent_id."""
-        conn = self._get_connection()
-        try:
+        with contextlib.closing(self._get_connection()) as conn:
             cursor = conn.cursor()
             if parent_id is None:
                 cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id IS NULL")
@@ -317,24 +358,19 @@ class DatabaseManager:
                 cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id = ?", (parent_id,))
             rows = cursor.fetchall()
             return rows
-        finally:
-            conn.close()
     
     def move_note_to_parent(self, note_id: int, new_parent_id: Optional[int]):
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE notes SET parent_id = ? WHERE id = ?", (new_parent_id, note_id))
-        conn.commit()
-        conn.close()
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE notes SET parent_id = ? WHERE id = ?", (new_parent_id, note_id))
 
     def get_note_by_title(self, title: str) -> Optional[Tuple]:
         """Get the first note matching the given title."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM notes WHERE title = ?", (title,))
-        row = cursor.fetchone()
-        conn.close()
-        return row
+        with contextlib.closing(self._get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM notes WHERE title = ?", (title,))
+            row = cursor.fetchone()
+            return row
 
     def get_detailed_statistics(self) -> dict:
         """Calculate detailed statistics for the vault."""

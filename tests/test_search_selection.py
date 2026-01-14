@@ -28,6 +28,8 @@ class TestSearchSelection(unittest.TestCase):
         # Patch synchronous loader
         original_loader_cls = self.window.NoteLoaderWorker
         class SyncLoader(original_loader_cls):
+            def __init__(self, db_path, note_id):
+                 super().__init__(db_path, note_id)
             def start(self, priority=None):
                 self.run()
         self.window.NoteLoaderWorker = SyncLoader
