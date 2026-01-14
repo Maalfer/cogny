@@ -125,10 +125,11 @@ class EditorArea(QWidget):
         self.title_edit.setPlainText(result["title"])
         self.text_editor.current_note_id = result["note_id"]
         
-        content = result["content"]
+        # Use pre-processed content from worker thread (already processed Markdown)
+        content = result["processed_content"]
         
         if result["is_markdown"]:
-             content = MarkdownRenderer.process_markdown_content(content)
+             # Content is already processed by worker, no need to process again
              if content != self.text_editor.toHtml():
                  formatted = f'<div style="white-space: pre-wrap;">{content}</div>'
                  self.text_editor.blockSignals(True)

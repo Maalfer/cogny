@@ -19,7 +19,6 @@ class NoteEditor(QTextEdit):
         self.current_font_size = 14
         self.current_editor_bg = None
         self.apply_theme("Light") # Default
-        self.image_cache = {}
 
             
     def _wrap_selection(self, start_marker, end_marker=None):
@@ -51,7 +50,11 @@ class NoteEditor(QTextEdit):
         self._wrap_selection("<u>", "</u>")
 
     def clear_image_cache(self):
-        self.image_cache = {}
+        """Clear the global image cache. Now optional since cache persists across notes."""
+        from app.ui.image_cache import GlobalImageCache
+        # Optionally clear global cache, but usually we want to keep it
+        # GlobalImageCache.get_instance().clear()
+        pass
 
 
     def apply_theme(self, theme_name: str, editor_bg: str = None):
@@ -924,22 +927,24 @@ class NoteEditor(QTextEdit):
             url = name.toString() if isinstance(name, QUrl) else str(name)
             if url.startswith("image://db/"):
                 try:
-                    # Check Cache
-                    if not hasattr(self, 'image_cache'):
-                         self.image_cache = {}
-                         
-                    if url in self.image_cache:
-                         return self.image_cache[url]
-                         
                     image_id = int(url.split("/")[-1])
+                    
+                    # Check global cache first
+                    from app.ui.image_cache import GlobalImageCache
+                    cache = GlobalImageCache.get_instance()
+                    cached = cache.get(image_id)
+                    if cached:
+                        return cached
+                    
+                    # Load from database
                     blob = self.db.get_image(image_id)
                     if blob:
                         img = QImage()
                         img.loadFromData(blob)
                         processed_img = self._process_image(img)
                         
-                        # Cache it
-                        self.image_cache[url] = processed_img
+                        # Store in global cache
+                        cache.set(image_id, processed_img)
                         return processed_img
                 except Exception as e:
                     print(f"Error loading image: {e}")

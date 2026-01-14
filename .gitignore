@@ -1,22 +1,41 @@
-__pycache__/
+# Python
 *.pyc
+__pycache__/
 *.pyo
 *.pyd
 .Python
-env/
-venv/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 .venv/
-.idea/
-.vscode/
-*.sqlite
+venv/
+ENV/
+
+# Database files
+*.cdb
 *.db
-.DS_Store
-*.cdb
-*.log
-.env
-*.cdb
-*.zip
-*.rar
-*.tar.gz
-conocimientoo/
+*.sqlite
+*.sqlite3
+
+# Backups
 backups/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Qt
+*.qmlc
+*.jsc

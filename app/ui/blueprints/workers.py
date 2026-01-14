@@ -92,11 +92,16 @@ class NoteLoaderWorker(QThread):
                 "processed_content": content
             }
             
-            # Check format
+            # Check format and process Markdown in worker thread
             if content.strip() and not content.lstrip().startswith("<!DOCTYPE HTML"):
                 result["is_markdown"] = True
-                # We return raw content and let main thread process it or helper
-                pass 
+                # Process Markdown in worker thread to avoid blocking UI
+                if self.is_cancelled: return
+                from app.ui.blueprints.markdown import MarkdownRenderer
+                result["processed_content"] = MarkdownRenderer.process_markdown_content(content)
+            else:
+                result["is_markdown"] = False
+                result["processed_content"] = content
 
             self.finished.emit(result)
         except Exception as e:
@@ -112,3 +117,63 @@ class NoteLoaderWorker(QThread):
 
     def cancel(self):
         self.is_cancelled = True
+
+class ImagePreloaderWorker(QThread):
+    """Background worker to progressively preload images into cache."""
+    progress = Signal(int, int)  # current, total
+    
+    def __init__(self, db_path):
+        super().__init__()
+        self.db_path = db_path
+        self.should_stop = False
+    
+    def run(self):
+        from app.database.manager import DatabaseManager
+        from app.ui.image_cache import GlobalImageCache
+        from PySide6.QtGui import QImage
+        from time import sleep
+        
+        try:
+            db = DatabaseManager(self.db_path)
+            cache = GlobalImageCache.get_instance()
+            
+            # Get all image IDs from database
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM images ORDER BY id")
+            image_ids = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            
+            total = len(image_ids)
+            if total == 0:
+                return
+            
+            # Preload each image
+            for i, image_id in enumerate(image_ids):
+                if self.should_stop:
+                    break
+                
+                # Skip if already cached
+                if cache.get(image_id):
+                    continue
+                
+                # Load and cache image
+                blob = db.get_image(image_id)
+                if blob:
+                    img = QImage()
+                    if img.loadFromData(blob):
+                        # Store in cache (will be processed on first actual load)
+                        cache.set(image_id, img)
+                
+                # Emit progress
+                self.progress.emit(i + 1, total)
+                
+                # Small delay to avoid blocking UI thread
+                sleep(0.1)  # 100ms between images
+                
+        except Exception as e:
+            print(f"Image preloader error: {e}")
+    
+    def stop(self):
+        """Stop the preloader gracefully."""
+        self.should_stop = True
