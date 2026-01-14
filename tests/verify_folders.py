@@ -8,6 +8,8 @@ import sqlite3
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.database.manager import DatabaseManager
+from app.models.note_model import NoteTreeModel
+from PySide6.QtCore import Qt
 
 class TestExplicitFolders(unittest.TestCase):
     def setUp(self):
@@ -16,6 +18,7 @@ class TestExplicitFolders(unittest.TestCase):
             os.remove(self.db_path)
             
         self.db = DatabaseManager(self.db_path)
+        self.model = NoteTreeModel(self.db)
         
     def tearDown(self):
         # db reference might be closed already if test creates new one?
@@ -45,6 +48,22 @@ class TestExplicitFolders(unittest.TestCase):
         
         self.assertEqual(is_folder, 1, "is_folder should be 1")
         print("Folder creation verified.")
+
+    def test_folder_dnd_flags(self):
+        print("Testing folder drag-and-drop flags...")
+        # 1. Create an empty explicit folder via Model (so it's in the item list)
+        folder_id = self.model.add_note("Empty Folder", None, is_folder=True)
+        
+        # 2. Get Index
+        item = self.model.note_items[folder_id]
+        index = item.index()
+        
+        # 3. Check Flags
+        flags = self.model.flags(index)
+        is_drop_enabled = bool(flags & Qt.ItemIsDropEnabled)
+        
+        self.assertTrue(is_drop_enabled, "Explicit folders must accept drops even if empty.")
+        print("DnD Flags verified.")
         
     def test_folder_migration(self):
         print("Testing implicit folder migration...")

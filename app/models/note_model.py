@@ -178,8 +178,11 @@ class NoteTreeModel(QStandardItemModel):
         if not index.isValid():
             return default_flags | Qt.ItemIsDropEnabled
             
-        # Only allow dropping ONTO an item if it is already a folder (has children)
-        if self.rowCount(index) > 0:
+        item = self.itemFromIndex(index)
+        # Check Explicit Folder OR Implicit Folder (Children)
+        is_folder = getattr(item, 'is_folder', False) or self.rowCount(index) > 0
+        
+        if is_folder:
             return default_flags | Qt.ItemIsDropEnabled
             
         # Leaf nodes get standard flags (No DropEnabled -> Forces Insert/Reorder)
@@ -222,7 +225,13 @@ class NoteTreeModel(QStandardItemModel):
         
         if target_item:
             # If dropping ONTO a note (parent is the note), check if it's a folder.
-            if target_item.rowCount() == 0 and insert_row == -1:
+            is_folder = getattr(target_item, 'is_folder', False) or target_item.rowCount() > 0
+            
+            # If dropping ON leaf (not folder) and row is -1 (directly on item)
+            # OR if it IS a folder but maybe user meant "insert between"?
+            # Qt logic: dropping ON item means inside. Dropping BETWEEN items gives row != -1.
+            
+            if not is_folder and insert_row == -1:
                 # User dropped ONTO a leaf node.
                 # Instead of nesting (creating folder) or rejecting, 
                 # we interpret this as "Put it BEFORE this note at the same level".
