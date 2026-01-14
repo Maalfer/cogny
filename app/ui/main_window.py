@@ -273,6 +273,10 @@ class MainWindow(QMainWindow):
         self.act_import_obsidian.setStatusTip("Importar una bóveda completa de Obsidian (Borra los datos actuales)")
         self.act_import_obsidian.triggered.connect(self.import_obsidian_vault)
 
+        self.act_export_obsidian = QAction("Exportar a Obsidian...", self)
+        self.act_export_obsidian.setStatusTip("Exportar la bóveda actual a formato Obsidian")
+        self.act_export_obsidian.triggered.connect(self.export_obsidian_vault)
+
         self.act_attach = QAction("Adjuntar Archivo...", self)
         self.act_attach.setStatusTip("Adjuntar un archivo a la nota actual")
         self.act_attach.triggered.connect(self.attach_file)
@@ -359,6 +363,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.act_new_child)
         file_menu.addSeparator()
         file_menu.addAction(self.act_import_obsidian)
+        file_menu.addAction(self.act_export_obsidian)
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()
@@ -526,6 +531,10 @@ class MainWindow(QMainWindow):
         action_import_obsidian.triggered.connect(self.import_obsidian_vault)
         tools_menu.addAction(action_import_obsidian)
 
+        action_export_obsidian = QAction("Exportar a Obsidian...", self)
+        action_export_obsidian.triggered.connect(self.export_obsidian_vault)
+        tools_menu.addAction(action_export_obsidian)
+
     def toggle_editor_toolbar(self, checked):
         self.editor_toolbar.setVisible(checked)
 
@@ -665,6 +674,25 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self.error.emit(str(e))
 
+    class ExportWorker(QThread):
+        progress = Signal(str)
+        finished = Signal()
+        error = Signal(str)
+
+        def __init__(self, db_manager, output_path):
+            super().__init__()
+            self.db = db_manager
+            self.output_path = output_path
+
+        def run(self):
+            try:
+                from app.exporters.obsidian_exporter import ObsidianExporter
+                exporter = ObsidianExporter(self.db)
+                exporter.export_vault(self.output_path, progress_callback=self.progress.emit)
+                self.finished.emit()
+            except Exception as e:
+                self.error.emit(str(e))
+
     def import_obsidian_vault(self):
         from PySide6.QtWidgets import QFileDialog
         
@@ -731,6 +759,61 @@ class MainWindow(QMainWindow):
             self.worker = None
             
         ModernAlert.show(self, "Error de Importación", f"Ocurrió un error: {error_msg}")
+
+    def export_obsidian_vault(self):
+        from PySide6.QtWidgets import QFileDialog
+        
+        output_path = QFileDialog.getExistingDirectory(self, "Seleccionar Carpeta de Destino para Exportar")
+        if not output_path:
+            return
+
+        # Setup Progress Dialog
+        self.progress_dialog = QProgressDialog("Exportando Bóveda...", "Cancelar", 0, 0, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.setCancelButton(None) 
+        self.progress_dialog.show()
+
+        # Setup Worker
+        self.export_worker = self.ExportWorker(self.db, output_path)
+        self.export_worker.progress.connect(self.update_export_progress)
+        self.export_worker.finished.connect(self.on_export_finished)
+        self.export_worker.error.connect(self.on_export_error)
+        
+        self.export_worker.start()
+
+    def update_export_progress(self, message):
+        if self.progress_dialog:
+            self.progress_dialog.setLabelText(message)
+
+    def on_export_finished(self):
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
+            
+        if hasattr(self, "export_worker"):
+            self.export_worker.quit()
+            self.export_worker.wait()
+            self.export_worker.deleteLater()
+            self.export_worker = None
+            
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: ModernInfo.show(self, "Éxito", "¡Bóveda exportada correctamente!"))
+
+    def on_export_error(self, error_msg):
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
+            
+        if hasattr(self, "export_worker"):
+            self.export_worker.quit()
+            self.export_worker.wait()
+            self.export_worker.deleteLater()
+            self.export_worker = None
+            
+        ModernAlert.show(self, "Error de Exportación", f"Ocurrió un error: {error_msg}")
 
     def show_statistics(self):
         stats = self.db.get_detailed_statistics()
