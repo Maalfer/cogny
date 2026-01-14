@@ -242,6 +242,7 @@ class NoteEditor(QTextEdit):
         fmt.setWidth(QTextLength(QTextLength.PercentageLength, 100))
         
         cursor.insertTable(rows, cols, fmt)
+        self.setTextCursor(cursor)
 
 
 

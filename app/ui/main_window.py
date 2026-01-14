@@ -375,55 +375,17 @@ class MainWindow(QMainWindow):
         empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
         # Search Bar
-        from app.ui.buscador import SearchManager # Import locally if needed or ensure it waits for top imports
+        from app.ui.buscador import SearchManager 
+        from app.ui.barra_herramientas import FormatToolbar
         self.search_manager = SearchManager(self.db, self.tree_view, self.proxy_model, self.on_selection_changed)
         toolbar.addWidget(self.search_manager.get_widget())
         
         # --- Editor Toolbar (Secondary) ---
         self.addToolBarBreak() # Force next toolbar to next line
         
-        self.editor_toolbar = QToolBar("Editor Toolbar")
-        self.editor_toolbar = QToolBar("Editor Toolbar")
-        self.editor_toolbar.setVisible(True) # Visible by default
+
+        self.editor_toolbar = FormatToolbar(self, self.text_editor)
         self.addToolBar(self.editor_toolbar)
-        
-        # Bold
-        action_bold = QAction("N", self) # N for Negrita (Spanish)
-        action_bold.setToolTip("Negrita (Bold)")
-        action_bold.triggered.connect(self.text_editor.toggle_bold)
-        action_bold.setText("N")
-        font = action_bold.font()
-        font.setBold(True)
-        action_bold.setFont(font)
-        self.editor_toolbar.addAction(action_bold)
-        
-        # Italic
-        action_italic = QAction("K", self)
-        action_italic.setToolTip("Cursiva (Italic)")
-        action_italic.triggered.connect(self.text_editor.toggle_italic)
-        font = action_italic.font()
-        font.setItalic(True)
-        action_italic.setText("K")
-        action_italic.setFont(font)
-        self.editor_toolbar.addAction(action_italic)
-        
-        # Underline
-        action_underline = QAction("S", self)
-        action_underline.setToolTip("Subrayado (Underline)")
-        action_underline.triggered.connect(self.text_editor.toggle_underline)
-        font = action_underline.font()
-        font.setUnderline(True)
-        action_underline.setText("S")
-        action_underline.setFont(font)
-        self.editor_toolbar.addAction(action_underline)
-
-        self.editor_toolbar.addSeparator()
-
-        # Insert Table
-        action_table = QAction("Tabla", self)
-        action_table.setToolTip("Insertar Tabla (2x2)")
-        action_table.triggered.connect(lambda: self.text_editor.insert_table(2, 2))
-        self.editor_toolbar.addAction(action_table)
 
     def create_menus(self):
         menubar = self.menuBar()
