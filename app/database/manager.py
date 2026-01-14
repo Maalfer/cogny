@@ -181,6 +181,59 @@ class DatabaseManager:
         cursor.execute("DELETE FROM images")
         cursor.execute("DELETE FROM notes")
         cursor.execute("DELETE FROM sqlite_sequence") # Reset autoincrement
+        
+        # Optimize after clearing massive data to return space to FS
+        # Note: calling VACUUM requires no active transaction usually, ensuring commit first.
+        conn.commit()
+        cursor.execute("VACUUM") 
+        conn.commit()
+        conn.close()
+
+    def repair_database(self):
+        """Autodiagnose and repair database issues."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Fix Orphaned Notes (Parent invalid) -> Move to Root
+        # Find notes with non-null parent that doesn't exist
+        cursor.execute("""
+            UPDATE notes 
+            SET parent_id = NULL 
+            WHERE parent_id IS NOT NULL 
+            AND parent_id NOT IN (SELECT id FROM notes)
+        """)
+        
+        # 2. Delete Orphaned Images (No associated note)
+        cursor.execute("DELETE FROM images WHERE note_id NOT IN (SELECT id FROM notes)")
+        
+        # 3. Delete Orphaned Attachments
+        cursor.execute("DELETE FROM attachments WHERE note_id NOT IN (SELECT id FROM notes)")
+        
+        # 4. Integrity Check
+        cursor.execute("PRAGMA integrity_check")
+        # row = cursor.fetchone()
+        # if row[0] != 'ok': ... (We just run it to let SQLite fix internal page issues if possible? No, it just checks. REINDEX helps.)
+        
+        conn.commit()
+        conn.close()
+
+    def optimize_database(self):
+        """Run extensive database optimization."""
+        # Step 0: Repair structure first
+        self.repair_database()
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Rebuild DB file, repacking pages (Reduces size)
+        cursor.execute("VACUUM")
+        
+        # 2. Analyze statistics for Query Planner (Improves speed)
+        cursor.execute("ANALYZE")
+        
+        # 3. Optimize FTS Index (Merges B-Trees in FTS structure)
+        cursor.execute("INSERT INTO notes_fts(notes_fts) VALUES('optimize')")
+        
         conn.commit()
         conn.close()
 

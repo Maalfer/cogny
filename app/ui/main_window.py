@@ -173,11 +173,21 @@ class MainWindow(QMainWindow):
             
             # 2. Creation Actions (Explicit)
             
-            # Action: Create Sibling Note (Same Level)
-            action_sibling = QAction("Crear nota (mismo nivel)", self)
-            action_sibling.setStatusTip("Crear una nota en el mismo nivel que la actual")
-            action_sibling.triggered.connect(self.add_sibling_note)
-            menu.addAction(action_sibling)
+            # Action: Create Note (Context Aware)
+            # If item is a folder (has children), create child.
+            # If item is a file, create sibling.
+            is_folder = item.rowCount() > 0
+            
+            if is_folder:
+                action_create = QAction("Crear nota en esta carpeta", self)
+                action_create.setStatusTip("Crear una nota dentro de esta carpeta")
+                action_create.triggered.connect(self.add_child_note)
+            else:
+                action_create = QAction("Crear nota (mismo nivel)", self)
+                action_create.setStatusTip("Crear una nota en el mismo nivel que la actual")
+                action_create.triggered.connect(self.add_sibling_note)
+                
+            menu.addAction(action_create)
             
             # Action: Create Child Note (Subfolder)
             action_child = QAction("Crear subcarpeta", self)
@@ -354,6 +364,58 @@ class MainWindow(QMainWindow):
 
 
 
+    def create_toolbar(self):
+        toolbar = QToolBar("Main Toolbar")
+        self.addToolBar(toolbar)
+        
+        style = self.style()
+        
+        # Spacer
+        empty = QWidget()
+        empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        
+        # Search Bar
+        from app.ui.buscador import SearchManager # Import locally if needed or ensure it waits for top imports
+        self.search_manager = SearchManager(self.db, self.tree_view, self.proxy_model, self.on_selection_changed)
+        toolbar.addWidget(self.search_manager.get_widget())
+        
+        # --- Editor Toolbar (Secondary) ---
+        self.addToolBarBreak() # Force next toolbar to next line
+        
+        self.editor_toolbar = QToolBar("Editor Toolbar")
+        self.editor_toolbar.setVisible(False) # Hidden by default
+        self.addToolBar(self.editor_toolbar)
+        
+        # Bold
+        action_bold = QAction("N", self) # N for Negrita (Spanish)
+        action_bold.setToolTip("Negrita (Bold)")
+        action_bold.triggered.connect(self.text_editor.toggle_bold)
+        action_bold.setText("N")
+        font = action_bold.font()
+        font.setBold(True)
+        action_bold.setFont(font)
+        self.editor_toolbar.addAction(action_bold)
+        
+        # Italic
+        action_italic = QAction("K", self)
+        action_italic.setToolTip("Cursiva (Italic)")
+        action_italic.triggered.connect(self.text_editor.toggle_italic)
+        font = action_italic.font()
+        font.setItalic(True)
+        action_italic.setText("K")
+        action_italic.setFont(font)
+        self.editor_toolbar.addAction(action_italic)
+        
+        # Underline
+        action_underline = QAction("S", self)
+        action_underline.setToolTip("Subrayado (Underline)")
+        action_underline.triggered.connect(self.text_editor.toggle_underline)
+        font = action_underline.font()
+        font.setUnderline(True)
+        action_underline.setText("S")
+        action_underline.setFont(font)
+        self.editor_toolbar.addAction(action_underline)
+
     def create_menus(self):
         menubar = self.menuBar()
 
@@ -363,7 +425,6 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.act_new_child)
         file_menu.addSeparator()
         file_menu.addAction(self.act_import_obsidian)
-        file_menu.addAction(self.act_export_obsidian)
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()
@@ -392,12 +453,33 @@ class MainWindow(QMainWindow):
         
         # Tools Menu
         tools_menu = menubar.addMenu("&Herramientas")
-        tools_menu.addAction(self.act_stats)
         tools_menu.addAction(self.act_theme)
+        
+        # Importar...
+        action_import_obsidian = QAction("Importar Obsidian...", self)
+        action_import_obsidian.triggered.connect(self.import_obsidian_vault)
+        tools_menu.addAction(action_import_obsidian)
+
+        action_export_obsidian = QAction("Exportar a Obsidian...", self)
+        action_export_obsidian.triggered.connect(self.export_obsidian_vault)
+        tools_menu.addAction(action_export_obsidian)
+        
+        action_optimize = QAction("Optimizar Base de Datos", self)
+        action_optimize.setStatusTip("Compactar y optimizar la base de datos (Reducir tamaño)")
+        action_optimize.triggered.connect(self.optimize_database_action)
+        tools_menu.addAction(action_optimize)
         
         # Help Menu
         help_menu = menubar.addMenu("&Ayuda")
         help_menu.addAction(self.act_about)
+        
+        # Statistics (Moved to Help)
+        action_stats = QAction("Estadísticas", self)
+        action_stats.triggered.connect(self.show_statistics)
+        help_menu.addAction(action_stats)
+
+    def toggle_editor_toolbar(self, checked):
+        self.editor_toolbar.setVisible(checked)
 
     def show_theme_dialog(self):
         from app.ui.widgets import ThemeSettingsDialog
@@ -429,114 +511,6 @@ class MainWindow(QMainWindow):
         
         # Update Status
         self.statusBar().showMessage(f"Tema cambiado a {theme_name}", 2000)
-
-    # ... (other methods) ...
-
-    def create_toolbar(self):
-        toolbar = QToolBar("Main Toolbar")
-        self.addToolBar(toolbar)
-        
-        style = self.style()
-        
-        # Spacer
-        empty = QWidget()
-        empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        # toolbar.addWidget(empty) # No spacer needed if it's the only thing? 
-        # User said: "en esa fila quiero que solamente este el buscador de notas"
-        # If I want it to take up the full width or just be there?
-        # Usually search bars are on the right or take available space.
-        # If it's the ONLY thing, maybe valid to just add it.
-        # But `QToolBar` packs left.
-        
-        # Search Bar
-        self.search_manager = SearchManager(self.db, self.tree_view, self.proxy_model, self.on_selection_changed)
-        toolbar.addWidget(self.search_manager.get_widget())
-        
-        # --- Editor Toolbar (Secondary) ---
-        self.addToolBarBreak() # Force next toolbar to next line
-        
-        self.editor_toolbar = QToolBar("Editor Toolbar")
-        self.editor_toolbar.setVisible(False) # Hidden by default
-        self.addToolBar(self.editor_toolbar)
-        
-        # Bold
-        action_bold = QAction("N", self) # N for Negrita (Spanish)
-        action_bold.setToolTip("Negrita (Bold)")
-        action_bold.triggered.connect(self.text_editor.toggle_bold)
-        # Style it? We can use text for now or icons if available. 
-        # Using text "B" "I" "U" is standard if no icons.
-        # Let's use standard English letters for recognizability or Spanish? 
-        # User said "similar al word". Word uses N K S in Spanish. 
-        # Let's use "N", "K" (Cursiva), "S" (Subrayado).
-        action_bold.setText("N")
-        font = action_bold.font()
-        font.setBold(True)
-        action_bold.setFont(font)
-        self.editor_toolbar.addAction(action_bold)
-        
-        # Italic
-        action_italic = QAction("K", self)
-        action_italic.setToolTip("Cursiva (Italic)")
-        action_italic.triggered.connect(self.text_editor.toggle_italic)
-        font = action_italic.font()
-        font.setItalic(True)
-        action_italic.setFont(font)
-        self.editor_toolbar.addAction(action_italic)
-        
-        # Underline
-        action_underline = QAction("S", self)
-        action_underline.setToolTip("Subrayado (Underline)")
-        action_underline.triggered.connect(self.text_editor.toggle_underline)
-        font = action_underline.font()
-        font.setUnderline(True)
-        action_underline.setFont(font)
-        self.editor_toolbar.addAction(action_underline)
-
-    def create_menus(self):
-        menu_bar = self.menuBar()
-        
-        # Archivo
-        file_menu = menu_bar.addMenu("&Archivo")
-        
-        action_new_root = QAction("Nueva Nota Raíz", self)
-        action_new_root.triggered.connect(self.add_root_note)
-        file_menu.addAction(action_new_root)
-        
-        file_menu.addSeparator()
-        
-        action_about = QAction("Acerca de", self)
-        action_about.triggered.connect(self.show_about)
-        file_menu.addAction(action_about)
-        
-        action_export_db = QAction("Exportar Bóveda...", self)
-        action_export_db.triggered.connect(self.export_database)
-        file_menu.addAction(action_export_db)
-        
-        action_stats = QAction("Estadísticas", self)
-        action_stats.triggered.connect(self.show_statistics)
-        file_menu.addAction(action_stats)
-        
-        # Herramientas (Tools)
-        tools_menu = menu_bar.addMenu("&Herramientas")
-        
-        # Editor Toggle
-        action_toggle_editor = QAction("Editor", self)
-        action_toggle_editor.setCheckable(True)
-        action_toggle_editor.setChecked(False)
-        action_toggle_editor.toggled.connect(self.toggle_editor_toolbar)
-        tools_menu.addAction(action_toggle_editor)
-        
-        # Importar...
-        action_import_obsidian = QAction("Importar Obsidian...", self)
-        action_import_obsidian.triggered.connect(self.import_obsidian_vault)
-        tools_menu.addAction(action_import_obsidian)
-
-        action_export_obsidian = QAction("Exportar a Obsidian...", self)
-        action_export_obsidian.triggered.connect(self.export_obsidian_vault)
-        tools_menu.addAction(action_export_obsidian)
-
-    def toggle_editor_toolbar(self, checked):
-        self.editor_toolbar.setVisible(checked)
 
 
     def add_root_note(self):
@@ -693,6 +667,21 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self.error.emit(str(e))
 
+    class OptimizeWorker(QThread):
+        finished = Signal()
+        error = Signal(str)
+
+        def __init__(self, db_manager):
+            super().__init__()
+            self.db = db_manager
+
+        def run(self):
+            try:
+                self.db.optimize_database()
+                self.finished.emit()
+            except Exception as e:
+                self.error.emit(str(e))
+
     def import_obsidian_vault(self):
         from PySide6.QtWidgets import QFileDialog
         
@@ -726,12 +715,12 @@ class MainWindow(QMainWindow):
         self.progress_dialog.setLabelText(message)
 
     def on_import_finished(self):
-        if hasattr(self, "progress_dialog"):
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog.deleteLater()
             self.progress_dialog = None
             
-        if hasattr(self, "worker"):
+        if hasattr(self, "worker") and self.worker:
             self.worker.quit()
             self.worker.wait()
             self.worker.deleteLater()
@@ -747,12 +736,12 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(100, lambda: ModernInfo.show(self, "Éxito", "¡Bóveda importada correctamente!"))
 
     def on_import_error(self, error_msg):
-        if hasattr(self, "progress_dialog"):
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog.deleteLater()
             self.progress_dialog = None
             
-        if hasattr(self, "worker"):
+        if hasattr(self, "worker") and self.worker:
             self.worker.quit()
             self.worker.wait()
             self.worker.deleteLater()
@@ -792,7 +781,7 @@ class MainWindow(QMainWindow):
             self.progress_dialog.deleteLater()
             self.progress_dialog = None
             
-        if hasattr(self, "export_worker"):
+        if hasattr(self, "export_worker") and self.export_worker:
             self.export_worker.quit()
             self.export_worker.wait()
             self.export_worker.deleteLater()
@@ -807,11 +796,56 @@ class MainWindow(QMainWindow):
             self.progress_dialog.deleteLater()
             self.progress_dialog = None
             
-        if hasattr(self, "export_worker"):
+        if hasattr(self, "export_worker") and self.export_worker:
             self.export_worker.quit()
             self.export_worker.wait()
             self.export_worker.deleteLater()
             self.export_worker = None
+            
+        ModernAlert.show(self, "Error de Exportación", f"Ocurrió un error: {error_msg}")
+
+    def optimize_database_action(self):
+        # Setup Progress Dialog (Spinner)
+        self.progress_dialog = QProgressDialog("Optimizando Base de Datos...", None, 0, 0, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.setCancelButton(None)
+        self.progress_dialog.setRange(0, 0) # Infinite spinner
+        self.progress_dialog.show()
+
+        self.optimize_worker = self.OptimizeWorker(self.db)
+        self.optimize_worker.finished.connect(self.on_optimize_finished)
+        self.optimize_worker.error.connect(self.on_optimize_error)
+        self.optimize_worker.start()
+
+    def on_optimize_finished(self):
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
+            
+        if hasattr(self, "optimize_worker") and self.optimize_worker:
+            self.optimize_worker.quit()
+            self.optimize_worker.wait()
+            self.optimize_worker.deleteLater()
+            self.optimize_worker = None
+            
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: ModernInfo.show(self, "Éxito", "Optimización y reparación completada correctamente.\nEl tamaño del archivo se ha reducido y se han corregido posibles errores."))
+
+    def on_optimize_error(self, error_msg):
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
+            
+        if hasattr(self, "optimize_worker") and self.optimize_worker:
+            self.optimize_worker.quit()
+            self.optimize_worker.wait()
+            self.optimize_worker.deleteLater()
+            self.optimize_worker = None
+            
+        ModernAlert.show(self, "Error", f"Error al optimizar: {error_msg}")
             
         ModernAlert.show(self, "Error de Exportación", f"Ocurrió un error: {error_msg}")
 

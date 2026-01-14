@@ -4,6 +4,10 @@ from app.ui.main_window import MainWindow
 from app.ui.themes import ThemeManager
 
 def main():
+    # Suppress benign Qt/Wayland warning
+    import os
+    os.environ["QT_LOGGING_RULES"] = "qt.qpa.services=false"
+    
     app = QApplication(sys.argv)
     
     # Apply Fusion Style
