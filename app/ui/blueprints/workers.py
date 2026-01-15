@@ -70,7 +70,8 @@ class NoteLoaderWorker(QThread):
         
         # Create a dedicated DB connection for this thread
         from app.database.manager import DatabaseManager
-        db = DatabaseManager(self.db_path)
+        # Skip init (backup/integrity check) to avoid freezing!
+        db = DatabaseManager(self.db_path, initialize=False)
         
         try:
             # 1. Fetch Content
@@ -131,31 +132,19 @@ class NoteLoaderWorker(QThread):
             while current_idx < total_lines:
                 if self.is_cancelled: return
                 
+                # Adaptive Chunk Sizing
+                # first chunk small (fast preview), subsequent chunks large (efficiency)
+                current_chunk_size = 50 if current_idx == 0 else 500
+                
                 # Determine end index
-                end_idx = min(current_idx + CHUNK_SIZE, total_lines)
+                end_idx = min(current_idx + current_chunk_size, total_lines)
                 
                 # Check for code block safety
-                # We need to ensure we don't split inside a code block
-                # Count ``` occurrences in the proposed chunk? No, in the CUMULATIVE text?
-                # Actually, we treat chunks as independent for rendering? 
-                # If we render chunk 1 safely, it produces HTML.
-                # If chunk 2 is rendered, it appends HTML.
-                # If a code block spans chunk 1 and 2:
-                # Chunk 1 has `<pre><code>...` but no closing `</code></pre>`? 
-                # MarkdownRenderer logic `re.split` relies on finding PAIRS of ```. 
-                # If chunk 1 has only one ```, it will treat it as text (escaped).
-                # Then chunk 2 has closing ```, it will treat it as text.
-                # RESULT: BROKEN CODE BLOCK.
-                
-                # FIX: We must ensure we split OUTSIDE code blocks.
-                # Scan lines from current_idx.
-                
+                # We must ensure we split OUTSIDE code blocks.
                 scan_idx = current_idx
                 in_code_block = False
                 
-                # Look ahead to find a safe break point
-                # We want at least CHUNK_SIZE, but extend if inside code block.
-                
+                # Look ahead
                 while scan_idx < total_lines:
                     line = lines[scan_idx]
                     if line.strip().startswith("```"):
@@ -164,7 +153,7 @@ class NoteLoaderWorker(QThread):
                     scan_idx += 1
                     
                     # If we have enough lines AND we are NOT inside a code block
-                    if scan_idx - current_idx >= CHUNK_SIZE and not in_code_block:
+                    if scan_idx - current_idx >= current_chunk_size and not in_code_block:
                          break
                 
                 # Now scan_idx is our split point
@@ -185,7 +174,10 @@ class NoteLoaderWorker(QThread):
                 
                 current_idx = scan_idx
                 
-                # Yield to event loop slightly if needed? QThread handles it.
+                # Yield to event loop slightly if needed
+                # If we process too fast, UI events pile up and frame drops.
+                # A small sleep allows UI to repaint.
+                self.msleep(50)
             
             self.finished.emit({"note_id": self.note_id, "done": True})
 

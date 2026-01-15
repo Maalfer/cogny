@@ -101,6 +101,12 @@ class EditorArea(QWidget):
         self.note_loader = NoteLoaderWorker(self.db.db_path, note_id)
         self.note_loader.chunk_loaded.connect(self.on_chunk_loaded)
         self.note_loader.finished.connect(self.on_note_loading_finished)
+        
+        # PERFORMANCE MODE
+        # Disable expensive visuals during streaming
+        self.text_editor.set_loading_state(True)
+        self.highlighter.setDocument(None) 
+        
         self.note_loader.start()
 
     def show_folder_placeholder(self, title):
@@ -118,9 +124,6 @@ class EditorArea(QWidget):
         current_html = self.text_editor.toHtml()
         if "Cargando contenido..." in current_html:
             # First real chunk replacing placeholder
-            # Wrap in pre-wrap div for consistent styling if needed, 
-            # though process_markdown_content emits blocks.
-            # We can use insertHtml if we clear first.
             self.text_editor.clear()
             
             # Note: insertHtml inserts at cursor. After clear, cursor is at start.
@@ -136,10 +139,13 @@ class EditorArea(QWidget):
              # Append HTML
              # We might need a newline separation?
              self.text_editor.insertHtml(html_chunk)
-             
-        self.text_editor.update_code_block_visuals()
 
     def on_note_loading_finished(self, result):
+        # Restore Visuals
+        self.text_editor.set_loading_state(False)
+        self.highlighter.setDocument(self.text_editor.document())
+        self.text_editor.update_code_block_visuals() # Apply full pass
+        
         self.status_message.emit("", 0) # Clear
         # Final cleanup or validation if needed
 

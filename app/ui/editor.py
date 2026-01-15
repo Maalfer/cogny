@@ -23,7 +23,11 @@ class NoteEditor(QTextEdit):
         self.current_theme = "Light"
         self.current_font_size = 14
         self.current_editor_bg = None
+        self.is_loading = False # Performance flag
         self.apply_theme("Light") # Default
+
+    def set_loading_state(self, loading: bool):
+        self.is_loading = loading
 
             
     def _wrap_selection(self, start_marker, end_marker=None):
@@ -649,6 +653,8 @@ class NoteEditor(QTextEdit):
 
     def on_contents_change(self, position, charsRemoved, charsAdded):
         """Standard optimization: Only update blocks affected by the change."""
+        if self.is_loading: return
+        
         doc = self.document()
         
         # Determine range of change
