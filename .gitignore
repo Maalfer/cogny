@@ -49,6 +49,8 @@ venv_build/
 # APT Repository (will be in docs/ instead)
 apt-repo/
 *.gpg.key
+!docs/*.gpg.key  # EXCEPCIÓN: Permitir la clave pública en docs/ para GitHub Pages
+
 
 # Test outputs
 tests/test_*.pdf
