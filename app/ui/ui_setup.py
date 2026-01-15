@@ -52,6 +52,11 @@ class UiSetupMixin:
 
         # File Menu
         file_menu = menubar.addMenu("&Archivo")
+        file_menu.addAction(self.act_new_db)
+        file_menu.addAction(self.act_open_db)
+        file_menu.addAction(self.act_save_as_db)
+        file_menu.addSeparator()
+        
         file_menu.addAction(self.act_new_root)
         file_menu.addAction(self.act_new_folder_root)
         file_menu.addSeparator()

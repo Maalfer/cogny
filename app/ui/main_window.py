@@ -10,9 +10,10 @@ from app.ui.ui_actions import UiActionsMixin
 from app.ui.ui_setup import UiSetupMixin
 
 class MainWindow(UiStateMixin, UiThemeMixin, UiWorkersMixin, UiActionsMixin, UiSetupMixin, QMainWindow):
-    def __init__(self, db_path="notes.cdb"):
+    def __init__(self, db_path="notes.cdb", is_draft=False):
         super().__init__()
-        self.setWindowTitle("Cogny")
+        self.is_draft = is_draft
+        self.setWindowTitle(f"Cogny - {'Borrador (Sin Guardar)' if is_draft else os.path.basename(db_path)}")
         self.resize(1200, 800)
         
         # Resolve Assets Path

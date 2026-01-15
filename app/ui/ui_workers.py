@@ -5,14 +5,24 @@ from app.ui.blueprints.workers import ImportWorker, ExportWorker, OptimizeWorker
 
 class UiWorkersMixin:
     def import_obsidian_vault(self):
-        ret = ModernConfirm.show(self, "Confirmar Importación", 
-                                  "Importar una Bóveda de Obsidian BORRARÁ todas las notas actuales.\\n\\n¿Estás seguro de que quieres continuar?",
-                                  "Sí", "Cancelar")
-        if not ret: return
-
+        # 1. Select Vault Directory
         vault_path = QFileDialog.getExistingDirectory(self, "Seleccionar Bóveda de Obsidian")
         if not vault_path: return
 
+        # 2. Select Destination Database
+        import os
+        db_path, _ = QFileDialog.getSaveFileName(self, "Guardar Nueva Base de Datos", 
+                                            os.path.expanduser("~/Documentos"), 
+                                            "Cogny Database (*.cdb)")
+        
+        if not db_path: return
+        if not db_path.endswith(".cdb"): db_path += ".cdb"
+
+        # 3. Switch to the new database (Creates it empty and reloads UI)
+        # We assume self.switch_database is available (from UiActionsMixin)
+        self.switch_database(db_path)
+
+        # 4. Start Import Process
         self.progress_dialog = QProgressDialog("Importando Bóveda...", "Cancelar", 0, 0, self)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)

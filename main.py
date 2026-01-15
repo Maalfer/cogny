@@ -37,7 +37,41 @@ def main():
     # Apply Theme
     app.setPalette(ThemeManager.get_palette(theme_name))
     
-    window = MainWindow()
+    # Database Selection Logic
+    db_path = settings.value("last_db_path", "")
+    
+    # Verify if file exists (if it was supposed to) or if it's empty
+    # If path is invalid or empty, show setup
+    show_setup = False
+    if not db_path or not os.path.exists(db_path):
+        show_setup = True
+        
+    if show_setup:
+        from app.ui.dialogs_setup import SetupDialog
+        setup_dialog = SetupDialog()
+        if setup_dialog.exec():
+            db_path = setup_dialog.selected_db_path
+            
+            # Handle Draft Mode
+            if db_path == "__TEMP__":
+                import tempfile
+                import uuid
+                # Create a unique temp name so we don't conflict
+                temp_name = f"cogny_draft_{uuid.uuid4().hex[:8]}.cdb"
+                db_path = os.path.join(tempfile.gettempdir(), temp_name)
+                # Do NOT save to settings.value("last_db_path")
+                # So next time app opens, it asks again.
+                is_draft = True
+            else:
+                settings.setValue("last_db_path", db_path)
+                is_draft = False
+        else:
+            # User closed dialog
+            sys.exit(0)
+    else:
+        is_draft = False
+    
+    window = MainWindow(db_path, is_draft=is_draft)
     window.show()
     sys.exit(app.exec())
 

@@ -1,6 +1,6 @@
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtWidgets import QFileDialog, QToolBar
 from app.ui.widgets import ModernInfo, ModernAlert
 from app.ui.blueprints.markdown import MarkdownRenderer
 import os
@@ -8,6 +8,15 @@ import os
 class UiActionsMixin:
     def create_actions(self):
         # File Actions
+        self.act_new_db = QAction("Nueva Base de Datos...", self)
+        self.act_new_db.triggered.connect(self.new_database)
+        
+        self.act_open_db = QAction("Abrir Base de Datos...", self)
+        self.act_open_db.triggered.connect(self.open_database)
+        
+        self.act_save_as_db = QAction("Guardar Como...", self) # Copy current DB to new location and switch
+        self.act_save_as_db.triggered.connect(self.save_as_database)
+
         self.act_new_root = QAction("Nueva Nota Raíz", self)
         self.act_new_root.triggered.connect(self.sidebar.add_root_note)
 
@@ -86,6 +95,83 @@ class UiActionsMixin:
         self.act_about = QAction("Acerca de", self)
         self.act_about.triggered.connect(self.show_about)
 
+    def new_database(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Nueva Base de Datos", 
+                                            os.path.expanduser("~/Documentos"), 
+                                            "Cogny Database (*.cdb)")
+        if path:
+            if not path.endswith(".cdb"): path += ".cdb"
+            self.switch_database(path)
+
+    def open_database(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Abrir Base de Datos", 
+                                            os.path.expanduser("~/Documentos"), 
+                                            "Cogny Database (*.cdb)")
+        if path:
+            self.switch_database(path)
+
+    def save_as_database(self):
+        # Save current DB content to a new file.
+        # Since SQLite is a file, we can checkpoint/backup or just copy.
+        # But simpler: switch to new path (created empty) and user copies content?
+        # "Save As" usually means "Save current state to new file and switch".
+        # SQLite `VACUUM INTO` or backup API is best. 
+        # For simplicity in this iteration: We will just COPY the file.
+        path, _ = QFileDialog.getSaveFileName(self, "Guardar Base de Datos Como...", 
+                                            os.path.expanduser("~/Documentos"), 
+                                            "Cogny Database (*.cdb)")
+        if path:
+            if not path.endswith(".cdb"): path += ".cdb"
+            
+            # Flush current changes
+            self.editor_area.save_current_note()
+            
+            # Copy file
+            import shutil
+            try:
+                shutil.copy2(self.db.db_path, path)
+                self.switch_database(path)
+                ModernInfo.show(self, "Éxito", f"Base de datos guardada en:\\n{path}")
+            except Exception as e:
+                ModernAlert.show(self, "Error", f"No se pudo guardar como:\\n{str(e)}")
+
+    def switch_database(self, new_path):
+        # 1. Update Settings
+        settings = QSettings()
+        settings.setValue("last_db_path", new_path)
+        
+        # Clear Draft Flag
+        self.is_draft = False
+        
+        # 2. Re-initialize DB Manager
+        # We need to ensure connections are closed ideally, but Python GC helps.
+        from app.database.manager import DatabaseManager
+        self.db = DatabaseManager(new_path)
+        
+        # 3. Update Image Cache
+        from app.ui.image_cache import GlobalImageCache
+        GlobalImageCache.set_db_path(new_path)
+        
+        # 4. Restart UI
+        # Removing toolbars and menubar to avoid duplication when calling setup_ui again
+        self.menuBar().clear()
+        for toolbar in self.findChildren(QToolBar):
+            self.removeToolBar(toolbar)
+            
+        # Clear Central Widget (Splitter)
+        if self.centralWidget():
+            self.centralWidget().deleteLater()
+            
+        # Re-run setup
+        self.setup_ui()
+        
+        # Start workers again
+        if hasattr(self, '_start_image_preloader'):
+            self._start_image_preloader(new_path)
+            
+        # Update Title
+        self.setWindowTitle(f"Cogny - {os.path.basename(new_path)}")
+
     def on_sidebar_note_selected(self, note_id):
         # Auto-save previous if needed (EditorArea handles save logic call, but we might want to trigger it before switch?)
         # EditorArea.load_note calls save? No. Sidebar emits selection changed.
@@ -114,6 +200,12 @@ class UiActionsMixin:
             if not msg: self.statusBar().clearMessage()
 
     def on_save_triggered(self):
+        # Intercept Save if we are in Draft Mode
+        if getattr(self, "is_draft", False):
+            # Prompt user to save the whole database
+            self.save_as_database()
+            return
+
         title = self.editor_area.save_current_note()
         if title and self.editor_area.current_note_id:
              # Need to update sidebar title in tree?
