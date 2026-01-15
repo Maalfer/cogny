@@ -1,0 +1,36 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: Cogny
+Label: Cogny App
+Codename: stable
+Date: Thu, 15 Jan 2026 22:34:05 UTC
+Architectures: amd64
+Components: main
+Description: Repositorio Oficial de Cogny
+MD5Sum:
+ e75d9166035bc1334f0994a0890597b0 534 main/binary-amd64/Packages
+ be965cc8ad6aefe6a7801b21250fb9a0 395 main/binary-amd64/Packages.gz
+ 72129a904a0961be22caf8e326e5dba9 109 main/binary-amd64/Release
+SHA1:
+ 79960e47723fd0a027844e910e04e4938834c176 534 main/binary-amd64/Packages
+ 7705a659e0fc56fc786a89baeb5fa7ce2b0706ab 395 main/binary-amd64/Packages.gz
+ 35016a46f4cb8bd54eef11fcdf920547f4dae80f 109 main/binary-amd64/Release
+SHA256:
+ 66b988471d1da10377c8cc34beea19e5816a5800aff1b886e56c3a5cb8760399 534 main/binary-amd64/Packages
+ 021b3f4865b416d12a274ee855236f351a19520a4fe2ad87065a48f62073618c 395 main/binary-amd64/Packages.gz
+ 0fbd99cf8dc871fda679b93ed3529f4c140a4cb787b1220cbe89b50a9d74a963 109 main/binary-amd64/Release
+-----BEGIN PGP SIGNATURE-----
+
+iQGzBAEBCgAdFiEEO2qlHX6qB+t5Eo7z2Jn+BXHctfsFAmlpa14ACgkQ2Jn+BXHc
+tfsI6Qv+OKk9jT7DdS1DoqMHtN8yg31dOQjlB3PvYELLZYXTOntEBLGEJ9LL1JND
+f9Z6reNOtW15RIiK4bCB9lz8F9oUZUxoRDBbmSLOUqlUW7WYzOVPsznoQc6B174L
+pinSwzpBj0g3VQJjpyN3zZaXD6gAa2jmz71F7dh3QX9+6IrSggICPVyK3SX91Yhw
+OtbKYMwtRJze0spk1sxyFYU/jKIQDNYPjvsbjDQzCDMz6VupZUBzunlZVMobUcK+
+QFN11GXpRqKVmfdhjPa7+Outc9p4MND7BE3vWlxSYbna9oVqEtLenFT61ZP8Mrj/
+PFJFd65cOhnHjzRPCDaoujr7IBW+OmlHwQexVZ6zONUyB9mdRNJbhVIKzcyygo8z
+7zCnTvvBVYfAqCwYCSCar9oOfmOB51ffYSCtGFPO2eHhwUWvGp2VeiDkBDvsR5q6
+LQAattPSD993iMlFhMAM4yihhrhOzYaoCbp6H+CatO2JTyAABesn0dTKhiIFe3sl
+oekUGOg2
+=MH3e
+-----END PGP SIGNATURE-----

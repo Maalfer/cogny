@@ -1,0 +1,7 @@
+Origin: Cogny
+Label: Cogny App
+Codename: stable
+Architectures: amd64
+Components: main
+Description: Repositorio Oficial de Cogny
+SignWith: D899FE0571DCB5FB
