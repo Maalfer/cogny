@@ -39,6 +39,15 @@ class NotesMixin:
     def get_note(self, note_id: int) -> Optional[Tuple]:
         return self.fetch_one("SELECT * FROM notes WHERE id = ?", (note_id,))
 
+    def get_note_metadata(self, note_id: int) -> Optional[Tuple]:
+        """Get note info without heavy content."""
+        return self.fetch_one("SELECT id, title, is_folder, parent_id FROM notes WHERE id = ?", (note_id,))
+
+    def get_note_content(self, note_id: int) -> Optional[str]:
+        """Get only the content of a note."""
+        row = self.fetch_one("SELECT content FROM notes WHERE id = ?", (note_id,))
+        return row['content'] if row else None
+
     def get_children(self, parent_id: Optional[int] = None) -> List[Tuple]:
         """Get all notes that are direct children of parent_id."""
         if parent_id is None:

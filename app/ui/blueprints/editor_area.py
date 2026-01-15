@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QSplitter, QVBoxLayout, QApplication
 from PySide6.QtCore import Qt, QSettings, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QTextCursor
 
 from app.ui.editor import NoteEditor
 from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm
@@ -78,7 +78,8 @@ class EditorArea(QWidget):
         
         # Only query DB if we don't have the info from sidebar
         if is_folder is None or title is None:
-            note_data = self.db.get_note(note_id)
+            # Use metadata query to avoid fetching heavy content in UI thread
+            note_data = self.db.get_note_metadata(note_id)
             if not note_data: return
             is_folder = bool(note_data['is_folder'])
             title = note_data['title']
@@ -91,11 +92,15 @@ class EditorArea(QWidget):
         self.text_editor.setReadOnly(False)
         
         self.status_message.emit(f"Cargando nota: {title}...", 0)
-        self.title_edit.setPlainText("Cargando...")
+        
+        # Set title immediately
+        self.title_edit.setPlainText(title)
+         # Show loading state only in content
         self.text_editor.setHtml("<h2 style='color: gray; text-align: center;'>Cargando contenido...</h2>")
         
         self.note_loader = NoteLoaderWorker(self.db.db_path, note_id)
-        self.note_loader.finished.connect(self.on_note_loaded)
+        self.note_loader.chunk_loaded.connect(self.on_chunk_loaded)
+        self.note_loader.finished.connect(self.on_note_loading_finished)
         self.note_loader.start()
 
     def show_folder_placeholder(self, title):
@@ -104,30 +109,39 @@ class EditorArea(QWidget):
         self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {title}</h1><p style='color: gray; text-align: center;'>Esta es una carpeta. Crea o selecciona una nota dentro de ella.</p>")
         self.text_editor.setReadOnly(True)
 
-    def on_note_loaded(self, result):
-        self.status_message.emit("", 0) # Clear
+    def on_chunk_loaded(self, html_chunk):
+        # First chunk? If text editor still has "Cargando...", clear it.
+        # But setHtml replaces everything.
+        # We need to know if it's the first update.
         
-        if not result or result["note_id"] != self.current_note_id:
-            return
+        # Helper check:
+        current_html = self.text_editor.toHtml()
+        if "Cargando contenido..." in current_html:
+            # First real chunk replacing placeholder
+            # Wrap in pre-wrap div for consistent styling if needed, 
+            # though process_markdown_content emits blocks.
+            # We can use insertHtml if we clear first.
+            self.text_editor.clear()
             
-        self.title_edit.setPlainText(result["title"])
-        self.text_editor.current_note_id = result["note_id"]
-        
-        # Use pre-processed content from worker thread (already processed Markdown)
-        content = result["processed_content"]
-        
-        if result["is_markdown"]:
-             # Content is already processed by worker, no need to process again
-             if content != self.text_editor.toHtml():
-                 formatted = f'<div style="white-space: pre-wrap;">{content}</div>'
-                 self.text_editor.blockSignals(True)
-                 try:
-                     self.text_editor.setHtml(formatted)
-                 finally:
-                     self.text_editor.blockSignals(False)
-                 self.text_editor.update_code_block_visuals()
+            # Note: insertHtml inserts at cursor. After clear, cursor is at start.
+            formatted = f'<div style="white-space: pre-wrap;">{html_chunk}</div>'
+            self.text_editor.setHtml(formatted)
         else:
-             self.text_editor.setHtml(content)
+             # Append
+             # Move cursor to end?
+             cursor = self.text_editor.textCursor()
+             cursor.movePosition(QTextCursor.End)
+             self.text_editor.setTextCursor(cursor)
+             
+             # Append HTML
+             # We might need a newline separation?
+             self.text_editor.insertHtml(html_chunk)
+             
+        self.text_editor.update_code_block_visuals()
+
+    def on_note_loading_finished(self, result):
+        self.status_message.emit("", 0) # Clear
+        # Final cleanup or validation if needed
 
     def save_current_note(self):
         if self.current_note_id is None:
