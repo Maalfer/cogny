@@ -15,6 +15,12 @@ class MarkdownRenderer:
         # Increase recursion limit for deep nested structures (e.g. lists)
         sys.setrecursionlimit(3000)
         
+        # 0. Pre-process: Unescape characters commonly escaped by Qt's toMarkdown
+        # This fixes issues where code blocks (\```) and images (!\[) rendering as literal text.
+        text = text.replace(r'\```', '```')
+        text = text.replace(r'!\[', '![')
+        text = text.replace(r'\]', ']')
+        
         # 1. Protect Internal HTML (Attachments Only - Images handled by Extension)
         placeholders = {}
         
