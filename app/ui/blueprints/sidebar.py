@@ -86,6 +86,8 @@ class Sidebar(QWidget):
             self.tree_view.expand(index)
 
     def on_tree_expanded(self, index):
+        if self.tree_view.model() != self.proxy_model:
+            return
         source_index = self.proxy_model.mapToSource(index)
         self.model.fetch_children(source_index)
 
