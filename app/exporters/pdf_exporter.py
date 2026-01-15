@@ -33,14 +33,14 @@ class PDFExporter:
             margin: 2.5cm;
             @bottom-center {{
                 content: "Página " counter(page) " de " counter(pages);
-                font-family: "Segoe UI", sans-serif;
+                font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                 font-size: 9pt;
                 color: {text_color};
             }}
         }}
 
         body {{
-            font-family: "Segoe UI", sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             font-size: 11pt;
             line-height: 1.6;
             color: {text_color};
@@ -115,13 +115,12 @@ class PDFExporter:
         """
         
         # 4. Generate PDF with Custom Fetcher for DB Images
-        html_obj = HTML(string=full_html, base_url=".")
+        html_obj = HTML(string=full_html, base_url=".", url_fetcher=self._db_url_fetcher)
         css_obj = CSS(string=full_css_str)
         
         html_obj.write_pdf(
             output_path, 
-            stylesheets=[css_obj],
-            url_fetcher=self._db_url_fetcher
+            stylesheets=[css_obj]
         )
 
     def _db_url_fetcher(self, url, timeout=10, ssl_context=None):

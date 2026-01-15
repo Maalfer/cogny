@@ -241,11 +241,10 @@ class UiActionsMixin:
                 
             from app.exporters.pdf_exporter import PDFExporter
             
-            settings = QSettings()
-            current_theme = settings.value("theme", "Dark")
-            
+            # Force Light theme for PDF export (standard white paper look)
+            # regardless of current UI theme.
             exporter = PDFExporter(self.db)
-            exporter.export_to_pdf(title, content, path, theme_name=current_theme)
+            exporter.export_to_pdf(title, content, path, theme_name="Light")
             
             ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\\n{path}")
             
