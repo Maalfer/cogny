@@ -53,6 +53,10 @@ class SetupMixin:
                 print("Migrating Database: Adding is_read_later column...")
                 cursor.execute("ALTER TABLE notes ADD COLUMN is_read_later BOOLEAN DEFAULT 0")
 
+            if "cached_html" not in columns:
+                print("Migrating Database: Adding cached_html column...")
+                cursor.execute("ALTER TABLE notes ADD COLUMN cached_html TEXT")
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS images (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

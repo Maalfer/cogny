@@ -78,7 +78,11 @@ class ObsidianImporter:
         # Parse Content for Links/Attachments
         new_content = self._process_links(content, note_id)
         
-        self.db.update_note(note_id, title, new_content)
+        # GENERATE CACHE (Double Column Architecture)
+        from app.ui.blueprints.markdown import MarkdownRenderer
+        cached_html = MarkdownRenderer.process_markdown_content(new_content)
+        
+        self.db.update_note(note_id, title, new_content, cached_html=cached_html)
 
     def _process_links(self, content, note_id):
         # 1. WikiLinks: ![[image.png]] (Embed) or [[doc.pdf]] (Link)

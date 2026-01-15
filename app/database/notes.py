@@ -20,14 +20,20 @@ class NotesMixin:
                 (title, note_id)
             )
 
-    def update_note(self, note_id: int, title: str, content: str):
-        """Update a note's title and content."""
+    def update_note(self, note_id: int, title: str, content: str, cached_html: str = None):
+        """Update a note's title, content, and render cache."""
         with self.transaction() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (title, content, note_id)
-            )
+            if cached_html is not None:
+                cursor.execute(
+                    "UPDATE notes SET title = ?, content = ?, cached_html = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (title, content, cached_html, note_id)
+                )
+            else:
+                 cursor.execute(
+                    "UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (title, content, note_id)
+                )
 
     def delete_note(self, note_id: int):
         """Delete a note and its children."""
@@ -47,6 +53,11 @@ class NotesMixin:
         """Get only the content of a note."""
         row = self.fetch_one("SELECT content FROM notes WHERE id = ?", (note_id,))
         return row['content'] if row else None
+
+    def get_note_cache(self, note_id: int) -> Optional[str]:
+        """Get the cached HTML of a note."""
+        row = self.fetch_one("SELECT cached_html FROM notes WHERE id = ?", (note_id,))
+        return row['cached_html'] if row else None
 
     def get_children(self, parent_id: Optional[int] = None) -> List[Tuple]:
         """Get all notes that are direct children of parent_id."""
@@ -100,3 +111,12 @@ class NotesMixin:
             WHERE is_read_later = 1 
             ORDER BY updated_at DESC
         """)
+
+    def update_note_cache(self, note_id: int, cached_html: str):
+        """Update only the cached HTML of a note."""
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE notes SET cached_html = ? WHERE id = ?",
+                (cached_html, note_id)
+            )

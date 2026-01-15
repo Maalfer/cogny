@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QSplitter, QVBoxLayout, QApplication
 from PySide6.QtCore import Qt, QSettings, Signal
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtGui import QFont, QTextCursor, QTextDocument
 
 from app.ui.editor import NoteEditor
 from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm
@@ -95,7 +95,20 @@ class EditorArea(QWidget):
         
         # Set title immediately
         self.title_edit.setPlainText(title)
-         # Show loading state only in content
+        
+        # 1. OPTIMIZATION: Try Loading from Render Cache (Double Column)
+        cached_html = self.db.get_note_cache(note_id)
+        if cached_html and len(cached_html) > 20:
+             self.text_editor.setHtml(cached_html)
+             self.text_editor.setReadOnly(False)
+             # Restore visuals immediately
+             self.highlighter.setDocument(self.text_editor.document())
+             self.text_editor.update_code_block_visuals()
+             
+             self.status_message.emit("Nota cargada (Cache)", 1000)
+             return
+
+        # 2. Fallback: Show loading state only in content
         self.text_editor.setHtml("<h2 style='color: gray; text-align: center;'>Cargando contenido...</h2>")
         
         self.note_loader = NoteLoaderWorker(self.db.db_path, note_id)
@@ -146,6 +159,10 @@ class EditorArea(QWidget):
         self.highlighter.setDocument(self.text_editor.document())
         self.text_editor.update_code_block_visuals() # Apply full pass
         
+        # Update Cache for next time
+        if self.current_note_id:
+             self.db.update_note_cache(self.current_note_id, self.text_editor.toHtml())
+        
         self.status_message.emit("", 0) # Clear
         # Final cleanup or validation if needed
 
@@ -176,7 +193,11 @@ class EditorArea(QWidget):
              except ValueError:
                  pass
 
-        self.db.update_note(self.current_note_id, title, content)
+        # We also want to ensure we save the Markdown source if possible.
+        # Let's switch to saving Markdown in 'content' and HTML in 'cached_html'.
+        
+        markdown_content = self.text_editor.toMarkdown()
+        self.db.update_note(self.current_note_id, title, markdown_content, cached_html=content)
         
         self.db.cleanup_images(self.current_note_id, image_ids)
         self.db.cleanup_attachments(self.current_note_id, att_ids)
