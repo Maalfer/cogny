@@ -40,21 +40,41 @@ Mantén protegida tu información sensible.
     -   *Sin zoom accidental con Ctrl+Rueda.*
 -   **UI Moderna**: Soporte para temas claro/oscuro (personalizable).
 
-## 🚀 Empezando
+## 🚀 Instalación
 
-### 📦 Instalación Rápida (.deb)
-Para distribuciones basadas en Debian (Ubuntu, Linux Mint, Debian, etc.):
+### 📦 Método Recomendado: APT Repository
 
-1. Ve a la sección de [Releases](../../releases) y descarga el archivo `cogny.deb`.
-2. Abre una terminal en la carpeta donde lo descargaste.
-3. Ejecuta el siguiente comando:
+Para distribuciones basadas en Debian (Ubuntu, Linux Mint, Debian, etc.), puedes instalar Cogny desde nuestro repositorio oficial:
 
 ```bash
-sudo dpkg -i cogny.deb
-```
-Si hay dependencias faltantes, ejecuta: `sudo apt-get install -f`
+# 1. Añadir la clave GPG del repositorio
+curl -fsSL https://maalfer.github.io/cogny/cogny.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/cogny-archive-keyring.gpg
 
-### 🐧 Instalación y Ejecución Manual (Desarrollo)
+# 2. Añadir el repositorio a tus fuentes
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cogny-archive-keyring.gpg] https://maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/cogny.list
+
+# 3. Actualizar e instalar
+sudo apt update
+sudo apt install cogny
+```
+
+**Actualizar a nuevas versiones:**
+```bash
+sudo apt update && sudo apt upgrade cogny
+```
+
+### 📥 Instalación Manual (.deb)
+
+También puedes descargar e instalar el paquete `.deb` directamente:
+
+1. Descarga el archivo desde [Releases](https://github.com/Maalfer/cogny/releases)
+2. Instálalo con:
+```bash
+sudo dpkg -i cogny_*.deb
+sudo apt-get install -f  # Si hay dependencias faltantes
+```
+
+### 🐧 Ejecución desde Código Fuente (Desarrollo)
 
 Sigue estos pasos para configurar y ejecutar la aplicación correctamente:
 
