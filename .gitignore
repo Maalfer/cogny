@@ -40,17 +40,15 @@ Thumbs.db
 *.qmlc
 *.jsc
 
-# Packaging
-*.deb
-!docs/pool/**/*.deb  # EXCEPCIÓN: Permitir paquetes .deb en docs/pool/ para APT repository
+# Packaging (específico para evitar problemas con docs/)
+/cogny_*.deb          # Bloquear .deb en raíz
+build_deb/*.deb       # Bloquear .deb en build_deb/
+/cogny.gpg.key        # Bloquear .gpg.key en raíz
+apt-repo/             # La carpeta apt-repo/ completa (se usa docs/ para GitHub Pages)
 *.spec
-build_deb/
 venv_build/
 
-# APT Repository (will be in docs/ instead)
-apt-repo/
-*.gpg.key
-!docs/*.gpg.key  # EXCEPCIÓN: Permitir la clave pública en docs/ para GitHub Pages
+# Nota: docs/ NO está bloqueado, se sube completo a GitHub Pages
 
 
 # Test outputs
