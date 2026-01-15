@@ -46,4 +46,21 @@ Thumbs.db
 build_deb/
 venv_build/
 
+# APT Repository (will be in docs/ instead)
+apt-repo/
+*.gpg.key
+
+# Test outputs
+tests/test_*.pdf
+tests/test_*.zip
+
+# PyInstaller
+*.spec
+
+# User data (example/demo database)
 conocimientoo/
+
+# Temporary files
+repro_*.py
+debug_*.py
+test_debug.*
