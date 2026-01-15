@@ -214,10 +214,16 @@ class UiActionsMixin:
         self.editor_toolbar.setVisible(checked)
 
     def export_note_pdf(self, note_id):
-        # ... Reuse PDF export logic calling PDFExporter ...
-        # Since it was inline, we can move it here or to a helper.
-        # It needs UI (FileDialog) so MainWindow or EditorArea?
-        # Let's keep it here but use MarkdownRenderer.
+        # 1. Check for Multi-Selection in Sidebar
+        # If user explicitly selected multiple notes in the sidebar tree, 
+        # we prioritize exporting that batch as a ZIP.
+        selection = self.sidebar.get_selected_notes()
+        
+        if len(selection) > 1:
+            self.export_multiple_pdf(selection)
+            return
+
+        # 2. Single Note Export (Legacy Flow)
         try:
             note_data = self.db.get_note(note_id)
             if not note_data:
@@ -226,8 +232,6 @@ class UiActionsMixin:
             
             title = note_data['title']
             content = note_data['content']
-            
-            processed_content = MarkdownRenderer.process_markdown_content(content)
             
             default_name = f"{title}.pdf"
             default_name = "".join([c for c in default_name if c.isalpha() or c.isdigit() or c in (' ', '.', '-', '_')]).strip()
@@ -242,7 +246,6 @@ class UiActionsMixin:
             from app.exporters.pdf_exporter import PDFExporter
             
             # Force Light theme for PDF export (standard white paper look)
-            # regardless of current UI theme.
             exporter = PDFExporter(self.db)
             exporter.export_to_pdf(title, content, path, theme_name="Light")
             
@@ -250,6 +253,32 @@ class UiActionsMixin:
             
         except Exception as e:
             ModernAlert.show(self, "Error de Exportación", str(e))
+
+    def export_multiple_pdf(self, selection):
+        """Bundles multiple notes into a single ZIP file."""
+        try:
+            # Suggest a ZIP filename
+            default_name = f"Notas_Exportadas_{len(selection)}.zip"
+            path, _ = QFileDialog.getSaveFileName(self, "Guardar Notas (ZIP)", 
+                                                os.path.join(os.path.expanduser("~"), default_name), 
+                                                "Archivos ZIP (*.zip)")
+            
+            if not path: return
+            if not path.endswith('.zip'): path += '.zip'
+            
+            from app.exporters.export_varios_pdf import MultiPDFExporter
+            
+            exporter = MultiPDFExporter(self.db)
+            # We force Light theme for printing
+            success = exporter.export_multiple(selection, path, theme_name="Light")
+            
+            if success:
+                 ModernInfo.show(self, "Exportación Completada", f"Se exportaron {len(selection)} notas a:\\n{path}")
+            else:
+                 ModernAlert.show(self, "Error", "No se pudo generar el archivo ZIP.")
+                 
+        except Exception as e:
+            ModernAlert.show(self, "Error de Exportación Múltiple", str(e))
 
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y SQLite.")

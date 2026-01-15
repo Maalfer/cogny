@@ -31,6 +31,8 @@ class Sidebar(QWidget):
         self.tree_view.setModel(self.proxy_model)
         self.tree_view.setHeaderHidden(True)
         self.tree_view.setUniformRowHeights(True)
+        # Enable Multi-Selection
+        self.tree_view.setSelectionMode(QTreeView.ExtendedSelection)
         
         # Signals
         self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
@@ -289,4 +291,30 @@ class Sidebar(QWidget):
         new_state = self.db.toggle_read_later(note_id)
         msg = "Nota guardada para ver más tarde." if new_state else "Nota eliminada de guardados."
         ModernAlert.show(self, "Ver más tarde", msg)  # Using Alert as simple feedback mechanism
+
+    def get_selected_notes(self):
+        """Returns a list of tuples (note_id, title) for all selected items."""
+        indexes = self.tree_view.selectedIndexes()
+        selected_notes = []
+        seen_ids = set()
+
+        for index in indexes:
+             # StandardItemModel (Search) or ProxyModel (Tree)?
+             # We need to handle both models robustly.
+             current_model = self.tree_view.model()
+             item = None
+             
+             if current_model == self.proxy_model:
+                 source_index = self.proxy_model.mapToSource(index)
+                 item = self.model.itemFromIndex(source_index)
+             else:
+                 item = current_model.itemFromIndex(index)
+             
+             if item and hasattr(item, 'note_id'):
+                 if item.note_id not in seen_ids:
+                     selected_notes.append((item.note_id, item.text()))
+                     seen_ids.add(item.note_id)
+                     
+        return selected_notes
+
 
