@@ -1,3 +1,4 @@
 PySide6
 Pygments
 markdown
+weasyprint

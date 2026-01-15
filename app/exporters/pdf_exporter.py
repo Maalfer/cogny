@@ -1,10 +1,8 @@
-from PySide6.QtGui import QTextDocument, QPageSize, QPageLayout, QPdfWriter, QImage, QAbstractTextDocumentLayout
-from PySide6.QtCore import QSizeF, QMarginsF, QUrl
 from app.database.manager import DatabaseManager
 from app.ui.themes import ThemeManager
 from app.ui.blueprints.markdown import MarkdownRenderer
+from weasyprint import HTML, CSS, default_url_fetcher
 import re
-import html
 
 class PDFExporter:
     def __init__(self, db_manager: DatabaseManager):
@@ -12,125 +10,163 @@ class PDFExporter:
 
     def export_to_pdf(self, title: str, content: str, output_path: str, theme_name: str = "Light"):
         """
-        Exports the content to PDF using specialized HTML rendering.
-        Matches the editor's look and feel including syntax highlighting.
+        Exports the content to PDF using WeasyPrint for high-quality rendering.
         """
         
-        # 1. Render Markdown to HTML using the Unified Renderer
-        # This ensures tables, code blocks (with inline styles), and internal images 
-        # are processed exactly as they appear in the editor.
-        html_content = MarkdownRenderer.process_markdown_content(content)
+        # 1. Render HTML
+        body_html = MarkdownRenderer.process_markdown_content(content)
         
-        # 2. Setup Document
-        doc = QTextDocument()
+        # 2. Prepare CSS
+        # Base Editor Styles
+        base_css = ThemeManager.get_editor_style(theme_name)
         
-        # 3. Add Styles
-        self._apply_styles(doc, theme_name)
+        # Theme Colors
+        is_dark = (theme_name == "Dark")
+        bg_color = "#1e1e1e" if is_dark else "#FAFAFA"
+        text_color = "#d4d4d4" if is_dark else "#202020"
+        border_color = "#454545" if is_dark else "#C0C0C0"
         
-        # 4. Load Images
-        self._load_images(doc, html_content)
+        # PDF Specific CSS (Pagination, @page, Resets)
+        pdf_css = f"""
+        @page {{
+            size: A4;
+            margin: 2.5cm;
+            @bottom-center {{
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: "Segoe UI", sans-serif;
+                font-size: 9pt;
+                color: {text_color};
+            }}
+        }}
+
+        body {{
+            font-family: "Segoe UI", sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: {text_color};
+            background-color: {bg_color};
+            margin: 0;
+            padding: 0;
+        }}
         
-        # 5. Construct Full HTML
-        # We wrap content in a div that matches the Editor's class to apply scoped styles if any,
-        # but mostly we rely on global styles from ThemeManager.
+        /* Document Title */
+        h1.doc-title {{
+            font-size: 24pt;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 2em;
+            padding-bottom: 0.5em;
+            border-bottom: 2px solid {border_color};
+        }}
+
+        /* Smart Page Breaks */
+        h1, h2, h3, h4, h5, h6 {{ 
+            break-after: avoid; 
+            margin-top: 1.5em;
+        }}
+        pre, blockquote, table, img, figure {{ 
+            break-inside: avoid; 
+        }}
+        
+        /* Table Tweaks for PDF */
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1em;
+        }}
+        th, td {{
+            border: 1px solid {border_color};
+            padding: 8px;
+        }}
+        
+        /* Pre/Code Tweaks */
+        pre {{
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap; /* Wrap long lines in PDF */
+            font-size: 10pt;
+            border: 1px solid {border_color};
+        }}
+        
+        /* Images */
+        img {{
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }}
+        """
+        
+        # Combine CSS
+        full_css_str = base_css + "\n" + pdf_css
+        
+        # 3. Full HTML Document
         full_html = f"""
+        <!DOCTYPE html>
         <html>
         <head>
             <title>{title}</title>
+            <meta charset="utf-8">
         </head>
         <body class="NoteEditor">
             <h1 class="doc-title">{title}</h1>
-            {html_content}
+            {body_html}
         </body>
         </html>
         """
         
-        doc.setHtml(full_html)
+        # 4. Generate PDF with Custom Fetcher for DB Images
+        html_obj = HTML(string=full_html, base_url=".")
+        css_obj = CSS(string=full_css_str)
         
-        # 6. Setup PDF Writer
-        writer = QPdfWriter(output_path)
-        writer.setPageSize(QPageSize(QPageSize.A4))
-        writer.setResolution(300) 
-        writer.setCreator("Cogni App")
-        
-        # Standard professional margins (20mm ~ 0.8 inch)
-        margins = QMarginsF(20, 20, 20, 20)
-        layout = QPageLayout(QPageSize(QPageSize.A4), QPageLayout.Portrait, margins)
-        writer.setPageLayout(layout)
-        
-        # 7. Print
-        doc.print_(writer)
-        
-    def _apply_styles(self, doc: QTextDocument, theme_name: str):
-        """Applies CSS consistent with the chosen theme."""
-        # 1. Get Base CSS from ThemeManager
-        # This includes h1-h6, table, pre, code, blockquote, img
-        base_css = ThemeManager.get_editor_style(theme_name)
-        
-        # 2. Augment for PDF Specifics
-        # - Font adjustments for Print (Points instead of Pixels?) 
-        #   (Qt usually treats px as points in print context or depends on resolution, 
-        #    but explicit pt is safer for text).
-        # - We replace pixels with points or trust the scaling.
-        # - We add specific Body styling.
-        
-        is_dark = (theme_name == "Dark")
-        bg_color = "#1e1e1e" if is_dark else "#FAFAFA"
-        text_color = "#d4d4d4" if is_dark else "#202020"
-        
-        pdf_overrides = f"""
-            body {{ 
-                font-family: "Segoe UI", sans-serif; 
-                font-size: 14pt; 
-                color: {text_color}; 
-                background-color: {bg_color}; 
-                line-height: 1.5;
-            }}
-            .doc-title {{ 
-                font-size: 24pt; 
-                font-weight: bold; 
-                color: {text_color}; 
-                margin-bottom: 30px; 
-                text-align: center; 
-                border-bottom: 2px solid {'#454545' if is_dark else '#C0C0C0'}; 
-                padding-bottom: 15px; 
-            }}
-            /* Ensure Tables use Full Width in PDF */
-            table {{ width: 100%; margin-bottom: 20px; }}
-            
-            /* Clean up code blocks for Print */
-            pre {{ 
-                font-size: 10pt; 
-                padding: 10px; 
-                background-color: {'#2d2d2d' if is_dark else '#F0F0F0'};
-                white-space: pre-wrap;
-            }}
-            
-            /* Adjust Images */
-            img {{ max-width: 100%; }}
-        """
-        
-        # Combine
-        full_css = base_css + "\n" + pdf_overrides
-        doc.setDefaultStyleSheet(full_css)
+        html_obj.write_pdf(
+            output_path, 
+            stylesheets=[css_obj],
+            url_fetcher=self._db_url_fetcher
+        )
 
-    def _load_images(self, doc: QTextDocument, content: str):
+    def _db_url_fetcher(self, url, timeout=10, ssl_context=None):
         """
-        Finds all image://db/{id} patterns and loads them into the document's resource cache.
+        Custom URL fetcher to intercept image://db/{id} requests and return data from SQLite.
+        Delegates other schemes to default_url_fetcher.
         """
-        refs = re.findall(r'image://db/(\d+)', content)
-        unique_ids = set(refs)
-        
-        for img_id_str in unique_ids:
+        if url.startswith("image://db/"):
             try:
-                img_id = int(img_id_str)
+                # Extract ID
+                # url format: image://db/123
+                img_id = url.split("image://db/")[-1]
+                if not img_id.isdigit():
+                    raise ValueError("Invalid Image ID")
+                    
+                img_id = int(img_id)
                 blob = self.db.get_image(img_id)
+                
                 if blob:
-                    image = QImage()
-                    if image.loadFromData(blob):
-                        url = QUrl(f"image://db/{img_id}")
-                        doc.addResource(QTextDocument.ImageResource, url, image)
+                    # Detect mime type? 
+                    # We usually store raw bytes. We detect header or assume png/jpg.
+                    # Simple heuristic:
+                    mime = 'image/png'
+                    if blob.startswith(b'\xff\xd8'): mime = 'image/jpeg'
+                    elif blob.startswith(b'GIF'): mime = 'image/gif'
+                    elif blob.startswith(b'<svg'): mime = 'image/svg+xml'
+                    
+                    return {
+                        'string': blob,
+                        'mime_type': mime,
+                        'encoding': None,
+                        'redirected_url': None
+                    }
+                else:
+                     raise FileNotFoundError(f"Image {img_id} not found in DB")
+                     
             except Exception as e:
-                print(f"Failed to load image resource {img_id}: {e}")
+                print(f"WeasyPrint Fetcher Error: {e}")
+                # Return empty or placeholder?
+                # Raise to let WeasyPrint handle (it shows broken image icon)
+                raise e
+        
+        # Fallback for http, file, attachment://...
+        # attachment:// is internal too but usually just a link, not loaded resource.
+        # MarkdownRenderer protects attachments as <a> links, so WeasyPrint won't fetch them unless <link/img>.
+        return default_url_fetcher(url, timeout, ssl_context)
 
 
