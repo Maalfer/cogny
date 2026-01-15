@@ -20,4 +20,8 @@ class UiThemeMixin:
         # Update components
         self.editor_area.switch_theme(theme_name)
         
+        # Apply Sidebar Styles explicitly
+        sidebar_style = ThemeManager.get_sidebar_style(theme_name)
+        self.sidebar.tree_view.setStyleSheet(sidebar_style)
+        
         self.statusBar().showMessage(f"Tema cambiado a {theme_name}", 2000)

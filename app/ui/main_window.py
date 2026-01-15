@@ -25,4 +25,11 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiWorkersMixin, UiActionsMixin, UiS
         self.db = DatabaseManager(db_path)
         
         self.setup_ui()
+        
+        # Apply Initial Theme (Stylesheets)
+        # Palette is set in main.py, but stylesheets (sidebar) need to be applied to widgets.
+        from PySide6.QtCore import QSettings
+        settings = QSettings()
+        current_theme = settings.value("theme", "Dark")
+        self.switch_theme(current_theme)
 

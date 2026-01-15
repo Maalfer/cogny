@@ -305,3 +305,80 @@ class ThemeManager:
                 "default": "#000000",       # Black
                 "inline_code": "#E67E22"    # Bright Orange for emphasis
             }
+
+    @staticmethod
+    def get_sidebar_style(theme: str) -> str:
+        """Provides CSS for the Sidebar QTreeView."""
+        if theme == "Dark":
+            hover_bg = "#2a2d3e"
+            selected_bg = "#37373D" # VS Code-like selection
+            text_color = "#d4d4d4"
+            
+            return f"""
+            QTreeView {{
+                background-color: transparent;
+                border: none;
+                color: {text_color};
+                show-decoration-selected: 1;
+                outline: 0;
+            }}
+            QTreeView::item {{
+                padding: 4px;
+                border-radius: 4px; /* Default radius, might apply to row */
+            }}
+            QTreeView::item:hover {{
+                background-color: {hover_bg};
+                border-radius: 4px;
+            }}
+            QTreeView::item:selected {{
+                background-color: {selected_bg};
+                color: white;
+                border-radius: 4px;
+            }}
+            QTreeView::item:selected:active {{
+                background-color: {selected_bg};
+            }}
+            QTreeView::item:selected:!active {{
+                background-color: {selected_bg}; /* Keep selection visible when focus lost */
+            }}
+            QTreeView::branch:has-children:!has-siblings:closed,
+            QTreeView::branch:closed:has-children:has-siblings {{
+                border-image: none;
+                image: none;
+                /* We rely on arrows provided by system or custom icons if needed. 
+                   Standard QTreeView style usually handles this. */
+            }}
+            """
+        else: # Light
+            hover_bg = "#E8E8E8"
+            selected_bg = "#D4D4D4"
+            text_color = "#202020"
+             
+            return f"""
+            QTreeView {{
+                background-color: transparent;
+                border: none;
+                color: {text_color};
+                show-decoration-selected: 1;
+                outline: 0;
+            }}
+            QTreeView::item {{
+                padding: 4px;
+                border-radius: 4px;
+            }}
+            QTreeView::item:hover {{
+                background-color: {hover_bg};
+                border-radius: 4px;
+            }}
+            QTreeView::item:selected {{
+                background-color: {selected_bg};
+                color: black;
+                border-radius: 4px;
+            }}
+            QTreeView::item:selected:active {{
+                background-color: {selected_bg};
+            }}
+            QTreeView::item:selected:!active {{
+                background-color: {selected_bg};
+            }}
+            """
