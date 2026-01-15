@@ -42,7 +42,19 @@ Mantén protegida tu información sensible.
 
 ## 🚀 Empezando
 
-### 🐧 Instalación y Ejecución en Linux
+### 📦 Instalación Rápida (.deb)
+Para distribuciones basadas en Debian (Ubuntu, Linux Mint, Debian, etc.):
+
+1. Ve a la sección de [Releases](../../releases) y descarga el archivo `cogny.deb`.
+2. Abre una terminal en la carpeta donde lo descargaste.
+3. Ejecuta el siguiente comando:
+
+```bash
+sudo dpkg -i cogny.deb
+```
+Si hay dependencias faltantes, ejecuta: `sudo apt-get install -f`
+
+### 🐧 Instalación y Ejecución Manual (Desarrollo)
 
 Sigue estos pasos para configurar y ejecutar la aplicación correctamente:
 

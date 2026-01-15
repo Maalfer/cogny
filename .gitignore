@@ -39,3 +39,9 @@ Thumbs.db
 # Qt
 *.qmlc
 *.jsc
+
+# Packaging
+*.deb
+*.spec
+build_deb/
+venv_build/
