@@ -34,7 +34,7 @@ class UiSetupMixin:
         self.restore_state()
 
     def create_toolbar(self):
-        toolbar = QToolBar("Main Toolbar")
+        toolbar = QToolBar("Barra Principal")
         self.addToolBar(toolbar)
         
         # Search Bar
@@ -55,6 +55,10 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_db)
         file_menu.addAction(self.act_open_db)
         file_menu.addAction(self.act_save_as_db)
+        
+        file_menu.addSeparator()
+        file_menu.addAction(self.act_read_later_list)
+        
         file_menu.addSeparator()
         
         file_menu.addAction(self.act_new_root)

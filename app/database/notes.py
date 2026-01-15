@@ -75,3 +75,39 @@ class NotesMixin:
         rows = cursor.fetchall()
         conn.close()
         return rows
+
+    def toggle_read_later(self, note_id: int) -> bool:
+        """
+        Toggle the is_read_later flag for a note.
+        Returns the new state (True/False).
+        """
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            # Get current state
+            cursor.execute("SELECT is_read_later FROM notes WHERE id = ?", (note_id,))
+            row = cursor.fetchone()
+            if not row:
+                return False
+            
+            # Since column might be NULL in old rows if we didn't defaulting Update, 
+            # treat None as False.
+            current_state = bool(row[0])
+            new_state = not current_state
+            
+            cursor.execute(
+                "UPDATE notes SET is_read_later = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (1 if new_state else 0, note_id)
+            )
+            return new_state
+
+    def get_read_later_notes(self) -> List[Tuple]:
+        """Get all notes marked for reading later."""
+        with contextlib.closing(self._get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, title, updated_at 
+                FROM notes 
+                WHERE is_read_later = 1 
+                ORDER BY updated_at DESC
+            """)
+            return cursor.fetchall()

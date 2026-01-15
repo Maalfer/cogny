@@ -26,6 +26,7 @@ class SetupMixin:
                     title TEXT NOT NULL,
                     content TEXT,
                     is_folder BOOLEAN DEFAULT 0,
+                    is_read_later BOOLEAN DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (parent_id) REFERENCES notes (id) ON DELETE CASCADE
@@ -35,6 +36,7 @@ class SetupMixin:
             # Migration: Check if is_folder column exists (for existing DBs)
             cursor.execute("PRAGMA table_info(notes)")
             columns = [info[1] for info in cursor.fetchall()]
+            
             if "is_folder" not in columns:
                 print("Migrating Database: Adding is_folder column...")
                 cursor.execute("ALTER TABLE notes ADD COLUMN is_folder BOOLEAN DEFAULT 0")
@@ -46,7 +48,10 @@ class SetupMixin:
                     SET is_folder = 1 
                     WHERE id IN (SELECT DISTINCT parent_id FROM notes WHERE parent_id IS NOT NULL)
                 """)
-                # conn.commit() # Handled by transaction
+
+            if "is_read_later" not in columns:
+                print("Migrating Database: Adding is_read_later column...")
+                cursor.execute("ALTER TABLE notes ADD COLUMN is_read_later BOOLEAN DEFAULT 0")
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS images (
@@ -68,15 +73,10 @@ class SetupMixin:
                 )
             """)
             
-            # Image Cache Table - stores processed images for faster loading
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS image_cache (
-                    image_id INTEGER PRIMARY KEY,
-                    processed_data BLOB,
-                    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE
-                )
-            """)
+            # Cleanup: Drop image_cache table if it exists (Feature removed)
+            cursor.execute("DROP TABLE IF EXISTS image_cache")
+
+            # Performance Indices
             
             # Performance Indices
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_parent_title ON notes(parent_id, title);")

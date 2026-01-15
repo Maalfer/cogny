@@ -66,43 +66,31 @@ class EditorArea(QWidget):
         if hasattr(self, "highlighter"):
              self.highlighter.set_theme(theme_name)
 
-    def load_note(self, note_id):
+    def load_note(self, note_id, is_folder=None, title=None):
         # Cancel previous loader
         if self.note_loader and self.note_loader.isRunning():
             self.note_loader.cancel()
             self.note_loader.wait() # Wait for thread to finish to prevent crash
             self.note_loader.deleteLater()
             self.note_loader = None
-            
-        # Get basic info to check if folder
-        note_data = self.db.get_note(note_id)
-        if not note_data: return # Or handle error
         
-        # Check folder manually since we don't have the item object here easily, 
-        # or we accept that callers might pass us a "folder" note ID.
-        # Ideally, we should check is_folder from DB.
-        # Use named access since Row factory is enabled
-        is_folder = bool(note_data['is_folder'])
-        # Actually let's trust the logic from main_window that checked item.is_folder or rowCount.
-        # But wait, we don't have the tree item here. 
-        # We can Query DB.
-        
-        # Re-implementing the logic cleanly:
         self.current_note_id = note_id
         
-        # Note: DB schema might vary, let's look at get_note return.
-        # main_window used note[2] for title, note[3] for content.
-        # We'll use the worker completely for loading content.
+        # Only query DB if we don't have the info from sidebar
+        if is_folder is None or title is None:
+            note_data = self.db.get_note(note_id)
+            if not note_data: return
+            is_folder = bool(note_data['is_folder'])
+            title = note_data['title']
         
         if is_folder:
-             self.show_folder_placeholder(note_data[2])
+             self.show_folder_placeholder(title)
              return
 
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
-        self.text_editor.clear_image_cache()
         
-        self.status_message.emit(f"Cargando nota: {note_data[2]}...", 0)
+        self.status_message.emit(f"Cargando nota: {title}...", 0)
         self.title_edit.setPlainText("Cargando...")
         self.text_editor.setHtml("<h2 style='color: gray; text-align: center;'>Cargando contenido...</h2>")
         

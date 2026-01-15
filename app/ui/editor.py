@@ -5,6 +5,11 @@ from app.database.manager import DatabaseManager
 from app.ui.themes import ThemeManager
 
 class NoteEditor(QTextEdit):
+    # Class-level image cache shared across instances
+    _image_cache = {}  # {image_id: QImage}
+    _image_cache_order = []  # For LRU eviction
+    _max_cached_images = 100  # Limit memory usage
+    
     def __init__(self, db_manager: DatabaseManager, parent=None):
         super().__init__(parent)
         self.db = db_manager
@@ -49,39 +54,26 @@ class NoteEditor(QTextEdit):
     def toggle_underline(self):
         self._wrap_selection("<u>", "</u>")
 
-    def clear_image_cache(self):
-        """Clear the global image cache. Now optional since cache persists across notes."""
-        from app.ui.image_cache import GlobalImageCache
-        # Optionally clear global cache, but usually we want to keep it
-        # GlobalImageCache.get_instance().clear()
-        pass
+
 
 
     def apply_theme(self, theme_name: str, editor_bg: str = None):
         self.current_theme = theme_name
         
-        # Update stored custom bg if provided
         if editor_bg is not None:
              self.current_editor_bg = editor_bg
         
-        # Get base style with stored bg
         style = ThemeManager.get_editor_style(theme_name, self.current_editor_bg)
-        
-        # Inject dynamic font size via setFont (CSS usually ignored for size if setHtml used)
         font_size = getattr(self, "current_font_size", 14)
         
-        # Apply Stylesheet (Colors, Padding, etc.)
         self.setStyleSheet(style)
         self.code_bg_color = ThemeManager.get_code_bg_color(theme_name)
         
-        # Apply Font Size directly to Widget and Document
         font = self.font()
         font.setPointSize(font_size)
         self.setFont(font)
-        # Also helpful for proper parsing of new content
-        # self.document().setDefaultFont(font) # Should cascade from widget, but being explicit helps
         
-        # Revert Native Margins
+        # Reset document margins
         doc = self.document()
         root_frame = doc.rootFrame()
         frame_fmt = root_frame.frameFormat()
@@ -103,23 +95,10 @@ class NoteEditor(QTextEdit):
         self.update_margins()
 
     def wheelEvent(self, event):
-        # Disable Ctrl + Scroll for Zoom as per user request
-        # if event.modifiers() & Qt.ControlModifier:
-        #     event.ignore() # Or accept and do nothing? 
-        #     # If we ignore, parent might handle it? 
-        #     # Better to just let default scrolling happen or do nothing if Ctrl is held?
-        #     # Standard behavior for Ctrl+Scroll is usually nothing if we don't handle it, 
-        #     # or some apps scroll faster.
-        #     # User said "quitarlo", implies no zoom.
-        #     # If I just call super(), QTextEdit might have built-in zoom?
-        #     # QTextEdit DOES have built-in Ctrl+Scroll zoom.
-        #     # To block it, we must accept the event and do nothing IF Ctrl is pressed.
-        
         if event.modifiers() & Qt.ControlModifier:
-             # Block native zoom and our custom zoom
-             pass
+            pass  # Block Ctrl+Scroll zoom
         else:
-             super().wheelEvent(event)
+            super().wheelEvent(event)
 
 
     def update_margins(self):
@@ -131,52 +110,35 @@ class NoteEditor(QTextEdit):
         if current_width > max_content_width:
              margin = (current_width - max_content_width) // 2
         else:
-             margin = 30 # Minimum padding
+             margin = 30
              
-        # Apply to Viewport Margins
-        # Left, Top, Right, Bottom
         self.setViewportMargins(margin, 20, margin, 20)
 
     def update_copy_buttons(self):
-        # 1. Identify start blocks of code
         code_blocks = []
         block = self.document().begin()
         while block.isValid():
             state = block.userState()
-            # We look for the START definition line.
-            # In our highlighter:
-            # - Start line has state assigned (2,3,4,5) AND previous state was 0 or 100.
-            # - But wait, previousBlockState() is not easily accessible from 'block' directly in iteration without querying keys.
-            # - Easier: Check text. If it starts with ``` and has state > 0.
-            
             if state > 0:
                  txt = block.text().strip()
-                 if txt.startswith("```"):
-                     # This is a start block (or end block? End block is state 100).
-                     # Highlighter sets state 100 for end block.
-                     if state != 100:
-                         code_blocks.append(block)
-            
+                 if txt.startswith("```") and state != 100:
+                     code_blocks.append(block)
             block = block.next()
             
-        # 2. Recycle/Create buttons
         needed = len(code_blocks)
         current = len(self.copy_buttons)
         
         if needed > current:
             for _ in range(needed - current):
-                # Reparent to viewport to match cursorRect coordinates exactly
                 btn = QToolButton(self.viewport())
                 btn.setText("Copy")
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.clicked.connect(self.copy_code_block)
                 self.copy_buttons.append(btn)
         
-        # 3. Assign blocks and show/hide
         for i, btn in enumerate(self.copy_buttons):
             if i < needed:
                 btn.show()
-                # Store current block info for click handler
                 btn.setProperty("block_position", code_blocks[i].position())
             else:
                 btn.hide()
@@ -184,11 +146,6 @@ class NoteEditor(QTextEdit):
         self.update_copy_buttons_position()
 
     def update_copy_buttons_position(self):
-        # ... (scanning logic) ...
-        # We need to recreate the scanning loop or just focus on the button update part.
-        # Since replace_file_content replaces a chunk, I need to be careful with context.
-        # I'll replace the loop inside update_copy_buttons_position.
-        
         button_idx = 0
         block = self.document().begin()
         
@@ -200,7 +157,6 @@ class NoteEditor(QTextEdit):
                      if button_idx < len(self.copy_buttons):
                          btn = self.copy_buttons[button_idx]
                          
-                         # Get precise rect
                          temp_cursor = self.textCursor()
                          temp_cursor.setPosition(block.position())
                          rect = self.cursorRect(temp_cursor)
@@ -209,11 +165,7 @@ class NoteEditor(QTextEdit):
                          btn_height = 20
                          btn.resize(btn_width, btn_height)
                          
-                         # Horizontal: Far right with margin (15px) inside total width
                          x = self.viewport().width() - btn_width - 15
-                         
-                         # Vertical: Precise Centering on the line
-                         # rect.height() is the line height of the first line (```bash)
                          y = rect.top() + (rect.height() - btn_height) / 2
                          
                          btn.move(x, y)
@@ -222,9 +174,6 @@ class NoteEditor(QTextEdit):
                          button_idx += 1
             block = block.next()
 
-    # Custom Zoom Handling
-    
-    # Text Zoom: Adjusts font size only.
     def textZoomIn(self):
         self._adjust_font_size(1)
 
@@ -232,7 +181,6 @@ class NoteEditor(QTextEdit):
         self._adjust_font_size(-1)
 
     def insert_table(self, rows=2, cols=2):
-        """Inserts a table at the current cursor position."""
         from PySide6.QtGui import QTextTableFormat
         from PySide6.QtCore import Qt
         
@@ -241,34 +189,22 @@ class NoteEditor(QTextEdit):
         fmt.setCellPadding(5)
         fmt.setCellSpacing(0)
         fmt.setBorder(1)
-        # fmt.setBorderBrush(Qt.gray) # Optional aesthetic
         fmt.setWidth(QTextLength(QTextLength.PercentageLength, 100))
         
         cursor.insertTable(rows, cols, fmt)
         self.setTextCursor(cursor)
 
-
-
     def _adjust_font_size(self, delta):
         self.current_font_size = max(8, self.current_font_size + delta)
-        self.apply_theme(self.current_theme) # Uses stored self.current_editor_bg automatically
+        self.apply_theme(self.current_theme)
 
-    # Image Zoom: Adjusts image size only.
     def imageZoomIn(self):
-        try:
-             self.image_scale = getattr(self, "image_scale", 1.0) * 1.1
-             self.update_image_sizes()
-        except Exception as e:
-             print(f"ERROR in imageZoomIn: {e}")
+        self.image_scale = getattr(self, "image_scale", 1.0) * 1.1
+        self.update_image_sizes()
 
     def imageZoomOut(self):
-        try:
-             self.image_scale = getattr(self, "image_scale", 1.0) / 1.1
-             self.update_image_sizes()
-        except Exception as e:
-             print(f"ERROR in imageZoomOut: {e}")
-             
-    # Legacy aliases/overrides if needed, but we will call specific methods from main window.
+        self.image_scale = getattr(self, "image_scale", 1.0) / 1.1
+        self.update_image_sizes()
     # We should override native zoomIn/zoomOut to do nothing or map to textZoom to prevent confusion if shortcuts traverse?
     def zoomIn(self, range=1):
         self.textZoomIn()
@@ -293,14 +229,9 @@ class NoteEditor(QTextEdit):
                 if fmt.isImageFormat():
                     img_fmt = fmt.toImageFormat()
                     
-                    # We assume 600 is base. 
-                    # If we supported variable base sizes, we'd need to store original size.
-                    # For now, uniform 600 is the app's style.
                     new_width = int(base_width * scale)
                     img_fmt.setWidth(new_width)
                     
-                    # Apply
-                    # access selection
                     cursor.setPosition(frag.position())
                     cursor.setPosition(frag.position() + frag.length(), QTextCursor.KeepAnchor)
                     cursor.setCharFormat(img_fmt)
@@ -319,29 +250,18 @@ class NoteEditor(QTextEdit):
         
         if not block.isValid(): return
         
-        # Extract Code
-        # Iterate from next block until end of code block (starts with ``` or state changes)
         code_text = []
-        
         curr = block.next()
         while curr.isValid():
             txt = curr.text()
-            if txt.strip() == "```":
+            if txt.strip() == "```" or curr.userState() == 100 or curr.userState() == 0:
                 break
-            # Handle userState check just in case text check fails?
-            # Highlighter sets state 100 for end ```
-            if curr.userState() == 100:
-                break
-            if curr.userState() == 0: # Should not happen inside logic
-                break
-                
             code_text.append(txt)
             curr = curr.next()
             
         full_text = "\n".join(code_text)
         QGuiApplication.clipboard().setText(full_text)
         
-        # Feedback (Optional: Change text to "Copied!" temporarily)
         sender.setText("Copied!")
         from PySide6.QtCore import QTimer
         QTimer.singleShot(2000, lambda b=sender: b.setText("Copy"))
@@ -351,11 +271,10 @@ class NoteEditor(QTextEdit):
         from PySide6.QtCore import QFileInfo
         from PySide6.QtGui import QPixmap
         
-        # Get System Icon
         info = QFileInfo(filename)
         icon_provider = QFileIconProvider()
         icon = icon_provider.icon(info)
-        pixmap = icon.pixmap(48, 48) # Larger icon
+        pixmap = icon.pixmap(48, 48)
         
         ba = QByteArray()
         buffer = QBuffer(ba)
@@ -363,10 +282,6 @@ class NoteEditor(QTextEdit):
         pixmap.save(buffer, "PNG")
         base64_data = ba.toBase64().data().decode()
         
-        # HTML with Table for Vertical Layout: Icon (Top), Filename (Bottom)
-        # We wrap it in a table to ensure it acts as a structured unit.
-        # HTML with Table for Vertical Layout: Icon (Top), Filename (Bottom)
-        # Both wrapped in anchor for consistent behavior
         html = f"""
         <table border="0" style="margin-top: 10px; margin-bottom: 10px;">
             <tr>
@@ -385,7 +300,6 @@ class NoteEditor(QTextEdit):
         self.textCursor().insertHtml(html)
 
     def keyPressEvent(self, event):
-        # 1. Handler for Image Deletion Safety
         if event.key() in (Qt.Key_Backspace, Qt.Key_Delete):
             cursor = self.textCursor()
             check_cursor = None
@@ -393,7 +307,6 @@ class NoteEditor(QTextEdit):
             if cursor.hasSelection():
                 check_cursor = cursor
             else:
-                # Create a temporary cursor to peek at what will be deleted
                 check_cursor = QTextCursor(cursor)
                 if event.key() == Qt.Key_Backspace:
                     if not check_cursor.atStart():
@@ -402,64 +315,35 @@ class NoteEditor(QTextEdit):
                      if not check_cursor.atEnd():
                          check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
             
-            # If we have a valid range to check
             if check_cursor and (check_cursor.hasSelection() or (not cursor.hasSelection() and check_cursor.position() != cursor.position())):
-                # Check for Attachments FIRST
-                is_att, att_id, table_range = self.cursor_contains_attachment(check_cursor)
-                # Check for Attachments FIRST
                 is_att, att_id, table_range = self.cursor_contains_attachment(check_cursor)
                 if is_att:
-                    # Use shared interactive method (handles confirmation and deletion)
-                    # We pass table_range if we have it, otherwise it relies on cursor but interactive expects range to clear text.
-                    # Interactive method uses self.textCursor() if range is passed.
-                    # Wait, if we call interactive, does it use the CURRENT cursor position?
-                    # The interactive function clears text based on 'table_range'. 
-                    # If 'table_range' is derived from check_cursor, it should be correct.
-                    # But we should ensure we return True/consume event.
-                    
                     self.delete_attachment_interactive(att_id, table_range)
-                    return # Event consumed regardless of Yes/No? 
-                    # Actually if No, we shouldn't consume 'Delete' key if it was just text?
-                    # But here 'is_att' is True, so we are over an attachment.
-                    # If user says No, we probably don't want standard 'delete' to happen which might corrupt the attachment HTML structure.
-                    # So consuming is safer.
-                    pass
-                             
-                # Check for Images (only if not an attachment, to avoid detecting the file icon as an image)
+                    return
+                              
                 elif self.cursor_contains_image(check_cursor):
                     from PySide6.QtWidgets import QMessageBox
-                    ret = QMessageBox.question(self, "Delete Image", 
-                                               "Are you sure you want to delete the selected image(s)?",
+                    ret = QMessageBox.question(self, "Eliminar Imagen", 
+                                               "¿Estás seguro de que quieres eliminar la(s) imagen(es) seleccionada(s)?",
                                                QMessageBox.Yes | QMessageBox.No)
                     if ret != QMessageBox.Yes:
-                        return # Cancel deletion
+                        return
 
-        # 2. Handler for Markdown Horizontal Rules
         if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
             cursor = self.textCursor()
             block = cursor.block()
             text = block.text().strip()
             
-            # Check for Markdown Horizontal Rule patterns (3 or more chars)
             import re
             if re.match(r'^[-*_]{3,}$', text):
                 cursor.beginEditBlock()
-                
-                # Clear the current line (the dashes)
                 cursor.select(QTextCursor.BlockUnderCursor)
                 cursor.removeSelectedText()
-                
-                # Insert HR
                 cursor.insertHtml("<hr>")
-                
-                # Insert a new block after the HR so the user can continue typing
                 cursor.insertBlock()
-                
                 cursor.endEditBlock()
-                
-                # Scroll to cursor to keep focus visible
                 self.ensureCursorVisible()
-                return # Consume the event
+                return
                 
         super().keyPressEvent(event)
 
@@ -629,10 +513,10 @@ class NoteEditor(QTextEdit):
                 menu = self.createStandardContextMenu()
                 
                 # Attachment Actions
-                action_open = menu.addAction("Open File")
+                action_open = menu.addAction("Abrir Archivo")
                 action_open.triggered.connect(lambda _: self.open_attachment(att_id))
                 
-                action_save_as = menu.addAction("Save File As...")
+                action_save_as = menu.addAction("Guardar Como...")
                 action_save_as.triggered.connect(lambda _: self.save_attachment_as(att_id))
                 
                 # Remove standard delete if present to avoid confusion
@@ -640,7 +524,7 @@ class NoteEditor(QTextEdit):
                     if "Delete" in action.text() or "Eliminar" in action.text():
                          menu.removeAction(action)
                          
-                action_delete = menu.addAction("Delete File")
+                action_delete = menu.addAction("Eliminar Archivo")
                 # Pass table_range to delete handler to remove text too
                 action_delete.triggered.connect(lambda _: self.delete_attachment_interactive(att_id, table_range))
                 
@@ -658,14 +542,14 @@ class NoteEditor(QTextEdit):
             menu.addSeparator()
             
             # Table Actions
-            menu.addAction("Insert Row Above", lambda: table.insertRows(table.cellAt(cursor).row(), 1))
-            menu.addAction("Insert Row Below", lambda: table.insertRows(table.cellAt(cursor).row() + 1, 1))
+            menu.addAction("Insertar Fila Arriba", lambda: table.insertRows(table.cellAt(cursor).row(), 1))
+            menu.addAction("Insertar Fila Abajo", lambda: table.insertRows(table.cellAt(cursor).row() + 1, 1))
             menu.addSeparator()
-            menu.addAction("Insert Column Left", lambda: table.insertColumns(table.cellAt(cursor).column(), 1))
-            menu.addAction("Insert Column Right", lambda: table.insertColumns(table.cellAt(cursor).column() + 1, 1))
+            menu.addAction("Insertar Columna Izquierda", lambda: table.insertColumns(table.cellAt(cursor).column(), 1))
+            menu.addAction("Insertar Columna Derecha", lambda: table.insertColumns(table.cellAt(cursor).column() + 1, 1))
             menu.addSeparator()
-            menu.addAction("Delete Row", lambda: table.removeRows(table.cellAt(cursor).row(), 1))
-            menu.addAction("Delete Column", lambda: table.removeColumns(table.cellAt(cursor).column(), 1))
+            menu.addAction("Eliminar Fila", lambda: table.removeRows(table.cellAt(cursor).row(), 1))
+            menu.addAction("Eliminar Columna", lambda: table.removeColumns(table.cellAt(cursor).column(), 1))
             menu.addSeparator()
             # Delete Table: Select range and remove
             def delete_table():
@@ -673,7 +557,7 @@ class NoteEditor(QTextEdit):
                 cursor.setPosition(table.lastCursorPosition().position() + 1, QTextCursor.KeepAnchor)
                 cursor.removeSelectedText()
                 
-            menu.addAction("Delete Table", delete_table)
+            menu.addAction("Eliminar Tabla", delete_table)
             
             menu.exec(event.globalPos())
             return
@@ -682,7 +566,7 @@ class NoteEditor(QTextEdit):
 
     def delete_attachment_interactive(self, att_id, table_range):
         from app.ui.widgets import ModernConfirm
-        if ModernConfirm.show(self, "Delete File", "Are you sure you want to delete this file permanently from the database?", "Delete", "Cancel"):
+        if ModernConfirm.show(self, "Eliminar Archivo", "¿Estás seguro de que quieres eliminar este archivo permanentemente de la base de datos?", "Eliminar", "Cancelar"):
              # DB Delete
              self.db.delete_attachment(att_id)
              
@@ -754,7 +638,7 @@ class NoteEditor(QTextEdit):
         filename, data = data_row
         
         # Ask user for location
-        save_path, _ = QFileDialog.getSaveFileName(self, "Save Attachment", filename)
+        save_path, _ = QFileDialog.getSaveFileName(self, "Guardar Adjunto", filename)
         
         if save_path:
             try:
@@ -929,12 +813,13 @@ class NoteEditor(QTextEdit):
                 try:
                     image_id = int(url.split("/")[-1])
                     
-                    # Check global cache first
-                    from app.ui.image_cache import GlobalImageCache
-                    cache = GlobalImageCache.get_instance()
-                    cached = cache.get(image_id)
-                    if cached:
-                        return cached
+                    # Check cache first (LRU)
+                    if image_id in NoteEditor._image_cache:
+                        # Move to end of LRU order (most recently used)
+                        if image_id in NoteEditor._image_cache_order:
+                            NoteEditor._image_cache_order.remove(image_id)
+                        NoteEditor._image_cache_order.append(image_id)
+                        return NoteEditor._image_cache[image_id]
                     
                     # Load from database
                     blob = self.db.get_image(image_id)
@@ -943,13 +828,32 @@ class NoteEditor(QTextEdit):
                         img.loadFromData(blob)
                         processed_img = self._process_image(img)
                         
-                        # Store in global cache
-                        cache.set(image_id, processed_img)
+                        # Add to cache with LRU eviction
+                        self._cache_image(image_id, processed_img)
                         return processed_img
                 except Exception as e:
                     print(f"Error loading image: {e}")
         
         return super().loadResource(type, name)
+    
+    def _cache_image(self, image_id, image):
+        """Add image to cache with LRU eviction."""
+        # Evict oldest if at capacity
+        while len(NoteEditor._image_cache) >= NoteEditor._max_cached_images:
+            if NoteEditor._image_cache_order:
+                oldest_id = NoteEditor._image_cache_order.pop(0)
+                NoteEditor._image_cache.pop(oldest_id, None)
+            else:
+                break
+        
+        NoteEditor._image_cache[image_id] = image
+        NoteEditor._image_cache_order.append(image_id)
+    
+    @classmethod
+    def clear_image_cache(cls):
+        """Clear the image cache (useful when switching databases)."""
+        cls._image_cache.clear()
+        cls._image_cache_order.clear()
 
     def _process_image(self, image: QImage) -> QImage:
         """Process image to enforce uniform style: 

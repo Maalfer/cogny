@@ -5,7 +5,7 @@ from app.ui.widgets import ModernInput, ModernAlert, ModernConfirm
 from app.models.note_model import NoteTreeModel
 
 class Sidebar(QWidget):
-    note_selected = Signal(int)
+    note_selected = Signal(int, bool, str)  # note_id, is_folder, title
     action_requested = Signal(str, object) # action_name, args
 
     def __init__(self, db_manager, parent=None):
@@ -66,7 +66,8 @@ class Sidebar(QWidget):
             # Search Result Model (StandardItemModel)
             item = current_model.itemFromIndex(index)
             if item and hasattr(item, 'note_id'):
-                self.note_selected.emit(item.note_id)
+                # Search results don't have is_folder info readily, pass None
+                self.note_selected.emit(item.note_id, False, item.text())
             return
 
         source_index = self.proxy_model.mapToSource(index)
@@ -75,7 +76,8 @@ class Sidebar(QWidget):
         if not item:
             return
 
-        self.note_selected.emit(item.note_id)
+        is_folder = getattr(item, 'is_folder', False)
+        self.note_selected.emit(item.note_id, is_folder, item.text())
 
     def on_tree_clicked(self, index):
         if self.tree_view.isExpanded(index):
@@ -124,6 +126,13 @@ class Sidebar(QWidget):
                  action_create_folder = QAction("Crear carpeta (mismo nivel)", self)
                  action_create_folder.triggered.connect(self.add_sibling_folder)
             menu.addAction(action_create_folder)
+
+            menu.addSeparator()
+
+            # Read Later Option
+            action_read_later = QAction("Ver más tarde", self)
+            action_read_later.triggered.connect(lambda: self.toggle_read_later(item.note_id))
+            menu.addAction(action_read_later)
 
             menu.addSeparator()
             
@@ -264,4 +273,9 @@ class Sidebar(QWidget):
             if proxy_index.isValid():
                 self.tree_view.setCurrentIndex(proxy_index)
                 self.tree_view.scrollTo(proxy_index)
+
+    def toggle_read_later(self, note_id):
+        new_state = self.db.toggle_read_later(note_id)
+        msg = "Nota guardada para ver más tarde." if new_state else "Nota eliminada de guardados."
+        ModernAlert.show(self, "Ver más tarde", msg)  # Using Alert as simple feedback mechanism
 

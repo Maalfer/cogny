@@ -40,7 +40,11 @@ class UiWorkersMixin:
         self.clean_worker()
         self.sidebar.model.load_notes()
         self.editor_area.clear()
-        QTimer.singleShot(100, lambda: ModernInfo.show(self, "Éxito", "¡Bóveda importada correctamente!"))
+        QTimer.singleShot(100, lambda: ModernInfo.show(
+            self, 
+            "Éxito", 
+            "¡Bóveda importada correctamente!\\n\\nLa indexación del contenido puede tardar unos momentos para que las notas carguen rápido."
+        ))
 
     def export_obsidian_vault(self):
         output_path = QFileDialog.getExistingDirectory(self, "Seleccionar Carpeta de Destino para Exportar")

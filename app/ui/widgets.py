@@ -353,7 +353,7 @@ class ThemeSettingsDialog(ModernDialog):
                     padding: 6px;
                 }
              """)
-             btn.setText("Default")
+             btn.setText("Por Defecto")
 
     def is_light(self, color_str):
         c = QColor(color_str)

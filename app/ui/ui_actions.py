@@ -16,6 +16,9 @@ class UiActionsMixin:
         
         self.act_save_as_db = QAction("Guardar Como...", self) # Copy current DB to new location and switch
         self.act_save_as_db.triggered.connect(self.save_as_database)
+        
+        self.act_read_later_list = QAction("Notas Guardadas...", self)
+        self.act_read_later_list.triggered.connect(self.show_read_later_dialog)
 
         self.act_new_root = QAction("Nueva Nota Raíz", self)
         self.act_new_root.triggered.connect(self.sidebar.add_root_note)
@@ -144,16 +147,14 @@ class UiActionsMixin:
         self.is_draft = False
         
         # 2. Re-initialize DB Manager
-        # We need to ensure connections are closed ideally, but Python GC helps.
         from app.database.manager import DatabaseManager
         self.db = DatabaseManager(new_path)
         
-        # 3. Update Image Cache
-        from app.ui.image_cache import GlobalImageCache
-        GlobalImageCache.set_db_path(new_path)
+        # 3. Clear image cache (different DB = different images)
+        from app.ui.editor import NoteEditor
+        NoteEditor.clear_image_cache()
         
         # 4. Restart UI
-        # Removing toolbars and menubar to avoid duplication when calling setup_ui again
         self.menuBar().clear()
         for toolbar in self.findChildren(QToolBar):
             self.removeToolBar(toolbar)
@@ -164,25 +165,15 @@ class UiActionsMixin:
             
         # Re-run setup
         self.setup_ui()
-        
-        # Start workers again
-        if hasattr(self, '_start_image_preloader'):
-            self._start_image_preloader(new_path)
             
         # Update Title
         self.setWindowTitle(f"Cogny - {os.path.basename(new_path)}")
 
-    def on_sidebar_note_selected(self, note_id):
-        # Auto-save previous if needed (EditorArea handles save logic call, but we might want to trigger it before switch?)
-        # EditorArea.load_note calls save? No. Sidebar emits selection changed.
-        # Logic: 
-        # 1. Save current note in EditorArea
+    def on_sidebar_note_selected(self, note_id, is_folder, title):
+        # Auto-save previous note
         self.editor_area.save_current_note()
-        # 2. Load new note
-        self.editor_area.load_note(note_id)
-        
-        # Check if it was a folder logic: Sidebar might have checked it? 
-        # EditorArea handles checking is_folder inside load_note (we implemented that).
+        # Load new note with metadata from sidebar (avoids DB query)
+        self.editor_area.load_note(note_id, is_folder=is_folder, title=title)
 
     def on_sidebar_action(self, action, arg):
         if action == "export_pdf":
@@ -260,3 +251,9 @@ class UiActionsMixin:
 
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y SQLite.")
+
+    def show_read_later_dialog(self):
+        from app.ui.dialogs.read_later_dialog import ReadLaterDialog
+        dlg = ReadLaterDialog(self.db, self)
+        dlg.note_selected.connect(self.sidebar.select_note)
+        dlg.exec()

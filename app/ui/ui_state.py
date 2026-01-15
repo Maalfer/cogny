@@ -7,10 +7,6 @@ class UiStateMixin:
              settings.setValue("last_note_id", self.editor_area.current_note_id)
         else:
              settings.remove("last_note_id")
-        
-        # Save image cache to database before closing
-        from app.ui.image_cache import GlobalImageCache
-        GlobalImageCache.get_instance().save_to_db()
              
         super().closeEvent(event)
 
