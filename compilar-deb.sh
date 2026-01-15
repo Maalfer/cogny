@@ -3,7 +3,7 @@ set -e
 
 # Configuration
 APP_NAME="cogny"
-VERSION="1.0.0"
+VERSION="1.0.1"
 ARCH="amd64"
 DEB_NAME="${APP_NAME}_${VERSION}_${ARCH}"
 BUILD_DIR="build_deb"
@@ -92,9 +92,19 @@ else
     echo "Advertencia: Icono no encontrado en $ICON_FILE"
 fi
 
+# Copy postinst and prerm scripts
+echo "-> Añadiendo scripts de instalación..."
+if [ -f "debian/postinst" ]; then
+    cp "debian/postinst" "$BUILD_DIR/DEBIAN/"
+    chmod 755 "$BUILD_DIR/DEBIAN/postinst"
+fi
+
+if [ -f "debian/prerm" ]; then
+    cp "debian/prerm" "$BUILD_DIR/DEBIAN/"
+    chmod 755 "$BUILD_DIR/DEBIAN/prerm"
+fi
+
 # Set permissions
-chmod 755 "$BUILD_DIR/DEBIAN/postinst" 2>/dev/null || true
-chmod 755 "$BUILD_DIR/DEBIAN/prerm" 2>/dev/null || true
 chmod -R 755 "$BUILD_DIR$INSTALL_DIR"
 
 # Build the .deb

@@ -12,7 +12,7 @@ set -e
 
 # Configuración
 APP_NAME="cogny"
-VERSION="1.0.0"
+VERSION="1.0.1"
 ARCH="amd64"
 DEB_FILE="${APP_NAME}_${VERSION}_${ARCH}.deb"
 APT_REPO_DIR="docs"  # Usar docs/ directamente para GitHub Pages

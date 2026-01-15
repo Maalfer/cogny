@@ -1,0 +1,7 @@
+#!/bin/bash
+# Pre-removal script for Cogny
+
+# Remove symlink
+rm -f /usr/local/bin/cogny
+
+exit 0
