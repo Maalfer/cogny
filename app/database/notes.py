@@ -37,22 +37,14 @@ class NotesMixin:
             cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
 
     def get_note(self, note_id: int) -> Optional[Tuple]:
-        with contextlib.closing(self._get_connection()) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
-            row = cursor.fetchone()
-            return row
+        return self.fetch_one("SELECT * FROM notes WHERE id = ?", (note_id,))
 
     def get_children(self, parent_id: Optional[int] = None) -> List[Tuple]:
         """Get all notes that are direct children of parent_id."""
-        with contextlib.closing(self._get_connection()) as conn:
-            cursor = conn.cursor()
-            if parent_id is None:
-                cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id IS NULL")
-            else:
-                cursor.execute("SELECT id, title, is_folder FROM notes WHERE parent_id = ?", (parent_id,))
-            rows = cursor.fetchall()
-            return rows
+        if parent_id is None:
+            return self.fetch_all("SELECT id, title, is_folder FROM notes WHERE parent_id IS NULL")
+        else:
+            return self.fetch_all("SELECT id, title, is_folder FROM notes WHERE parent_id = ?", (parent_id,))
     
     def move_note_to_parent(self, note_id: int, new_parent_id: Optional[int]):
         with self.transaction() as conn:
@@ -61,20 +53,11 @@ class NotesMixin:
 
     def get_note_by_title(self, title: str) -> Optional[Tuple]:
         """Get the first note matching the given title."""
-        with contextlib.closing(self._get_connection()) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM notes WHERE title = ?", (title,))
-            row = cursor.fetchone()
-            return row
+        return self.fetch_one("SELECT * FROM notes WHERE title = ?", (title,))
 
     def get_all_notes(self) -> List[Tuple]:
         """Get all notes for search processing. (Legacy/Backup)"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM notes")
-        rows = cursor.fetchall()
-        conn.close()
-        return rows
+        return self.fetch_all("SELECT * FROM notes")
 
     def toggle_read_later(self, note_id: int) -> bool:
         """
@@ -102,12 +85,9 @@ class NotesMixin:
 
     def get_read_later_notes(self) -> List[Tuple]:
         """Get all notes marked for reading later."""
-        with contextlib.closing(self._get_connection()) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id, title, updated_at 
-                FROM notes 
-                WHERE is_read_later = 1 
-                ORDER BY updated_at DESC
-            """)
-            return cursor.fetchall()
+        return self.fetch_all("""
+            SELECT id, title, updated_at 
+            FROM notes 
+            WHERE is_read_later = 1 
+            ORDER BY updated_at DESC
+        """)
