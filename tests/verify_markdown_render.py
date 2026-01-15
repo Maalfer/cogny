@@ -42,5 +42,15 @@ def foo():
     else:
         print("FAIL: Code highlighting (no inline styles)")
 
+    # 3. Internal Image (Native Extension)
+    img_md = 'Some text <img src="image://db/123" /> more text'
+    html_img = MarkdownRenderer.process_markdown_content(img_md)
+    print("\n--- Internal Image HTML ---")
+    print(html_img)
+    if '<div style="margin: 10px 0;">' in html_img and '<img src="image://db/123"' in html_img:
+        print("PASS: Internal Image Extension")
+    else:
+        print("FAIL: Internal Image Extension")
+
 if __name__ == "__main__":
     test_markdown_features()

@@ -38,6 +38,9 @@ class UiActionsMixin:
         self.act_export_obsidian = QAction("Exportar a Obsidian...", self)
         self.act_export_obsidian.triggered.connect(self.export_obsidian_vault)
 
+        self.act_export_pdf = QAction("Exportar PDF", self)
+        self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
+
         self.act_attach = QAction("Adjuntar Archivo...", self)
         self.act_attach.triggered.connect(self.editor_area.attach_file)
 

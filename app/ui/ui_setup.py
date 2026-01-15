@@ -42,6 +42,9 @@ class UiSetupMixin:
         self.search_manager = SearchManager(self.db, self.sidebar.tree_view, self.sidebar.proxy_model, self.sidebar.on_selection_changed)
         toolbar.addWidget(self.search_manager.get_widget())
         
+        toolbar.addSeparator()
+        toolbar.addAction(self.act_export_pdf)
+        
         self.addToolBarBreak() 
         
         self.editor_toolbar = FormatToolbar(self, self.editor_area.text_editor)
@@ -68,6 +71,9 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
         file_menu.addAction(self.act_import_obsidian)
+        file_menu.addAction(self.act_export_obsidian)
+        file_menu.addSeparator()
+        file_menu.addAction(self.act_export_pdf)
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()
