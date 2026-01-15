@@ -51,6 +51,44 @@ class ThemeManager:
                 selection-background-color: #264f78;
                 selection-color: white;
             }}
+            /* Markdown Headers */
+            h1 {{ font-size: 24px; color: #569CD6; font-weight: bold; margin-top: 20px; }}
+            h2 {{ font-size: 20px; color: #569CD6; font-weight: bold; margin-top: 18px; }}
+            h3 {{ font-size: 18px; color: #569CD6; font-weight: bold; margin-top: 16px; }}
+            h4 {{ font-size: 16px; font-weight: bold; margin-top: 14px; }}
+            h5 {{ font-size: 14px; font-weight: bold; font-style: italic; }}
+            h6 {{ font-size: 12px; font-weight: bold; font-style: italic; color: #808080; }}
+            
+            /* Blockquotes */
+            blockquote {{
+                border-left: 4px solid #569CD6;
+                padding-left: 10px;
+                color: #A0A0A0;
+                margin-left: 10px;
+                font-family: Consolas, "Courier New", monospace;
+            }}
+            
+            /* Lists */
+            ul, ol {{ margin-left: 20px; }}
+            li {{ margin-bottom: 5px; }}
+            
+            /* Code Blocks (pre) & Inline Code (code) */
+            pre {{
+                background-color: #2d2d2d;
+                border: 1px solid #454545;
+                padding: 10px;
+                border-radius: 5px;
+                color: #d4d4d4;
+                font-family: Consolas, "Courier New", monospace;
+            }}
+            code {{
+                background-color: #383838;
+                padding: 2px 4px;
+                border-radius: 3px;
+                font-family: Consolas, "Courier New", monospace;
+            }}
+            a {{ color: #4A90E2; text-decoration: none; }}
+            
             /* Limit Image Width for cleaner layout */
             img {{
                 max-width: 600px;
@@ -134,6 +172,7 @@ class ThemeManager:
                 background: none;
             }}
             """
+
         else: # Light
             bg_color = editor_bg if editor_bg else "#FAFAFA"
             return f"""

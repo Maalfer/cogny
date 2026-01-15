@@ -10,6 +10,10 @@ class MarkdownRenderer:
         import markdown
         import re
         import uuid
+        import sys
+        
+        # Increase recursion limit for deep nested structures (e.g. lists)
+        sys.setrecursionlimit(3000)
         
         # 1. Protect Internal HTML (Images & Attachments)
         placeholders = {}
@@ -36,7 +40,13 @@ class MarkdownRenderer:
         try:
             html_content = markdown.markdown(
                 text, 
-                extensions=['extra', 'nl2br', 'sane_lists']
+                extensions=['extra', 'nl2br', 'sane_lists', 'codehilite'],
+                extension_configs={
+                    'codehilite': {
+                        'noclasses': True,
+                        'pygments_style': 'default'
+                    }
+                }
             )
         except Exception as e:
             print(f"Markdown Error: {e}")
@@ -54,8 +64,4 @@ class MarkdownRenderer:
             
         return html_content
 
-    @staticmethod
-    def render_markdown_table(lines):
-        # Legacy: No longer needed with 'markdown' library but keeping it just in case
-        # static referencing elsewhere (unlikely based on my read).
-        return ""
+
