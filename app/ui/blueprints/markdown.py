@@ -114,7 +114,13 @@ class MarkdownRenderer:
         
         # 3. Restore Placeholders
         for token, original in placeholders.items():
-            content = content.replace(token, original)
+            # If it is an image, wrap in div to force block level (User Request)
+            if original.startswith('<img'):
+                 replacement = f'<div style="margin: 10px 0;">{original}</div>'
+            else:
+                 replacement = original
+                 
+            content = content.replace(token, replacement)
             
         return content
 

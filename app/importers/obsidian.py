@@ -80,7 +80,9 @@ class ObsidianImporter:
         
         # GENERATE CACHE (Double Column Architecture)
         from app.ui.blueprints.markdown import MarkdownRenderer
-        cached_html = MarkdownRenderer.process_markdown_content(new_content)
+        raw_html = MarkdownRenderer.process_markdown_content(new_content)
+        # Wrap in pre-wrap div to prevent whitespace collapse in QTextEdit
+        cached_html = f'<div style="white-space: pre-wrap;">{raw_html}</div>'
         
         self.db.update_note(note_id, title, new_content, cached_html=cached_html)
 
