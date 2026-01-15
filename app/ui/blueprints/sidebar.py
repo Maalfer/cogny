@@ -102,8 +102,17 @@ class Sidebar(QWidget):
 
         if index.isValid():
             self.tree_view.setCurrentIndex(index)
-            source_index = self.proxy_model.mapToSource(index)
-            item = self.model.itemFromIndex(source_index)
+            
+            # Handle different models (Proxy vs Search Results)
+            current_model = self.tree_view.model()
+            if current_model == self.proxy_model:
+                source_index = self.proxy_model.mapToSource(index)
+                item = self.model.itemFromIndex(source_index)
+            else:
+                # Assuming StandardItemModel (Search Results)
+                item = current_model.itemFromIndex(index)
+            
+            if not item: return
             
             # 1. Rename Option
             action_rename = QAction("Cambiar nombre", self)
