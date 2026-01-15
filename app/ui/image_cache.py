@@ -8,7 +8,7 @@ cache portability with the database file.
 
 from collections import OrderedDict
 from PySide6.QtGui import QImage
-from PySide6.QtCore import QByteArray, QBuffer, QIODevice
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMutex, QMutexLocker
 
 
 class GlobalImageCache:
@@ -26,6 +26,7 @@ class GlobalImageCache:
         """Initialize the cache. Use get_instance() instead of direct instantiation."""
         self._cache = OrderedDict()
         self._max_size = 100  # Maximum number of cached images in memory
+        self._mutex = QMutex()
     
     @classmethod
     def get_instance(cls):
@@ -43,6 +44,7 @@ class GlobalImageCache:
     
     def _load_from_db(self):
         """Load cached images from database on startup."""
+        locker = QMutexLocker(self._mutex)
         if not self._db_path:
             return
         
@@ -72,6 +74,7 @@ class GlobalImageCache:
     
     def save_to_db(self):
         """Save all in-memory cached images to database."""
+        locker = QMutexLocker(self._mutex)
         if not self._db_path:
             return
         
@@ -80,7 +83,11 @@ class GlobalImageCache:
             conn = sqlite3.connect(self._db_path)
             cursor = conn.cursor()
             
-            for key, qimage in self._cache.items():
+            # We need to copy items to avoid runtime error if cache changes during iteration
+            # (though mutex should prevent that from other threads, but safe logic is good)
+            items = list(self._cache.items())
+
+            for key, qimage in items:
                 # Extract image_id from key "image://db/123"
                 image_id = int(key.split("/")[-1])
                 
@@ -114,6 +121,7 @@ class GlobalImageCache:
         Returns:
             Cached QImage if found, None otherwise
         """
+        locker = QMutexLocker(self._mutex)
         key = f"image://db/{image_id}"
         
         # Check memory cache first
@@ -135,7 +143,12 @@ class GlobalImageCache:
                     img = QImage()
                     if img.loadFromData(QByteArray(row[0])):
                         # Add to memory cache
-                        self.set(image_id, img)
+                        # We must respect max size even here
+                        if len(self._cache) >= self._max_size:
+                             self._cache.popitem(last=False)
+                             
+                        self._cache[key] = img
+                        self._cache.move_to_end(key)
                         return img
             except Exception as e:
                 print(f"Failed to load image from DB cache: {e}")
@@ -152,6 +165,7 @@ class GlobalImageCache:
             image_id: Database ID of the image
             image_data: Processed QImage to cache
         """
+        locker = QMutexLocker(self._mutex)
         key = f"image://db/{image_id}"
         
         # Remove oldest entry if cache is full
@@ -164,10 +178,12 @@ class GlobalImageCache:
     
     def clear(self):
         """Clear memory cache. Database cache remains intact."""
+        locker = QMutexLocker(self._mutex)
         self._cache.clear()
     
     def clear_db_cache(self):
         """Clear all cached images from database."""
+        locker = QMutexLocker(self._mutex)
         if not self._db_path:
             return
         
@@ -184,14 +200,17 @@ class GlobalImageCache:
     
     def set_max_size(self, size: int):
         """Set the maximum cache size."""
+        locker = QMutexLocker(self._mutex)
         self._max_size = max(1, size)
         while len(self._cache) > self._max_size:
             self._cache.popitem(last=False)
     
     def get_size(self) -> int:
         """Get current number of cached images in memory."""
+        locker = QMutexLocker(self._mutex)
         return len(self._cache)
     
     def get_max_size(self) -> int:
         """Get maximum cache capacity."""
+        locker = QMutexLocker(self._mutex)
         return self._max_size

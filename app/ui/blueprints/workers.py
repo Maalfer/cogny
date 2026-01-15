@@ -170,6 +170,9 @@ class ImagePreloaderWorker(QThread):
                 
                 # Small delay to avoid blocking UI thread
                 sleep(0.1)  # 100ms between images
+            
+            # Ensure cache is persisted to DB after preloading
+            cache.save_to_db()
                 
         except Exception as e:
             print(f"Image preloader error: {e}")

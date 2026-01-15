@@ -60,13 +60,19 @@ class Sidebar(QWidget):
         if not index.isValid():
              return
 
+        # Check if we are in Search Mode (different model)
+        current_model = self.tree_view.model()
+        if current_model != self.proxy_model:
+            # Search Result Model (StandardItemModel)
+            item = current_model.itemFromIndex(index)
+            if item and hasattr(item, 'note_id'):
+                self.note_selected.emit(item.note_id)
+            return
+
         source_index = self.proxy_model.mapToSource(index)
         item = self.model.itemFromIndex(source_index)
         
         if not item:
-            # Handle search model edge case handled in original code if necessary
-            # For now simplified as we moved SearchManager logic maybe?
-            # SearchManager updates proxy filter, so standard logic applies.
             return
 
         self.note_selected.emit(item.note_id)

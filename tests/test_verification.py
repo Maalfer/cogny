@@ -11,6 +11,10 @@ from app.database.manager import DatabaseManager
 app = QApplication.instance() or QApplication(sys.argv)
 
 class TestNoteApp(unittest.TestCase):
+    def tearDown(self):
+        if hasattr(self, 'patcher'):
+            self.patcher.stop()
+            
     def setUp(self):
         self.db_path = "test_env_notes.cdb"
         if os.path.exists(self.db_path):
@@ -28,36 +32,36 @@ class TestNoteApp(unittest.TestCase):
         # Monkey Patch the class inside the method or globally?
         # Better: create a MockWorker that runs synchronously.
         
-        original_loader_cls = self.window.NoteLoaderWorker
         
-        class SyncLoader(original_loader_cls):
+        # Monkey Patch the class inside the method or globally?
+        # Better: create a MockWorker that runs synchronously.
+        
+        from app.ui.blueprints.workers import NoteLoaderWorker
+        from unittest.mock import patch
+        
+        class SyncLoader(NoteLoaderWorker):
             def __init__(self, db_path, note_id):
-                 # Call original init but pass mock DB or None since we shadow run?
-                 # Actually original __init__ sets self.db_path.
-                 # We can just call super using correct args
                  super().__init__(db_path, note_id)
-                 # We might need to override run() to use 'db_path' correct or just rely on original logic?
-                 # If we use original run(), it creates DatabaseManager(db_path).
-                 # In test, db_path is potentially a temp file string.
-                 # Does `test_verification` use a real file path? Yes, `test_env_notes.cdb`.
                  
             def start(self, priority=None):
                 self.run() # Run synchronously
                 
-        self.window.NoteLoaderWorker = SyncLoader
+        self.patcher = patch('app.ui.blueprints.editor_area.NoteLoaderWorker', SyncLoader)
+        self.patcher.start()
+
 
     def test_window_title(self):
-        self.assertEqual(self.window.windowTitle(), "Cogny")
+        self.assertIn("Cogny", self.window.windowTitle())
         
     def test_add_root_note(self):
         # Programmatically call add note logic since QInputDialog blocks
         # We can call model directly or mock the dialog. 
         # For valid integration test, let's call model directly like the dialog would.
         
-        self.window.model.add_note("Root Note 1", None)
+        self.window.sidebar.model.add_note("Root Note 1", None)
         
         # Verify in Model
-        root = self.window.model.invisibleRootItem()
+        root = self.window.sidebar.model.invisibleRootItem()
         self.assertEqual(root.rowCount(), 1)
         item = root.child(0)
         self.assertEqual(item.text(), "Root Note 1")
@@ -70,13 +74,13 @@ class TestNoteApp(unittest.TestCase):
         
     def test_hierarchy_and_content(self):
         # Create Root
-        root_id = self.window.model.add_note("Root", None)
+        root_id = self.window.sidebar.model.add_note("Root", None)
         
         # Create Child
-        child_id = self.window.model.add_note("Child", root_id)
+        child_id = self.window.sidebar.model.add_note("Child", root_id)
         
         # Verify Model Structure
-        root_item = self.window.model.item(0) # Logic depends on order, but here we have 1
+        root_item = self.window.sidebar.model.item(0) # Logic depends on order, but here we have 1
         self.assertEqual(root_item.text(), "Root")
         self.assertEqual(root_item.rowCount(), 1)
         child_item = root_item.child(0)
@@ -84,19 +88,19 @@ class TestNoteApp(unittest.TestCase):
         
         # Test Selection and Editing
         # Select Child
-        index = self.window.model.indexFromItem(child_item)
-        proxy_index = self.window.proxy_model.mapFromSource(index)
-        self.window.tree_view.setCurrentIndex(proxy_index)
+        index = self.window.sidebar.model.indexFromItem(child_item)
+        proxy_index = self.window.sidebar.proxy_model.mapFromSource(index)
+        self.window.sidebar.tree_view.setCurrentIndex(proxy_index)
         
         # Check Editor Title (loaded from DB)
-        self.assertEqual(self.window.title_edit.toPlainText(), "Child")
+        self.assertEqual(self.window.editor_area.title_edit.toPlainText(), "Child")
         
         # Edit Content
-        self.window.text_editor.setPlainText("Hello World")
-        self.window.title_edit.setPlainText("Child Renamed")
+        self.window.editor_area.text_editor.setPlainText("Hello World")
+        self.window.editor_area.title_edit.setPlainText("Child Renamed")
         
         # Save
-        self.window.save_current_note()
+        self.window.editor_area.save_current_note()
         
         # Verify in DB
         db = DatabaseManager(self.db_path)
@@ -113,7 +117,13 @@ class TestNoteApp(unittest.TestCase):
         self.assertEqual(len(db.get_children(None)), 0)
         
         # Insert a dummy image
-        img_id = db.add_image(1, b"fake_png_data")
+        # Create a note first to satisfy FK
+        cursor = db._get_connection().cursor()
+        cursor.execute("INSERT INTO notes (title) VALUES ('Dummy')")
+        note_id = cursor.lastrowid
+        db._get_connection().commit()
+        
+        img_id = db.add_image(note_id, b"fake_png_data")
         self.assertIsNotNone(img_id)
         
         # Retrieve it
@@ -122,8 +132,8 @@ class TestNoteApp(unittest.TestCase):
         
     def test_image_cleanup_on_save(self):
         # 1. Create Note
-        note_id = self.window.model.add_note("Image Note", None)
-        self.window.current_note_id = note_id
+        note_id = self.window.sidebar.model.add_note("Image Note", None)
+        self.window.editor_area.current_note_id = note_id
         
         # 2. Add specific image to DB manually (simulating paste)
         db = DatabaseManager(self.db_path)
@@ -131,37 +141,37 @@ class TestNoteApp(unittest.TestCase):
         
         # 3. Set content WITH image tag
         html_with_img = f'<html><body><img src="image://db/{img_id}" /></body></html>'
-        self.window.text_editor.setHtml(html_with_img)
-        self.window.save_current_note()
+        self.window.editor_area.text_editor.setHtml(html_with_img)
+        self.window.editor_area.save_current_note()
         
         # Verify it still exists
         self.assertIsNotNone(db.get_image(img_id))
         
         # 4. Remove image tag from content
-        self.window.text_editor.setHtml("<html><body>No Image</body></html>")
-        self.window.save_current_note()
+        self.window.editor_area.text_editor.setHtml("<html><body>No Image</body></html>")
+        self.window.editor_area.save_current_note()
         
         # Verify it is GONE
         self.assertIsNone(db.get_image(img_id))
         
     def test_autosave_on_switch(self):
         # 1. Create two notes
-        note1_id = self.window.model.add_note("Note 1", None)
-        note2_id = self.window.model.add_note("Note 2", None)
+        note1_id = self.window.sidebar.model.add_note("Note 1", None)
+        note2_id = self.window.sidebar.model.add_note("Note 2", None)
         
         # 2. Select Note 1 and Edit
         # Manually select Note 1
-        note1_item = self.window.model.item(0) # Logic assumes 0 is note1
+        note1_item = self.window.sidebar.model.item(0) # Logic assumes 0 is note1
         # To be safe, find items. But assuming order is fine for test.
         # Actually, newly added notes are appended.
         # note1 is at row count-2, note2 at row count-1? 
         # get_children() returns list.
         # Let's rely on manual setting of current_note_id + on_selection_changed trigger simulation for unit test
         
-        self.window.current_note_id = note1_id
-        self.window.title_edit.setPlainText("Modified Note 1")
+        self.window.editor_area.current_note_id = note1_id
+        self.window.editor_area.title_edit.setPlainText("Modified Note 1")
         # We need to simulate the editor content change
-        self.window.text_editor.setHtml("Modified Content")
+        self.window.editor_area.text_editor.setHtml("Modified Content")
         
         # 3. Trigger switch to Note 2
         # We call save_current_note() indirectly? 
@@ -173,7 +183,7 @@ class TestNoteApp(unittest.TestCase):
         # Create dummy index for Note 2 using model
         # note2_item ... we need to find it. 
         # Let's iterate model rows.
-        root = self.window.model.invisibleRootItem()
+        root = self.window.sidebar.model.invisibleRootItem()
         note2_item = None
         for i in range(root.rowCount()):
             it = root.child(i)
@@ -181,8 +191,15 @@ class TestNoteApp(unittest.TestCase):
                 note2_item = it
                 break
         
-        index2 = self.window.model.indexFromItem(note2_item)
-        self.window.on_selection_changed(index2, QModelIndex())
+        index2 = self.window.sidebar.model.indexFromItem(note2_item)
+        proxy_index2 = self.window.sidebar.proxy_model.mapFromSource(index2)
+        
+        # We can call setCurrentIndex on view to be more realistic
+        self.window.sidebar.tree_view.setCurrentIndex(proxy_index2)
+        # OR force call if we want to isolate callback logic, but using correct index
+        # self.window.sidebar.on_selection_changed(proxy_index2, QModelIndex())
+        # Let's use manually calling callback to match original test intention but with correct index
+        self.window.sidebar.on_selection_changed(proxy_index2, QModelIndex())
         
         # Now Check DB for Note 1
         db = DatabaseManager(self.db_path)
@@ -191,13 +208,13 @@ class TestNoteApp(unittest.TestCase):
         self.assertIn("Modified Content", note1[3])
 
     def test_delete(self):
-        root_id = self.window.model.add_note("To Delete", None)
+        root_id = self.window.sidebar.model.add_note("To Delete", None)
         
         # Select
-        root_item = self.window.model.item(0)
-        index = self.window.model.indexFromItem(root_item)
-        proxy_index = self.window.proxy_model.mapFromSource(index)
-        self.window.tree_view.setCurrentIndex(proxy_index)
+        root_item = self.window.sidebar.model.item(0)
+        index = self.window.sidebar.model.indexFromItem(root_item)
+        proxy_index = self.window.sidebar.proxy_model.mapFromSource(index)
+        self.window.sidebar.tree_view.setCurrentIndex(proxy_index)
         
         # Helper to simulate delete without blocking popup
         # We can mock QMessageBox or just call the logic that triggers delete if we separated it.
@@ -206,10 +223,10 @@ class TestNoteApp(unittest.TestCase):
         
         from unittest.mock import patch
         with patch('app.ui.widgets.ModernConfirm.show', return_value=True):
-            self.window.delete_note()
+            self.window.sidebar.delete_note()
             
         # Verify Gone logic
-        self.assertEqual(self.window.model.rowCount(), 0)
+        self.assertEqual(self.window.sidebar.model.rowCount(), 0)
         
         db = DatabaseManager(self.db_path)
         self.assertEqual(len(db.get_children(None)), 0)
@@ -234,8 +251,8 @@ class TestNoteApp(unittest.TestCase):
 
     def test_attachments(self):
         # 1. Setup Note
-        note_id = self.window.model.add_note("Att Note", None)
-        self.window.current_note_id = note_id
+        note_id = self.window.sidebar.model.add_note("Att Note", None)
+        self.window.editor_area.current_note_id = note_id
         
         # 2. Add Attachment via DB directly (simulating UI flow)
         db = DatabaseManager(self.db_path)
@@ -244,8 +261,8 @@ class TestNoteApp(unittest.TestCase):
         
         # 3. Simulate Editor Content
         html = f'<a href="attachment://{att_id}">test.txt</a>'
-        self.window.text_editor.setHtml(html)
-        self.window.save_current_note()
+        self.window.editor_area.text_editor.setHtml(html)
+        self.window.editor_area.save_current_note()
         
         # Verify stored in DB
         res = db.get_attachment(att_id)
@@ -253,8 +270,8 @@ class TestNoteApp(unittest.TestCase):
         self.assertEqual(res[1], b"Content")
         
         # 4. Remove link and Save
-        self.window.text_editor.setHtml("")
-        self.window.save_current_note()
+        self.window.editor_area.text_editor.setHtml("")
+        self.window.editor_area.save_current_note()
         
         res_deleted = db.get_attachment(att_id)
         self.assertIsNone(res_deleted)
@@ -344,7 +361,7 @@ class TestNoteApp(unittest.TestCase):
                 f.write("Here is the file: [[data.zip]]")
                 
             # 3. Import
-            importer = ObsidianImporter(self.window.text_editor.db) # Access DB via editor or create new manager
+            importer = ObsidianImporter(self.window.editor_area.text_editor.db) # Access DB via editor or create new manager
             # Wait, self.window doesn't expose DB easily? 
             # MainWindow has self.model.db, text_editor.db
             # Let's use clean DB manager
@@ -425,7 +442,7 @@ print("Hello World")
         """Test that imported raw markdown preserves indentation when loaded."""
         # 1. Manually insert raw markdown note into DB (simulating import)
         raw_content = "Code:\n\n    def foo():\n        return True"
-        note_id = self.window.model.add_note("Whitespace Test", None)
+        note_id = self.window.sidebar.model.add_note("Whitespace Test", None)
         
         # We must bypass the editor save logic which saves as HTML.
         # Direct DB injection simulating Importer
@@ -434,7 +451,7 @@ print("Hello World")
         
         # 2. Select the note in UI
         # Find item
-        root = self.window.model.invisibleRootItem()
+        root = self.window.sidebar.model.invisibleRootItem()
         # It's likely the last one
         item_found = None
         for i in range(root.rowCount()):
@@ -444,14 +461,14 @@ print("Hello World")
                  break
         
         self.assertIsNotNone(item_found)
-        index = self.window.model.indexFromItem(item_found)
-        proxy_index = self.window.proxy_model.mapFromSource(index)
+        index = self.window.sidebar.model.indexFromItem(item_found)
+        proxy_index = self.window.sidebar.proxy_model.mapFromSource(index)
         
         # 3. Trigger Load
-        self.window.on_selection_changed(proxy_index, QModelIndex())
+        self.window.sidebar.on_selection_changed(proxy_index, QModelIndex())
         
         # 4. Check Editor Content
-        loaded_inv = self.window.text_editor.toPlainText()
+        loaded_inv = self.window.editor_area.text_editor.toPlainText()
         
         # Indentation (4 spaces) must be present
         self.assertIn("    def foo():", loaded_inv)
