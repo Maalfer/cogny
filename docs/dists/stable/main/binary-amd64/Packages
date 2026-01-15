@@ -1,0 +1,16 @@
+Package: cogny
+Version: 1.0.0
+Architecture: amd64
+Maintainer: Mario <mario@example.com>
+Depends: libc6, libgl1
+Priority: optional
+Section: utils
+Filename: pool/main/c/cogny/cogny_1.0.0_amd64.deb
+Size: 72384640
+SHA256: f88e0136e8946d2633ec6ef2cad83599aeff2ba19abf65edc518d91e1feb5271
+SHA1: b11050ecf51059bb96e0cdcc2c662e266de0484e
+MD5sum: f5a0abd1d10f4c39ef81e1f158fa6e6f
+Description: Hierarchical Note Taking App
+ Cogni is a modern note-taking application designed for efficiency.
+ helping you organize your thoughts hierarchically.
+

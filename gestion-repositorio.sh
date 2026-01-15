@@ -15,7 +15,7 @@ APP_NAME="cogny"
 VERSION="1.0.0"
 ARCH="amd64"
 DEB_FILE="${APP_NAME}_${VERSION}_${ARCH}.deb"
-APT_REPO_DIR="apt-repo"
+APT_REPO_DIR="docs"  # Usar docs/ directamente para GitHub Pages
 GPG_KEY_ID=""  # Dejar vacío para usar la clave por defecto
 
 # Colores para output
@@ -148,20 +148,19 @@ EOF
 # Paso 8: Resumen e Instrucciones
 # ============================================
 echo -e "\n${GREEN}=== ¡Repositorio APT creado exitosamente! ===${NC}\n"
-echo -e "${YELLOW}Siguiente paso: Publicar en GitHub Pages${NC}"
+echo -e "${YELLOW}Siguiente paso: Publicar en GitHub${NC}"
 echo -e "
-1. Sube la carpeta '${APT_REPO_DIR}/' a GitHub:
-   
-   Opción A - Carpeta docs/ en rama main:
-   ${GREEN}mkdir -p docs
-   cp -r ${APT_REPO_DIR}/* docs/
-   git add docs
+El repositorio ya está en la carpeta ${GREEN}docs/${NC} listo para GitHub Pages.
+
+${YELLOW}Comandos para subir a GitHub:${NC}
+   ${GREEN}git add docs
    git commit -m 'Update APT repository v${VERSION}'
    git push${NC}
    
-   Luego en GitHub: Settings > Pages > Source: 'main' branch, /docs folder
+${YELLOW}Luego en GitHub:${NC}
+   Settings > Pages > Source: 'main' branch, ${GREEN}/docs${NC} folder
 
-2. Los usuarios podrán instalar con:
+${YELLOW}Los usuarios podrán instalar con:${NC}
    ${GREEN}curl -fsSL https://TU_USUARIO.github.io/cogny/${APP_NAME}.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/${APP_NAME}-archive-keyring.gpg
    echo \"deb [arch=amd64 signed-by=/usr/share/keyrings/${APP_NAME}-archive-keyring.gpg] https://TU_USUARIO.github.io/cogny stable main\" | sudo tee /etc/apt/sources.list.d/${APP_NAME}.list
    sudo apt update && sudo apt install ${APP_NAME}${NC}
@@ -169,5 +168,5 @@ echo -e "
 
 echo -e "${GREEN}Archivos generados:${NC}"
 echo -e "  - ${DEB_FILE}"
-echo -e "  - ${APT_REPO_DIR}/ (repositorio completo)"
+echo -e "  - ${APT_REPO_DIR}/ (repositorio en docs/ listo para GitHub Pages)"
 echo -e "  - ${APP_NAME}.gpg.key (clave pública)\n"
