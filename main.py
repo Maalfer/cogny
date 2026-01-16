@@ -12,7 +12,7 @@ def main():
     
     # Apply Fusion Style
     app.setOrganizationName("CognyApp")
-    app.setApplicationName("Cogni")
+    app.setApplicationName("Cogny")
     
     # Linux Desktop Integration
     # Crucial for wayland/gnome to associate window with .desktop file

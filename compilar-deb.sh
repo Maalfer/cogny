@@ -3,7 +3,7 @@ set -e
 
 # Configuration
 APP_NAME="cogny"
-VERSION="1.0.1"
+VERSION="1.0.2"
 ARCH="amd64"
 DEB_NAME="${APP_NAME}_${VERSION}_${ARCH}"
 BUILD_DIR="build_deb"
@@ -71,7 +71,7 @@ Architecture: $ARCH
 Maintainer: Mario <mario@example.com>
 Depends: libc6, libgl1
 Description: Hierarchical Note Taking App
- Cogni is a modern note-taking application designed for efficiency.
+ Cogny is a modern note-taking application designed for efficiency.
  helping you organize your thoughts hierarchically.
 EOF
 # Note: PyInstaller bundles Python, so we don't strictly need python3 dependency,

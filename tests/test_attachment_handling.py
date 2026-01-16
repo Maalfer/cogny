@@ -191,7 +191,7 @@ class TestAttachmentHandling(unittest.TestCase):
                 # Check if xdg-open was called
                 args, _ = mock_popen.call_args
                 self.assertEqual(args[0][0], 'xdg-open')
-                self.assertIn('cogni_test_', args[0][1])
+                self.assertIn('cogny_test_', args[0][1])
 
 
     def test_context_menu_action_triggers_method(self):

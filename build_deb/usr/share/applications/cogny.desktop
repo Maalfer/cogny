@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Cogny
+Comment=Hierarchical Note Taking App
+Exec=/opt/cogny/cogny
+Icon=cogny
+Type=Application
+Categories=Office;Utility;
+Terminal=false
+StartupWMClass=cogny.desktop

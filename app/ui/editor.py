@@ -618,7 +618,7 @@ class NoteEditor(QTextEdit):
         name, ext = os.path.splitext(filename)
         
         try:
-            fd, path = tempfile.mkstemp(suffix=ext, prefix=f"cogni_{name}_")
+            fd, path = tempfile.mkstemp(suffix=ext, prefix=f"cogny_{name}_")
             with os.fdopen(fd, 'wb') as f:
                 f.write(data)
             

@@ -1,0 +1,10 @@
+Package: cogny
+Version: 1.0.2
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Mario <mario@example.com>
+Depends: libc6, libgl1
+Description: Hierarchical Note Taking App
+ Cogny is a modern note-taking application designed for efficiency.
+ helping you organize your thoughts hierarchically.
