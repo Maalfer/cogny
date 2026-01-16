@@ -118,6 +118,10 @@ class EditorArea(QWidget):
         self.text_editor.document().setBaseUrl(base_url)
         
         # Load Plain Text (Source Mode) to allow Highlighter to work (Live Preview)
+        # Fix: older saves might have \ufffc (obj replacement char). Strip it on load.
+        if markdown_content:
+            markdown_content = markdown_content.replace('\ufffc', '')
+        
         self.text_editor.setPlainText(markdown_content)
         
         # Helper to render images inline (Live Preview Style)
@@ -157,11 +161,16 @@ class EditorArea(QWidget):
         # Let's assume Title Edit handles Rename elsewhere or we ignore title mismatch for now.
         # We just save content.
         
-        content = self.text_editor.toMarkdown()
+        # USE toPlainText() to preserve Markdown Source.
+        # toMarkdown() was double-escaping characters (e.g. \` -> \\\`) because it thought they were literal text in a Rich Doc.
+        content = self.text_editor.toPlainText()
+        
+        # Cleanup: Remove Object Replacement Characters (\ufffc) inserted by inserted images/attachments visuals.
+        # These should not be saved to disk.
+        content = content.replace('\ufffc', '')
         
         # We need to preserve `attachment://` links. 
-        # `toMarkdown` might output them correctly if they are standard links.
-        # Qt's markdown writer usually handles standard formats.
+        # `toPlainText` preserves them as text string `[filename](attachment://id)`.
         
         success = self.fm.save_note(self.current_note_id, content)
         if success:

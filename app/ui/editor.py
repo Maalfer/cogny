@@ -927,66 +927,101 @@ class NoteEditor(QTextEdit):
         return super().loadResource(type, name)
     
     def render_images(self):
-        """Scans the document for Markdown image links and inserts QTextImageFormat objects to render them."""
-        # This simulates "Live Preview" by showing the image AFTER the link (or replacing it if we were advanced).
-        # We will insert it AFTER for now, consistent with insertFromMimeData.
-        # Issue: If we just append, we might duplicate if we run this multiple times?
-        # This is expected to be run ONCE after load.
-        
-        # Regex for Markdown Image: ![alt](url)
-        import re
+        """Scans the document for Markdown image links (Standard & WikiLink) and inserts QTextImageFormat objects."""
         text = self.toPlainText()
-        # We need to iterate and insert. Modifying document invalidates text positions.
-        # So we process reversed? Or use QRegularExpression search on document.
-        
-        # Note: Pattern must match `![...](...)`
-        # We use QDocument's find to get cursor.
-        from PySide6.QtCore import QRegularExpression
-        regex = QRegularExpression(r"!\[.*?\]\((.*?)\)")
-        
         cursor = self.textCursor()
-        cursor.setPosition(0)
         
-        # We perform finding loop.
-        # Note: Finding moves cursor to END of match? Or selects it? Selects it.
-        # We want to insert Image AFTER the match.
-        
-        doc = self.document()
-        it = regex.globalMatch(text)
-        
-        # We must collect insertions to avoid invalidating iterators, OR use an offset.
-        # But `globalMatch` works on string 'text', which doesn't change when we edit document (if we don't reload text).
-        # But positions in 'doc' WILL change.
-        # So we should iterate BACKWARDS? globalMatch doesn't support backwards easily.
-        # We can collect all matches: (start, end, url)
-        
+        # 1. Collect all matches (Standard + WikiLink)
+        # We need to handle them in reverse order of position to avoid invalidating offsets.
+        # Format: (start, end, image_source_or_name, is_wikilink)
         matches = []
-        while it.hasNext():
-            match = it.next()
-            matches.append((match.capturedStart(), match.capturedEnd(), match.captured(1)))
+        
+        # A. Standard Markdown: ![alt](url)
+        from PySide6.QtCore import QRegularExpression
+        regex_std = QRegularExpression(r"!\[.*?\]\((.*?)\)")
+        it_std = regex_std.globalMatch(text)
+        while it_std.hasNext():
+            m = it_std.next()
+            matches.append((m.capturedStart(), m.capturedEnd(), m.captured(1), False))
             
-        # Process Reversed so positions remain valid for earlier checks
-        for start, end, url in reversed(matches):
-            # Move cursor to end of match
+        # B. Obsidian WikiLink: ![[filename|options]] or ![[filename]]
+        # Note: We need to capture the filename part before any '|'
+        regex_wiki = QRegularExpression(r"!\[\[(.*?)\]\]")
+        it_wiki = regex_wiki.globalMatch(text)
+        while it_wiki.hasNext():
+            m = it_wiki.next()
+            content = m.captured(1)
+            # Handle piping for dimensions: "image.png|100"
+            if "|" in content:
+                filename = content.split("|")[0]
+            else:
+                filename = content
+            matches.append((m.capturedStart(), m.capturedEnd(), filename.strip(), True))
+            
+        # Sort matches by start position (descending) to process bottom-up
+        matches.sort(key=lambda x: x[0], reverse=True)
+        
+        for start, end, target, is_wikilink in matches:
+            # Resolve Path
+            # self.fm is available?
+            resolved_path = target
+            
+            if hasattr(self, "fm") and self.fm:
+                # 1. Try Absolute (if already absolute)
+                import os
+                if os.path.exists(target):
+                    resolved_path = target
+                else:
+                    # 2. Try Relative to Current Note (BaseUrl approach)
+                    # We need the current note's directory.
+                    # self.current_note_path might be set by EditorArea?
+                    # EditorArea sets `self.text_editor.current_note_path = note_id`
+                    
+                    found = False
+                    
+                    # Search Paths:
+                    # a. Same directory as note
+                    # b. 'Adjuntos' folder in vault root
+                    # c. Vault root
+                    
+                    if hasattr(self, "current_note_path") and self.current_note_path:
+                        # note_id usually is relative to root.
+                        # fm.root_path is root.
+                        
+                        note_abs_path = os.path.join(self.fm.root_path, self.current_note_path)
+                        note_dir = os.path.dirname(note_abs_path)
+                        
+                        # Check same dir
+                        path_a = os.path.join(note_dir, target)
+                        if os.path.exists(path_a):
+                            resolved_path = path_a
+                            found = True
+                    
+                    if not found:
+                        # Check root Adjuntos
+                        path_b = os.path.join(self.fm.root_path, "Adjuntos", target)
+                        if os.path.exists(path_b):
+                            resolved_path = path_b
+                            found = True
+                            
+                    if not found:
+                        # Check root
+                        path_c = os.path.join(self.fm.root_path, target)
+                        if os.path.exists(path_c):
+                            resolved_path = path_c
+                            found = True
+
+            # Insert Image
             cursor.setPosition(end)
             
-            # Insert Image
             from PySide6.QtGui import QTextImageFormat
             fmt = QTextImageFormat()
-            fmt.setName(url)
-            fmt.setWidth(600) # Default width
+            fmt.setName(resolved_path) # Absolute path works best here
+            fmt.setWidth(600) # Default
             
-            # We insert a newline and image? Or inline?
-            # insertFromMimeData used inline? `insertText` then `insertImage`.
-            # If we insert inline, it flows.
-            # But the user might want it on a new line.
-            # Usually images are block level.
-            # Let's just insert the image format.
+            # TODO: Parse size from WikiLink ("|100") if needed
+            
             cursor.insertImage(fmt)
-            
-            # Note: The text `![...](...)` remains visible (handled by highlighter?)
-            # Highlighter doesn't hide it currently (saw code).
-            # So user sees Link + Image. This is acceptable for "Live Preview MVP".
 
     def _cache_image(self, image_id, image):
         """Add image to cache with LRU eviction. Key can be int or str."""

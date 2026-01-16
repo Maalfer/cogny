@@ -106,6 +106,30 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
                 self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
 
+
+        # Image Links (Standard & WikiLink) - Hide when inactive
+        # Standard: ![alt](url)
+        img_std_pattern = QRegularExpression(r"!\[.*?\]\((.*?)\)")
+        it = img_std_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            # We hide the WHOLE MATCH (including ! and [])
+            if not is_active:
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.hidden_format)
+            else:
+                # Optional: Style the link parts differently when active?
+                # Gray out the syntax chars, keep url visible?
+                # For now just let it be standard text (or use hidden_format logic from others)
+                pass
+
+        # WikiLink: ![[image]]
+        img_wiki_pattern = QRegularExpression(r"!\[\[(.*?)\]\]")
+        it = img_wiki_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            if not is_active:
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.hidden_format)
+
         # Inline Code (`text`)
         # Must be before normal text rules? No, separate regex.
         # User wants: Italic + Emphasis (Color)
