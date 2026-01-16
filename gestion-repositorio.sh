@@ -59,17 +59,19 @@ fi
 # ============================================
 echo -e "\n${YELLOW}→ Configurando firmado GPG...${NC}"
 
-# Si no se especificó KEY_ID, usar la primera clave disponible
+# Si no se especificó KEY_ID, intentar detectarla
 if [ -z "$GPG_KEY_ID" ]; then
+    echo -e "${YELLOW}→ Buscando clave GPG disponible...${NC}"
     GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
     
     if [ -z "$GPG_KEY_ID" ]; then
         echo -e "${RED}Error: No se encontró ninguna clave GPG.${NC}"
-        echo -e "${YELLOW}Genera una con: gpg --full-generate-key${NC}"
+        echo -e "${YELLOW}En CI/CD, asegúrate de configurar el secreto GPG_PRIVATE_KEY.${NC}"
         exit 1
     fi
-    
-    echo -e "${GREEN}✓ Usando clave GPG: $GPG_KEY_ID${NC}"
+    echo -e "${GREEN}✓ Clave detectada: $GPG_KEY_ID${NC}"
+else
+    echo -e "${GREEN}✓ Usando GPG_KEY_ID proporcionada: $GPG_KEY_ID${NC}"
 fi
 
 # Exportar clave pública
