@@ -5,12 +5,13 @@ from app.ui.widgets import ModernInput, ModernAlert, ModernConfirm
 from app.models.note_model import NoteTreeModel
 
 class Sidebar(QWidget):
-    note_selected = Signal(int, bool, str)  # note_id, is_folder, title
+    note_selected = Signal(str, bool, str)  # note_id (path), is_folder, title
     action_requested = Signal(str, object) # action_name, args
 
-    def __init__(self, db_manager, parent=None):
+    def __init__(self, db_manager, file_manager, parent=None):
         super().__init__(parent)
         self.db = db_manager
+        self.fm = file_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -19,14 +20,14 @@ class Sidebar(QWidget):
 
         # Tree View
         self.tree_view = QTreeView()
-        self.model = NoteTreeModel(self.db)
+        self.model = NoteTreeModel(self.fm)
         self.model.load_notes()
 
         # Proxy Model for Search/Filtering
         self.proxy_model = QSortFilterProxyModel(self)
         self.proxy_model.setSourceModel(self.model)
         self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        self.proxy_model.setRecursiveFilteringEnabled(True)
+        self.proxy_model.setRecursiveFilteringEnabled(True) # Important for tree
 
         self.tree_view.setModel(self.proxy_model)
         self.tree_view.setHeaderHidden(True)
@@ -182,8 +183,24 @@ class Sidebar(QWidget):
         new_name, ok = ModernInput.get_text(self, "Cambiar nombre", "Nuevo nombre:", text=old_name)
         
         if ok and new_name.strip():
-            item.setText(new_name.strip())
-            self.db.update_note_title(item.note_id, new_name.strip())
+            new_name = new_name.strip()
+            # Rename in FS via FM
+            # Item.note_id is the RELATIVE PATH.
+            # We need to compute new ID (path) to update item?
+            # Model reload might be safer or update item.
+            # FM.rename_item returns new relative path.
+            
+            try:
+                new_rel_path = self.fm.rename_item(item.note_id, new_name)
+                item.setText(new_name)
+                item.note_id = new_rel_path
+                # We should technically reload model or update children paths if it's a folder?
+                # If folder, all children IDs are now invalid.
+                # Simplest for now: Reload Model if it's a folder or just always?
+                if getattr(item, 'is_folder', False):
+                     self.model.load_notes()
+            except Exception as e:
+                ModernAlert.show(self, "Error", f"No se pudo renombrar: {e}")
 
     def add_sibling_note(self):
         index = self.tree_view.currentIndex()
@@ -272,8 +289,8 @@ class Sidebar(QWidget):
             # Signal before deletion to clear editor if needed
             self.action_requested.emit("note_deleted", item.note_id)
 
-            self.db.delete_note(item.note_id)
             self.model.delete_note(item.note_id)
+            # self.model.delete_note calls fm.delete_item internally now.
 
     def select_note(self, note_id):
         if not note_id: return
@@ -288,9 +305,17 @@ class Sidebar(QWidget):
                 self.tree_view.scrollTo(proxy_index)
 
     def toggle_read_later(self, note_id):
-        new_state = self.db.toggle_read_later(note_id)
-        msg = "Nota guardada para ver más tarde." if new_state else "Nota eliminada de guardados."
-        ModernAlert.show(self, "Ver más tarde", msg)  # Using Alert as simple feedback mechanism
+        # Read Later is Metadata logic. 
+        # Since we moved to Files, we don't have a DB "notes" table record for every file necessarily unless we sync?
+        # The user wanted "eliminar totalmente que las notas y todo se guarden en la base de datos".
+        # So "Read Later" feature might be deprecated or needs a separate DB table mapping Path -> State.
+        # Check `db.toggle_read_later` implementation. It uses `UPDATE notes`.
+        # Since we aren't using `notes` table for content, but we might keep it for metadata?
+        # User said "eliminar totalmente que las notas... se guarden en la base de datos".
+        # This implies we shouldn't rely on `notes` table ID.
+        # The `note_id` is now a STRING (path). DB expects INT.
+        # Feature disabled for now or requires refactor to use Path in DB.
+        ModernAlert.show(self, "No Disponible", "La función 'Ver más tarde' está deshabilitada en el modo de archivos locales por ahora.")
 
     def get_selected_notes(self):
         """Returns a list of tuples (note_id, title) for all selected items."""

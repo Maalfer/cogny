@@ -13,13 +13,13 @@ class UiSetupMixin:
         self.setCentralWidget(self.splitter)
 
         # 1. Sidebar Blueprint
-        self.sidebar = Sidebar(self.db, self)
+        self.sidebar = Sidebar(self.db, self.fm, self)
         self.sidebar.note_selected.connect(self.on_sidebar_note_selected)
         self.sidebar.action_requested.connect(self.on_sidebar_action)
         self.splitter.addWidget(self.sidebar)
 
         # 2. Editor Blueprint
-        self.editor_area = EditorArea(self.db, self)
+        self.editor_area = EditorArea(self.db, self.fm, self)
         self.editor_area.status_message.connect(self.on_editor_status)
         self.splitter.addWidget(self.editor_area)
         

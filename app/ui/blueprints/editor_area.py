@@ -12,12 +12,24 @@ from app.ui.blueprints.markdown import MarkdownRenderer
 class EditorArea(QWidget):
     status_message = Signal(str, int) # message, timeout
 
-    def __init__(self, db_manager, parent=None):
+    def __init__(self, db_manager, file_manager, parent=None):
         super().__init__(parent)
         self.db = db_manager
+        self.fm = file_manager
         self.current_note_id = None
         self.note_loader = None
         self.setup_ui()
+
+    def set_file_manager(self, file_manager):
+        self.fm = file_manager
+        self.text_editor.fm = file_manager
+        # Reset editor
+        self.clear()
+        # Update Base URL for editor to new root temporarily until note loaded?
+        from PySide6.QtCore import QUrl
+        import os
+        base_url = QUrl.fromLocalFile(self.fm.root_path + os.sep)
+        self.text_editor.document().setBaseUrl(base_url)
 
     def setup_ui(self):
         # Vertical Splitter (Title / Content)
@@ -39,7 +51,7 @@ class EditorArea(QWidget):
         self.title_edit.return_pressed.connect(lambda: self.text_editor.setFocus())
         
         # Content
-        self.text_editor = NoteEditor(self.db)
+        self.text_editor = NoteEditor(self.db, self.fm)
         
         # Highlighter
         self.highlighter = MarkdownHighlighter(self.text_editor.document())
@@ -48,6 +60,9 @@ class EditorArea(QWidget):
         # Load Theme
         self.apply_current_theme()
 
+        # Cleanup disabled to prevent data loss with loose loose coupling
+        # self.db.cleanup_images(self.current_note_id, image_ids)
+        # self.db.cleanup_attachments(self.current_note_id, att_ids)
         self.splitter.addWidget(self.title_edit)
         self.splitter.addWidget(self.text_editor)
         self.splitter.setSizes([80, 700])
@@ -67,22 +82,7 @@ class EditorArea(QWidget):
              self.highlighter.set_theme(theme_name)
 
     def load_note(self, note_id, is_folder=None, title=None):
-        # Cancel previous loader
-        if self.note_loader and self.note_loader.isRunning():
-            self.note_loader.cancel()
-            self.note_loader.wait() # Wait for thread to finish to prevent crash
-            self.note_loader.deleteLater()
-            self.note_loader = None
-        
         self.current_note_id = note_id
-        
-        # Only query DB if we don't have the info from sidebar
-        if is_folder is None or title is None:
-            # Use metadata query to avoid fetching heavy content in UI thread
-            note_data = self.db.get_note_metadata(note_id)
-            if not note_data: return
-            is_folder = bool(note_data['is_folder'])
-            title = note_data['title']
         
         if is_folder:
              self.show_folder_placeholder(title)
@@ -93,118 +93,83 @@ class EditorArea(QWidget):
         
         self.status_message.emit(f"Cargando nota: {title}...", 0)
         
-        # Set title immediately
-        self.title_edit.setPlainText(title)
+        # Set title
+        self.title_edit.setPlainText(title) # Title is usually part of note_id (filename)
         
-        # 1. OPTIMIZATION: Try Loading from Render Cache (Double Column)
-        cached_html = self.db.get_note_cache(note_id)
-        if cached_html and len(cached_html) > 20:
-             self.text_editor.setHtml(cached_html)
-             self.text_editor.setReadOnly(False)
-             # Restore visuals immediately
-             self.highlighter.setDocument(self.text_editor.document())
-             self.text_editor.update_code_block_visuals()
-             
-             self.status_message.emit("Nota cargada (Cache)", 1000)
-             return
-
-        # 2. Fallback: Show loading state only in content
-        self.text_editor.setHtml("<h2 style='color: gray; text-align: center;'>Cargando contenido...</h2>")
+        # Pass current note path to editor for relative link calculation
+        self.text_editor.current_note_path = note_id
         
-        self.note_loader = NoteLoaderWorker(self.db.db_path, note_id)
-        self.note_loader.chunk_loaded.connect(self.on_chunk_loaded)
-        self.note_loader.finished.connect(self.on_note_loading_finished)
+        # Load Content from FS
+        markdown_content = self.fm.read_note(note_id)
+        if markdown_content is None:
+            markdown_content = "" # New or empty
+            
+        # Set Base URL for resolving local images
+        # We point to Root so "Adjuntos/img.png" resolves
+        from PySide6.QtCore import QUrl
+        import os
+        # Base Path should be the directory containing the note
+        # FileManager has _get_abs_path but it is internal. `read_note` handles it.
+        # We can reconstruct it: root + note_id
+        # Let's use fm.root_path
+        full_path = os.path.join(self.fm.root_path, note_id)
+        note_dir = os.path.dirname(full_path)
+        base_url = QUrl.fromLocalFile(note_dir + os.sep)
+        self.text_editor.document().setBaseUrl(base_url)
         
-        # PERFORMANCE MODE
-        # Disable expensive visuals during streaming
-        self.text_editor.set_loading_state(True)
-        self.highlighter.setDocument(None) 
+        # Load Plain Text (Source Mode) to allow Highlighter to work (Live Preview)
+        self.text_editor.setPlainText(markdown_content)
         
-        self.note_loader.start()
+        # Helper to render images inline (Live Preview Style)
+        # We process the text to find image links and insert image objects
+        self.text_editor.render_images()
+        
+        # Restore Visuals
+        self.highlighter.setDocument(self.text_editor.document())
+        self.text_editor.update_code_block_visuals()
+        
+        self.status_message.emit("Nota cargada.", 1000)
 
     def show_folder_placeholder(self, title):
         self.title_edit.setPlainText(title)
         self.title_edit.setReadOnly(True)
-        self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {title}</h1><p style='color: gray; text-align: center;'>Esta es una carpeta. Crea o selecciona una nota dentro de ella.</p>")
+        self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {title}</h1><p style='color: gray; text-align: center;'>Esta es una carpeta.</p>")
         self.text_editor.setReadOnly(True)
 
     def on_chunk_loaded(self, html_chunk):
-        # First chunk? If text editor still has "Cargando...", clear it.
-        # But setHtml replaces everything.
-        # We need to know if it's the first update.
-        
-        # Helper check:
-        current_html = self.text_editor.toHtml()
-        if "Cargando contenido..." in current_html:
-            # First real chunk replacing placeholder
-            self.text_editor.clear()
-            
-            # Note: insertHtml inserts at cursor. After clear, cursor is at start.
-            formatted = f'<div style="white-space: pre-wrap;">{html_chunk}</div>'
-            self.text_editor.setHtml(formatted)
-        else:
-             # Append
-             # Move cursor to end?
-             cursor = self.text_editor.textCursor()
-             cursor.movePosition(QTextCursor.End)
-             self.text_editor.setTextCursor(cursor)
-             
-             # Append HTML
-             # We might need a newline separation?
-             self.text_editor.insertHtml(html_chunk)
+        pass # Deprecated
 
     def on_note_loading_finished(self, result):
-        # Restore Visuals
-        self.text_editor.set_loading_state(False)
-        self.highlighter.setDocument(self.text_editor.document())
-        self.text_editor.update_code_block_visuals() # Apply full pass
-        
-        # Update Cache for next time
-        if self.current_note_id:
-             self.db.update_note_cache(self.current_note_id, self.text_editor.toHtml())
-        
-        self.status_message.emit("", 0) # Clear
-        # Final cleanup or validation if needed
+        pass # Deprecated
 
     def save_current_note(self):
         if self.current_note_id is None:
             return
 
         title = self.title_edit.toPlainText()
-        content = self.text_editor.toHtml()
+        # Update filename if title changed? 
+        # TitleEditor emits return_pressed, handled elsewhere?
+        # Sidebar handles renaming (filename change).
+        # Title in UI is just visual? Or does it write # Title?
+        # Usually filename = title.
+        # If user edits title here, we should probably rename file?
+        # But that complicates things (saving triggers rename).
+        # Let's assume Title Edit handles Rename elsewhere or we ignore title mismatch for now.
+        # We just save content.
         
-        import re
+        content = self.text_editor.toMarkdown()
         
-        # Cleanup Images
-        image_ids = []
-        matches = re.findall(r'src="image://db/(\d+)"', content)
-        for m in matches:
-             try:
-                 image_ids.append(int(m))
-             except ValueError:
-                 pass
+        # We need to preserve `attachment://` links. 
+        # `toMarkdown` might output them correctly if they are standard links.
+        # Qt's markdown writer usually handles standard formats.
         
-        # Cleanup Attachments
-        att_ids = []
-        att_matches = re.findall(r'href="attachment://(\d+)"', content)
-        for m in att_matches:
-             try:
-                 att_ids.append(int(m))
-             except ValueError:
-                 pass
-
-        # We also want to ensure we save the Markdown source if possible.
-        # Let's switch to saving Markdown in 'content' and HTML in 'cached_html'.
+        success = self.fm.save_note(self.current_note_id, content)
+        if success:
+             self.status_message.emit("Guardado.", 2000)
+        else:
+             self.status_message.emit("Error al guardar.", 2000)
         
-        markdown_content = self.text_editor.toMarkdown()
-        self.db.update_note(self.current_note_id, title, markdown_content, cached_html=content)
-        
-        self.db.cleanup_images(self.current_note_id, image_ids)
-        self.db.cleanup_attachments(self.current_note_id, att_ids)
-        
-        self.status_message.emit("Guardado.", 2000)
-        
-        return title # Return title to update tree if needed
+        return title
 
     def clear(self):
         self.current_note_id = None
@@ -228,8 +193,10 @@ class EditorArea(QWidget):
             with open(path, 'rb') as f:
                 data = f.read()
             
-            att_id = self.db.add_attachment(self.current_note_id, filename, data)
-            self.text_editor.insert_attachment(att_id, filename)
+            # Using database table 'attachments' for storage.
+            # Passing note_id=0 as a global bucket.
+            att_id = self.db.add_attachment(0, filename, data)
+            self.text_editor.insert_attachment(att_id, filename) 
             
         except Exception as e:
             ModernAlert.show(self, "Error", f"No se pudo adjuntar el archivo: {e}")

@@ -8,10 +8,10 @@ import os
 class UiActionsMixin:
     def create_actions(self):
         # File Actions
-        self.act_new_db = QAction("Nueva Base de Datos...", self)
+        self.act_new_db = QAction("Nueva Bóveda...", self) # Concept shift?
         self.act_new_db.triggered.connect(self.new_database)
         
-        self.act_open_db = QAction("Abrir Base de Datos...", self)
+        self.act_open_db = QAction("Abrir Bóveda...", self)
         self.act_open_db.triggered.connect(self.open_database)
         
         self.act_save_as_db = QAction("Guardar Como...", self) # Copy current DB to new location and switch
@@ -102,19 +102,50 @@ class UiActionsMixin:
         self.act_about.triggered.connect(self.show_about)
 
     def new_database(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Nueva Base de Datos", 
-                                            os.path.expanduser("~/Documentos"), 
-                                            "Cogny Database (*.cdb)")
-        if path:
-            if not path.endswith(".cdb"): path += ".cdb"
-            self.switch_database(path)
+        # Create New Vault (Folder)
+        # We need a parent directory to create the new vault INSIDE.
+        dialog = QFileDialog(self, "Seleccionar ubicación para la nueva bóveda", os.path.expanduser("~/Documentos"))
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        
+        if dialog.exec():
+            selected_files = dialog.selectedFiles()
+            if selected_files:
+                path = selected_files[0]
+                from app.ui.widgets import ModernInput
+                name, ok = ModernInput.get_text(self, "Nueva Bóveda", "Nombre de la bóveda:")
+                if ok and name.strip():
+                    full_path = os.path.join(path, name.strip())
+                    try:
+                        os.makedirs(full_path, exist_ok=False)
+                        # Create .obsidian folder (optional but nice)
+                        os.makedirs(os.path.join(full_path, ".obsidian"), exist_ok=True)
+                        # Create 'Adjuntos' folder
+                        os.makedirs(os.path.join(full_path, "Adjuntos"), exist_ok=True)
+                        
+                        self.load_vault(full_path)
+                        ModernInfo.show(self, "Éxito", f"Bóveda creada: {name}")
+                    except FileExistsError:
+                        ModernAlert.show(self, "Error", "Ya existe una carpeta con ese nombre.")
+                    except Exception as e:
+                        ModernAlert.show(self, "Error", f"No se pudo crear la bóveda: {e}")
 
     def open_database(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Abrir Base de Datos", 
-                                            os.path.expanduser("~/Documentos"), 
-                                            "Cogny Database (*.cdb)")
-        if path:
-            self.switch_database(path)
+        # OPEN VAULT (FOLDER)
+        # Use explicit dialog instance for better control over directory selection behavior
+        dialog = QFileDialog(self, "Abrir Bóveda (Seleccionar Carpeta)", os.path.expanduser("~/Documentos"))
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        
+        # Try to enforce native dialog if available, but ensure it respects directory selection
+        # On some Linux DEs, native dialogs can be finicky about "Open" vs "Enter".
+        # If issues persist, we might consider DontUseNativeDialog.
+        # For now, let's stick to standard configuration which usually works if setFileMode is correct.
+        
+        if dialog.exec():
+             selected_files = dialog.selectedFiles()
+             if selected_files:
+                 self.load_vault(selected_files[0])
 
     def save_as_database(self):
         # Save current DB content to a new file.

@@ -10,9 +10,10 @@ class NoteEditor(QTextEdit):
     _image_cache_order = []  # For LRU eviction
     _max_cached_images = 100  # Limit memory usage
     
-    def __init__(self, db_manager: DatabaseManager, parent=None):
+    def __init__(self, db_manager: DatabaseManager, file_manager, parent=None):
         super().__init__(parent)
         self.db = db_manager
+        self.fm = file_manager
         self.cursorPositionChanged.connect(self.update_highlighting)
         # Optimized: Use contentsChange for incremental updates instead of full textChanged scan
         self.document().contentsChange.connect(self.on_contents_change)
@@ -798,52 +799,197 @@ class NoteEditor(QTextEdit):
                 # Convert QImage to bytes (PNG)
                 ba = QByteArray()
                 buffer = QBuffer(ba)
+                
+                # Setup Buffer
                 buffer.open(QIODevice.WriteOnly)
                 image.save(buffer, "PNG")
                 data = ba.data()
                 
-                if hasattr(self, "current_note_id") and self.current_note_id is not None:
-                    image_id = self.db.add_image(self.current_note_id, data)
+                # Generate Filename (timestamp or UUID)
+                import time
+                filename = f"image_{int(time.time()*1000)}.png"
+                
+                # Save to FS
+                try:
+                    rel_path_root = self.fm.save_image(data, filename)
                     
-                    # Insert HTML
-                    html = f'<img src="image://db/{image_id}" />'
-                    self.textCursor().insertHtml(html)
-                    return
-        
-        super().insertFromMimeData(source)
-
+                    # Calculate relative path from current note to image
+                    # rel_path_root is "Adjuntos/file.png"
+                    # current_note_path is "Folder/Note.md" or "Note.md"
+                    
+                    final_link_path = rel_path_root
+                    if hasattr(self, "current_note_path") and self.current_note_path:
+                         import os
+                         # We need to go from Note DIR to Image
+                         # Note path is relative to root.
+                         note_rel_dir = os.path.dirname(self.current_note_path)
+                         # Target is rel_path_root
+                         
+                         # relpath(target, start)
+                         # We must pretend we are at absolute paths to be safe or just use parts
+                         # relpath works with relative paths if they start from same base
+                         final_link_path = os.path.relpath(rel_path_root, note_rel_dir)
+                    
+                    # Normalize slashes
+                    url_path = final_link_path.replace("\\", "/")
+                    
+                    # Insert Markdown
+                    self.textCursor().insertText(f"![Image]({url_path})")
+                    
+                    # Insert WYSIWYG Image
+                    # For display, we want it to resolve.
+                    # If we use relative path, BaseUrl (Root) + Relative Path might FAIL if BaseUrl isn't Note Dir.
+                    # EditorArea sets BaseUrl to ROOT.
+                    # "../Adjuntos/img.png" relative to ROOT is "root/../Adjuntos/img.png" -> Invalid?
+                    # valid relative to ROOT would be "Adjuntos/img.png".
+                    
+                    # QT RESOLUTION logic: 
+                    # If BaseUrl is set, relative URLs are resolved against it.
+                    # If BaseUrl is Root, and we have "../Adjuntos", it goes up out of root?
+                    # ISSUE: Browser/Qt calculates relative to BaseUrl.
+                    # If I put `![Img](../Adjuntos/...)` and BaseUrl is Root, it breaks.
+                    # BaseUrl should be the NOTE DIRECTORY!
+                    
+                    # Correction: In EditorArea, I set BaseUrl to `fm.root_path`.
+                    # I SHOULD set BaseUrl to `dirname(fm.root_path + note_id)`.
+                    
+                    from PySide6.QtGui import QTextImageFormat
+                    fmt = QTextImageFormat()
+                    # For QTextImageFormat, name acts as source.
+                    # If we use the relative path, it needs valid BaseUrl.
+                    fmt.setName(url_path)
+                    fmt.setWidth(600) 
+                    self.textCursor().insertImage(fmt)
+                    
+                except Exception as e:
+                    print(f"Error saving image: {e}")
+            return
+            return
+        return super().insertFromMimeData(source)
+    
     def loadResource(self, type, name):
         if type == QTextDocument.ImageResource:
             url = name.toString() if isinstance(name, QUrl) else str(name)
+            
+            # 1. Handle DB Images (Legacy support or if needed)
             if url.startswith("image://db/"):
                 try:
                     image_id = int(url.split("/")[-1])
-                    
-                    # Check cache first (LRU)
                     if image_id in NoteEditor._image_cache:
-                        # Move to end of LRU order (most recently used)
-                        if image_id in NoteEditor._image_cache_order:
-                            NoteEditor._image_cache_order.remove(image_id)
-                        NoteEditor._image_cache_order.append(image_id)
                         return NoteEditor._image_cache[image_id]
                     
-                    # Load from database
                     blob = self.db.get_image(image_id)
                     if blob:
                         img = QImage()
                         img.loadFromData(blob)
                         processed_img = self._process_image(img)
-                        
-                        # Add to cache with LRU eviction
                         self._cache_image(image_id, processed_img)
                         return processed_img
                 except Exception as e:
-                    print(f"Error loading image: {e}")
-        
+                    print(f"Error loading DB image: {e}")
+            
+            # 2. Handle Local Files (Native or Relative)
+            # When we use BaseUrl, 'name' might be relative or resolved?
+            # Usually render happens with resolved URL?
+            # Let's check if it exists locally.
+            
+            # If QUrl, toLocalFile might work.
+            if isinstance(name, QUrl):
+                 if name.isLocalFile():
+                     path = name.toLocalFile()
+                 else:
+                     # Check relative to base?
+                     # document().baseUrl() is not automatically applied to 'name' passed here?
+                     # Actually it is. name should be full path if resolved.
+                     # Let's try native load first, then process.
+                     # But we can't 'call super' to get the image object easily to process it.
+                     # We load it manually.
+                     path = name.toLocalFile()
+            else:
+                 path = url
+                 
+            import os
+            if os.path.exists(path):
+                 try:
+                     img = QImage(path)
+                     if not img.isNull():
+                         processed_img = self._process_image(img)
+                         # Cache key: path
+                         # We can use the same cache for paths
+                         # NoteEditor._image_cache uses int keys?
+                         # We should allow string keys.
+                         # self._cache_image uses whatever key.
+                         
+                         return processed_img
+                 except:
+                     pass
+
         return super().loadResource(type, name)
     
+    def render_images(self):
+        """Scans the document for Markdown image links and inserts QTextImageFormat objects to render them."""
+        # This simulates "Live Preview" by showing the image AFTER the link (or replacing it if we were advanced).
+        # We will insert it AFTER for now, consistent with insertFromMimeData.
+        # Issue: If we just append, we might duplicate if we run this multiple times?
+        # This is expected to be run ONCE after load.
+        
+        # Regex for Markdown Image: ![alt](url)
+        import re
+        text = self.toPlainText()
+        # We need to iterate and insert. Modifying document invalidates text positions.
+        # So we process reversed? Or use QRegularExpression search on document.
+        
+        # Note: Pattern must match `![...](...)`
+        # We use QDocument's find to get cursor.
+        from PySide6.QtCore import QRegularExpression
+        regex = QRegularExpression(r"!\[.*?\]\((.*?)\)")
+        
+        cursor = self.textCursor()
+        cursor.setPosition(0)
+        
+        # We perform finding loop.
+        # Note: Finding moves cursor to END of match? Or selects it? Selects it.
+        # We want to insert Image AFTER the match.
+        
+        doc = self.document()
+        it = regex.globalMatch(text)
+        
+        # We must collect insertions to avoid invalidating iterators, OR use an offset.
+        # But `globalMatch` works on string 'text', which doesn't change when we edit document (if we don't reload text).
+        # But positions in 'doc' WILL change.
+        # So we should iterate BACKWARDS? globalMatch doesn't support backwards easily.
+        # We can collect all matches: (start, end, url)
+        
+        matches = []
+        while it.hasNext():
+            match = it.next()
+            matches.append((match.capturedStart(), match.capturedEnd(), match.captured(1)))
+            
+        # Process Reversed so positions remain valid for earlier checks
+        for start, end, url in reversed(matches):
+            # Move cursor to end of match
+            cursor.setPosition(end)
+            
+            # Insert Image
+            from PySide6.QtGui import QTextImageFormat
+            fmt = QTextImageFormat()
+            fmt.setName(url)
+            fmt.setWidth(600) # Default width
+            
+            # We insert a newline and image? Or inline?
+            # insertFromMimeData used inline? `insertText` then `insertImage`.
+            # If we insert inline, it flows.
+            # But the user might want it on a new line.
+            # Usually images are block level.
+            # Let's just insert the image format.
+            cursor.insertImage(fmt)
+            
+            # Note: The text `![...](...)` remains visible (handled by highlighter?)
+            # Highlighter doesn't hide it currently (saw code).
+            # So user sees Link + Image. This is acceptable for "Live Preview MVP".
+
     def _cache_image(self, image_id, image):
-        """Add image to cache with LRU eviction."""
+        """Add image to cache with LRU eviction. Key can be int or str."""
         # Evict oldest if at capacity
         while len(NoteEditor._image_cache) >= NoteEditor._max_cached_images:
             if NoteEditor._image_cache_order:
