@@ -803,7 +803,8 @@ class NoteEditor(QTextEdit):
                 # Setup Buffer
                 buffer.open(QIODevice.WriteOnly)
                 image.save(buffer, "PNG")
-                data = ba.data()
+                # Explicit conversion to bytes
+                data = ba.data() 
                 
                 # Generate Filename (timestamp or UUID)
                 import time
@@ -814,8 +815,7 @@ class NoteEditor(QTextEdit):
                     rel_path_root = self.fm.save_image(data, filename)
                     
                     # Calculate relative path from current note to image
-                    # rel_path_root is "Adjuntos/file.png"
-                    # current_note_path is "Folder/Note.md" or "Note.md"
+                    # rel_path_root is "images/file.png"
                     
                     final_link_path = rel_path_root
                     if hasattr(self, "current_note_path") and self.current_note_path:
@@ -823,11 +823,9 @@ class NoteEditor(QTextEdit):
                          # We need to go from Note DIR to Image
                          # Note path is relative to root.
                          note_rel_dir = os.path.dirname(self.current_note_path)
-                         # Target is rel_path_root
                          
                          # relpath(target, start)
-                         # We must pretend we are at absolute paths to be safe or just use parts
-                         # relpath works with relative paths if they start from same base
+                         # We use relative paths for the Markdown link so it's portable
                          final_link_path = os.path.relpath(rel_path_root, note_rel_dir)
                     
                     # Normalize slashes
@@ -837,92 +835,77 @@ class NoteEditor(QTextEdit):
                     self.textCursor().insertText(f"![Image]({url_path})")
                     
                     # Insert WYSIWYG Image
-                    # For display, we want it to resolve.
-                    # If we use relative path, BaseUrl (Root) + Relative Path might FAIL if BaseUrl isn't Note Dir.
-                    # EditorArea sets BaseUrl to ROOT.
-                    # "../Adjuntos/img.png" relative to ROOT is "root/../Adjuntos/img.png" -> Invalid?
-                    # valid relative to ROOT would be "Adjuntos/img.png".
+                    # CRITICAL: Use ABSOLUTE path for the visual insertion to guarantee loadResource works
+                    # without complex relative resolution guesswork during the insert event.
+                    # loadResource will still be called, but with an absolute path check first.
                     
-                    # QT RESOLUTION logic: 
-                    # If BaseUrl is set, relative URLs are resolved against it.
-                    # If BaseUrl is Root, and we have "../Adjuntos", it goes up out of root?
-                    # ISSUE: Browser/Qt calculates relative to BaseUrl.
-                    # If I put `![Img](../Adjuntos/...)` and BaseUrl is Root, it breaks.
-                    # BaseUrl should be the NOTE DIRECTORY!
-                    
-                    # Correction: In EditorArea, I set BaseUrl to `fm.root_path`.
-                    # I SHOULD set BaseUrl to `dirname(fm.root_path + note_id)`.
+                    full_abs_path = os.path.join(self.fm.root_path, rel_path_root)
                     
                     from PySide6.QtGui import QTextImageFormat
                     fmt = QTextImageFormat()
-                    # For QTextImageFormat, name acts as source.
-                    # If we use the relative path, it needs valid BaseUrl.
-                    fmt.setName(url_path)
+                    # We use the absolute path for the runtime object name/source
+                    fmt.setName(full_abs_path)
                     fmt.setWidth(600) 
                     self.textCursor().insertImage(fmt)
                     
                 except Exception as e:
                     print(f"Error saving image: {e}")
             return
-            return
         return super().insertFromMimeData(source)
     
     def loadResource(self, type, name):
+        import os  # Import at top of function to ensure availability
+        
         if type == QTextDocument.ImageResource:
             url = name.toString() if isinstance(name, QUrl) else str(name)
             
-            # 1. Handle DB Images (Legacy support or if needed)
+            # 1. Handle DB Images (Legacy support - TO BE REMOVED, but keeping structure valid for now)
             if url.startswith("image://db/"):
-                try:
-                    image_id = int(url.split("/")[-1])
-                    if image_id in NoteEditor._image_cache:
-                        return NoteEditor._image_cache[image_id]
-                    
-                    blob = self.db.get_image(image_id)
-                    if blob:
-                        img = QImage()
-                        img.loadFromData(blob)
-                        processed_img = self._process_image(img)
-                        self._cache_image(image_id, processed_img)
-                        return processed_img
-                except Exception as e:
-                    print(f"Error loading DB image: {e}")
+                 # We will remove this block correctly in the next step when stripping DB code
+                 pass
             
-            # 2. Handle Local Files (Native or Relative)
-            # When we use BaseUrl, 'name' might be relative or resolved?
-            # Usually render happens with resolved URL?
-            # Let's check if it exists locally.
+            # 2. Handle Local Files
+            path = url
+            if isinstance(name, QUrl) and name.isLocalFile():
+                path = name.toLocalFile()
             
-            # If QUrl, toLocalFile might work.
-            if isinstance(name, QUrl):
-                 if name.isLocalFile():
-                     path = name.toLocalFile()
-                 else:
-                     # Check relative to base?
-                     # document().baseUrl() is not automatically applied to 'name' passed here?
-                     # Actually it is. name should be full path if resolved.
-                     # Let's try native load first, then process.
-                     # But we can't 'call super' to get the image object easily to process it.
-                     # We load it manually.
-                     path = name.toLocalFile()
-            else:
-                 path = url
-                 
-            import os
-            if os.path.exists(path):
-                 try:
-                     img = QImage(path)
-                     if not img.isNull():
-                         processed_img = self._process_image(img)
-                         # Cache key: path
-                         # We can use the same cache for paths
-                         # NoteEditor._image_cache uses int keys?
-                         # We should allow string keys.
-                         # self._cache_image uses whatever key.
+            # 3. Path Resolution Strategy
+            candidate_paths = []
+            
+            # Priority A: Absolute Path (as passed by insertFromMimeData)
+            candidate_paths.append(path)
+            
+            # Priority C: Relative to Note, Relative to Root
+            if self.fm:
+                # Relative to Vault Root (Standard)
+                candidate_paths.append(os.path.join(self.fm.root_path, path))
+                
+                # Relative to images (Obsidian style)
+                candidate_paths.append(os.path.join(self.fm.root_path, "images", path))
+                
+                # Relative to Current Note Directory (if available and path is relative)
+                if hasattr(self, "current_note_path") and self.current_note_path and not os.path.isabs(path):
+                     note_dir = os.path.dirname(os.path.join(self.fm.root_path, self.current_note_path))
+                     candidate_paths.append(os.path.join(note_dir, path))
+
+            # 4. Attempt Load
+            for p in candidate_paths:
+                if os.path.exists(p) and os.path.isfile(p):
+                     try:
+                         # Normalize separators
+                         p = os.path.normpath(p)
                          
-                         return processed_img
-                 except:
-                     pass
+                         # Check Cache (using path key)
+                         if p in NoteEditor._image_cache:
+                              return NoteEditor._image_cache[p]
+                         
+                         img = QImage(p)
+                         if not img.isNull():
+                             processed_img = self._process_image(img)
+                             self._cache_image(p, processed_img)
+                             return processed_img
+                     except Exception as e:
+                         print(f"Error loading image {p}: {e}")
 
         return super().loadResource(type, name)
     

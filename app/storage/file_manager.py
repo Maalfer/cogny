@@ -10,7 +10,8 @@ class FileManager:
     """
     def __init__(self, root_path: str):
         self.root_path = os.path.abspath(root_path)
-        self.images_path = os.path.join(self.root_path, "Adjuntos")
+        # Use 'images' folder as requested by user
+        self.images_path = os.path.join(self.root_path, "images")
         
         # Ensure images directory exists
         if not os.path.exists(self.images_path):
@@ -104,7 +105,13 @@ class FileManager:
         try:
             with os.scandir(abs_path) as it:
                 for entry in it:
-                     if entry.name.startswith('.') or entry.name == "Adjuntos": 
+                     if entry.name.startswith('.'): 
+                         continue
+                     
+                     # Filter out default folders from tree view if desired?
+                     # User might want to see 'images'. 
+                     # Previous code filtered 'Adjuntos'. Let's filter 'images' to keep tree clean?
+                     if entry.name == "images" or entry.name == "Adjuntos":
                          continue
                          
                      if entry.is_dir():
@@ -212,11 +219,13 @@ class FileManager:
 
     def save_image(self, data: bytes, filename: str) -> str:
         """
-        Saves an image to the Adjuntos directory.
-        Returns the relative path from the root (e.g., "Adjuntos/image.png").
+        Saves an image to the 'images' directory.
+        Returns the relative path from the root (e.g., "images/image.png").
         """
-        # Avoid collisions?
-        # For now, simple save.
+        # Ensure dir exists (redundant check but safe)
+        if not os.path.exists(self.images_path):
+             os.makedirs(self.images_path, exist_ok=True)
+             
         path = os.path.join(self.images_path, filename)
         
         # Rename if exists
@@ -229,4 +238,4 @@ class FileManager:
         with open(path, 'wb') as f:
             f.write(data)
             
-        return os.path.join("Adjuntos", os.path.basename(path))
+        return os.path.join("images", os.path.basename(path))

@@ -195,56 +195,16 @@ class NoteTreeModel(QStandardItemModel):
                          continue
                     
                     # Move in File System
-                    # We need to construct new path
-                    import os
-                    base_name = os.path.basename(note_id)
-                    new_rel_path = self.fm.rename_item(note_id, base_name) # This implementation of rename_item is flawed for Moving?
-                    # rename_item in FileManager currently just renames in place?
-                    # I need a move_item method in FileManager or use rename_item differently.
-                    # FileManager.rename_item logic: new_path = join(dirname(old), new_name).
-                    # That is for renaming.
-                    # For moving, we need join(new_parent, filename).
-                    
-                    # Update: FileManager needs move support.
-                    # Let's assume I fix FileManager below.
-                    # self.fm.move_item(note_id, new_parent_id)
-                    
-                    # Since I can't easily modify FM in this tool call, I'll assum I will add it.
-                    # Actually, let's just implement move logic here roughly or stub it.
-                    # I'll add `move_item` to `FileManager` in next step.
-                    
+                    # We utilize the file manager's move_item method which handles the move logic.
                     new_id = self.fm.move_item(note_id, new_parent_id)
+                    
                     if not new_id: continue
-
-                    # Update Model
-                    source_parent = item.parent() or self.invisibleRootItem()
                     
-                    if destination_parent is None:
-                         destination_parent = self.invisibleRootItem()
-
-                    taken_row = source_parent.takeRow(item.row())
-                    destination_parent.appendRow(taken_row)
-                    
-                    # Update ID map and item ID?
-                    # The ID IS the path. So if we move it, the ID changes!
-                    # And all children IDs change too!
-                    # This is heavy for a defined ID system.
-                    # But for FS, path = ID.
-                    # We must reload the model or recursively update IDs.
-                    # Simplest: Reload Model.
-                    # But that breaks selection and expansion.
-                    # Recursive update:
-                    # Logic to update IDs of item and children...
-                    
-                    # For now: Just Trigger Reload?
-                    # Or better: don't support DND for now? "Implement file system reader" -> DND nice to have.
-                    # User said "lo unico que quiero que se guarde en bd es la funcionalidad de insertar archivos".
-                    # Everything else "read directly".
-                    # If I move a file, I change the FS.
-                    # I should try to support it.
-                    
-                    self.load_notes() # Brute force reload to correct all IDs
+                    # Since IDs are paths, moving invalidates all IDs in the subtree.
+                    # We must reload the model to ensure consistency.
+                    self.load_notes() 
                     return True
+
 
         finally:
              self.layoutChanged.emit()

@@ -82,12 +82,13 @@ class EditorArea(QWidget):
              self.highlighter.set_theme(theme_name)
 
     def load_note(self, note_id, is_folder=None, title=None):
-        self.current_note_id = note_id
-        
         if is_folder:
+             self.current_note_id = None
              self.show_folder_placeholder(title)
              return
 
+        self.current_note_id = note_id
+        
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
         
