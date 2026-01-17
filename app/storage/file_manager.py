@@ -2,13 +2,17 @@ import os
 import shutil
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
+from app.storage.metadata_cache import MetadataCache
+from app.core.indexer import VaultIndexer, VaultWatcher
+from PySide6.QtCore import QObject
 
-class FileManager:
+class FileManager(QObject):
     """
     Manages file system operations for the note application.
-    Acts as an Obsidian-compatible vault manager.
+    Acts as an Obsidian-compatible vault manager with caching and indexing.
     """
     def __init__(self, root_path: str):
+        super().__init__()
         self.root_path = os.path.abspath(root_path)
         # Use 'images' folder as requested by user
         self.images_path = os.path.join(self.root_path, "images")
@@ -16,6 +20,18 @@ class FileManager:
         # Ensure images directory exists
         if not os.path.exists(self.images_path):
             os.makedirs(self.images_path, exist_ok=True)
+
+        # Advanced Features: Cache, Indexer, Watcher
+        self.cache = MetadataCache(self.root_path)
+        
+        self.indexer = VaultIndexer(self.root_path, self.cache)
+        self.watcher = VaultWatcher(self.root_path)
+        
+        # Connect Watcher -> Indexer
+        self.watcher.file_changed.connect(self.indexer.update_file)
+        
+        # Start Initial Scan
+        self.indexer.scan_all()
 
     def _get_rel_path(self, abs_path: str) -> str:
         return os.path.relpath(abs_path, self.root_path)
@@ -159,6 +175,9 @@ class FileManager:
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(content)
+            
+            # Update Indexer
+            self.indexer.update_file(rel_path)
             return True
         except Exception as e:
             print(f"Error saving file {path}: {e}")
@@ -176,6 +195,9 @@ class FileManager:
                 if not path.endswith('.md'): path += '.md'
                 with open(path, 'w', encoding='utf-8') as f:
                     f.write("")
+            
+            # Update Indexer
+            self.indexer.update_file(rel_path)
             return True
         except Exception as e:
             print(f"Error creating {path}: {e}")

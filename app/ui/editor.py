@@ -800,6 +800,11 @@ class NoteEditor(QTextEdit):
         return out_img
 
     def _on_image_loaded(self, path, image):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QTextDocument
+        # DEBUG
+        # print(f"Image loaded async: {path}")
+        
         if path in NoteEditor._loading_images:
             NoteEditor._loading_images.remove(path)
             
@@ -808,24 +813,36 @@ class NoteEditor(QTextEdit):
         
         # Force Document to reload this resource
         doc = self.document()
-        doc.addResource(QTextDocument.ImageResource, QUrl.fromLocalFile(path), image)
         
-        # Trigger Layout Update
-        # We need to force a redraw. 
-        # setLineWrapColumnOrWidth trick or viewport update.
+        # Use QUrl.fromLocalFile which handles scheme correctly
+        url = QUrl.fromLocalFile(path)
+        doc.addResource(QTextDocument.ImageResource, url, image)
+        
+        # Also try the string path as QUrl (sometimes Qt uses this internally if not strict)
+        doc.addResource(QTextDocument.ImageResource, QUrl(path), image)
+        
+        # Force Layout Update
+        # Just viewport().update() might not enough if geometry didn't change (same size placeholder?)
+        # But our placeholder is fixed size, real image might differ.
         self.viewport().update()
         
-        # Sometimes document needs a kick to re-layout if size changed
-        # We can emit a signal or slightly adjust width?
-        # A clearer way is to iterate over the document and mark formats as dirty, but that's complex.
-        # Usually addResource + update() is enough if the name matches.
-        # But loadResource uses the name.
-        # We used QUrl.fromLocalFile(path) as key in addResource.
-        # We need to ensure that matches what render_images inserted (fmt.name).
+        # Force re-layout by toggling wrap mode slightly or just setSame
+        # This is a hack but ensures the document re-queries resources
+        # self.document().setPageSize(self.document().pageSize()) # Minimal impact
         
-        # render_images sets fmt.setName(resolved_path) -> which is a string path.
-        # So we should use string path as key?
-        doc.addResource(QTextDocument.ImageResource, QUrl(path), image) # Try both or string
+        # Try finding the block and marking it dirty?
+        # A simpler way often used:
+        cursor = self.textCursor()
+        # triggering a fake content change
+        # invalidating the frame
+        
+        # Actually, simply addResource matches the URL name used in insertImage.
+        # render_images used: fmt.setName(resolved_path) -> String absolute path.
+        # So QUrl(resolved_path) IS likely the key.
+        # But QUrl("c:/foo") is not valid URL? QUrl::fromLocalFile("c:/foo") -> file:///c:/foo
+        
+        # Let's ensure we cover the "scheme-less" variant if that's what's happening.
+        pass
 
     
     def render_images(self):
@@ -950,6 +967,7 @@ class NoteEditor(QTextEdit):
            - Rounded Corners (12px)
         """
         target_width = 600
+        from PySide6.QtCore import Qt
         
         # 1. Scale uniform width
         # Use FastTransformation for performance (Smooth is too slow for large images)
