@@ -6,6 +6,12 @@ import contextlib
 class SetupMixin:
     def init_db(self):
         """Initialize the database tables."""
+        
+        # Ensure Vault directories exist
+        if hasattr(self, 'vault_path') and self.vault_path:
+             images_dir = os.path.join(self.vault_path, "images")
+             os.makedirs(images_dir, exist_ok=True)
+
         # 1. Backup before potential migration
         self.backup_database()
         
@@ -119,6 +125,11 @@ class SetupMixin:
     def backup_database(self):
         """Creates a backup of the database file."""
         if not os.path.exists(self.db_path):
+            return
+            
+        # Don't backup empty/new files (size 0 or very small header only?)
+        # SQLite header is 100 bytes. So < 100 bytes is definitely invalid or empty.
+        if os.path.getsize(self.db_path) == 0:
             return
 
         backup_dir = os.path.join(os.path.dirname(self.db_path), "backups")

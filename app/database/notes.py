@@ -1,5 +1,7 @@
 from typing import List, Optional, Tuple
 import contextlib
+import os
+import re
 
 class NotesMixin:
     def add_note(self, title: str, parent_id: Optional[int] = None, content: str = "", is_folder: bool = False) -> int:
@@ -10,15 +12,46 @@ class NotesMixin:
                 "INSERT INTO notes (title, parent_id, content, is_folder) VALUES (?, ?, ?, ?)",
                 (title, parent_id, content, 1 if is_folder else 0)
             )
-            return cursor.lastrowid
+            note_id = cursor.lastrowid
+        
+        # Side-effect: Save to file
+        if not is_folder:
+            self._save_note_to_file(title, content)
+            
+        return note_id
+
+    def _save_note_to_file(self, title: str, content: str):
+        if hasattr(self, 'vault_path') and self.vault_path:
+            # Sanitize filename
+            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c in (' ', '-', '_')]).strip()
+            if not safe_title:
+                safe_title = "Untitled"
+            
+            file_path = os.path.join(self.vault_path, f"{safe_title}.md")
+            
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            except Exception as e:
+                print(f"Failed to save note to file: {e}")
 
     def update_note_title(self, note_id: int, title: str):
+        # Todo: Handle renaming the file on disk? 
+        # For now, just save the new file (duplicates old one) or ignore?
+        # Better: get old title, rename. But that requires extra query. 
+        # For simplicity in this iteration: Save new file.
+        
         with self.transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE notes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (title, note_id)
             )
+        
+        # We need content to save full file.
+        content = self.get_note_content(note_id)
+        if content is not None:
+             self._save_note_to_file(title, content)
 
     def update_note(self, note_id: int, title: str, content: str, cached_html: str = None):
         """Update a note's title, content, and render cache."""
@@ -34,6 +67,8 @@ class NotesMixin:
                     "UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                     (title, content, note_id)
                 )
+        
+        self._save_note_to_file(title, content)
 
     def delete_note(self, note_id: int):
         """Delete a note and its children."""

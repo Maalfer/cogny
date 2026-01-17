@@ -43,8 +43,20 @@ def main():
     # Verify if file exists (if it was supposed to) or if it's empty
     # If path is invalid or empty, show setup
     show_setup = False
+    # If path is invalid or empty, show setup
+    show_setup = False
+    
+    # Check if db_path is valid (File or Directory)
     if not db_path or not os.path.exists(db_path):
         show_setup = True
+    
+    # If it is a directory (Vault), check if internal DB exists inside
+    if not show_setup and os.path.isdir(db_path):
+        internal_db = os.path.join(db_path, ".cogny.cdb")
+        # We don't force setup here if internal db is missing, 
+        # because MainWindow might create it? 
+        # Actually better to rely on MainWindow handling the init if the path is a dir.
+        pass
         
     if show_setup:
         from app.ui.dialogs_setup import SetupDialog

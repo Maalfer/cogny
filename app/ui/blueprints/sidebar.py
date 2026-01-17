@@ -14,6 +14,21 @@ class Sidebar(QWidget):
         self.fm = file_manager
         self.setup_ui()
 
+    def set_file_manager(self, file_manager):
+        self.fm = file_manager
+        
+        # Re-initialize Model with new FM
+        from app.models.note_model import NoteTreeModel
+        self.model = NoteTreeModel(self.fm)
+        self.model.load_notes()
+        
+        # Update Proxy Source
+        self.proxy_model.setSourceModel(self.model)
+        
+        # Reconnect Signals that depend on model instance
+        if hasattr(self, 'on_rows_moved'):
+            self.model.rowsMoved.connect(self.on_rows_moved)
+
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
