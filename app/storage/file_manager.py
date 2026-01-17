@@ -111,7 +111,8 @@ class FileManager:
                      # Filter out default folders from tree view if desired?
                      # User might want to see 'images'. 
                      # Previous code filtered 'Adjuntos'. Let's filter 'images' to keep tree clean?
-                     if entry.name == "images" or entry.name == "Adjuntos":
+                     # USER REQUEST: Make images visible.
+                     if entry.name == "Adjuntos":
                          continue
                          
                      if entry.is_dir():
@@ -121,13 +122,17 @@ class FileManager:
                              'title': entry.name,
                              'is_folder': True
                          })
-                     elif entry.is_file() and entry.name.endswith('.md'):
-                         rel_path = self._get_rel_path(entry.path)
-                         items.append({
-                             'id': rel_path,
-                             'title': os.path.splitext(entry.name)[0],
-                             'is_folder': False
-                         })
+                     elif entry.is_file():
+                         is_md = entry.name.endswith('.md')
+                         is_image = entry.name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'))
+                         
+                         if is_md or is_image:
+                             rel_path = self._get_rel_path(entry.path)
+                             items.append({
+                                 'id': rel_path,
+                                 'title': os.path.splitext(entry.name)[0] if is_md else entry.name,
+                                 'is_folder': False
+                             })
                          
             # Sort: Folders first, then items, alphabetical
             items.sort(key=lambda x: (not x['is_folder'], x['title'].lower()))

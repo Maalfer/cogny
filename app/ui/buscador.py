@@ -3,9 +3,9 @@ from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QObject, Signal
 
 class SearchManager(QObject):
-    def __init__(self, db_manager, tree_view: QTreeView, proxy_model: QSortFilterProxyModel, selection_callback=None):
+    def __init__(self, file_manager, tree_view: QTreeView, proxy_model: QSortFilterProxyModel, selection_callback=None):
         super().__init__()
-        self.db = db_manager
+        self.fm = file_manager
         self.tree_view = tree_view
         self.proxy_model = proxy_model
         self.selection_callback = selection_callback
@@ -57,13 +57,6 @@ class SearchManager(QObject):
             self.tree_view.setRootIsDecorated(True)
             self.proxy_model.setFilterRegularExpression("")
             
-            # Reconnect Selection Model if it was changed
-            # MainWindow handles the connection, but if we changed the model, the selection model changed.
-            # We need a way to maintain the connection or notify MainWindow to reconnect.
-            # We can use the callback to notify "model changed" or just handle selection here?
-            # MainWindow binds: self.tree_view.selectionModel().currentChanged.connect(self.on_selection_changed)
-            # When setModel is called, selectionModel is replaced.
-            
             if self.selection_callback:
                 self.tree_view.selectionModel().currentChanged.connect(self.selection_callback)
 
@@ -71,21 +64,18 @@ class SearchManager(QObject):
         search_model = QStandardItemModel()
         
         # Smart Search Logic
-        # 1. Clean query
-        query_text = text.strip()
+        query_text = text.strip().lower()
         
-        # 2. Get results from DB
-        results = self.search_db_smart(query_text)
+        # Get results from FS
+        results = self.search_files(query_text)
         
         note_icon = QIcon.fromTheme("text-x-generic")
         
         for row in results:
             note_id = row[0]
             title = row[1]
-            snippet = row[2] # We will fetch snippet if possible of matches
+            snippet = row[2] 
             
-            # Display: Title + Snippet (maybe in tooltip or subtitle?)
-            # StandardItem only supports text.
             display_text = f"{title}"
             
             item = QStandardItem(display_text)
@@ -95,7 +85,6 @@ class SearchManager(QObject):
             
             # Use Tooltip for context/snippet
             if snippet:
-                # Clean snippet characters?
                 item.setToolTip(f"...{snippet}...")
                 
             search_model.appendRow(item)
@@ -106,73 +95,60 @@ class SearchManager(QObject):
         if self.selection_callback:
             self.tree_view.selectionModel().currentChanged.connect(self.selection_callback)
             
-    def search_db_smart(self, query):
+    def search_files(self, query):
         """
-        Implements 'Google-like' search:
-        - Splits query into tokens.
-        - Tries to match ALL tokens first (AND).
-        - Then matches ANY token (OR) for improved recall but lower rank.
-        - Uses Prefix matching (*) for each token.
+        Searches all markdown files in the vault.
+        Returns list of (rel_path, title, snippet).
         """
-        # We delegate the raw query execution to DB, but we construct the logic here or in DB?
-        # User wants logic in buscador.py?
-        # But DB access is via self.db reference.
-        # Ideally, we call a generic query method on DB or we extend DB.
-        # Let's add a 'search_advanced' to DB or modify 'search_notes_fts'.
-        # Since I cannot modify DB and buscador.py simultaneously efficiently without multiple tools,
-        # I will assume I can call a new method I will add to DB, OR reuse search_notes_fts if I can pass raw query.
-        # Existing search_notes_fts builds the query internally: f'"{sanitized}"*'
-        # This is too restrictive. I need to modify DB manager first to allow flexible queries or improved logic.
+        import os
+        results = []
+        if not query: return []
         
-        # Let's modify DB manager to accept a raw FTS query or handle the logic there.
-        # But the user said "toda la logica del buscador este en ... buscador.py".
-        # So buscador.py should construct the FTS query string and pass it to a generic DB search method.
-        # BUT search_notes_fts currently HARDCODES the query construction.
-        # I MUST refactor DatabaseManager.search_notes_fts to be more flexible.
+        # Split query for AND logic
+        terms = query.split()
         
-    def search_db_smart(self, query):
-        """
-        Implements 'Google-like' search:
-        - Splits query into tokens.
-        - Tries difference strategies combined with OR.
-        """
-        import re
-        
-        # 1. Sanitize
-        # Remove special chars that might break FTS syntax: " * : ( )
-        clean_query = re.sub(r'[\"\*\:\(\)]', '', query).strip()
-        if not clean_query:
-            return []
+        for root, dirs, files in os.walk(self.fm.root_path):
+            # Skip hidden
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
             
-        tokens = clean_query.split()
-        if not tokens:
-             return []
-             
-        # Strategy 1: Exact Phrase (Highest Rank implicitly)
-        # "foo bar"
-        exact_phrase = f'"{clean_query}"'
-        
-        # Strategy 2: All terms (AND) with prefix support
-        # foo* AND bar*
-        and_terms = " AND ".join([f'"{t}"*' for t in tokens])
-        
-        # Strategy 3: Any term (OR) with prefix support
-        # foo* OR bar*
-        or_terms = " OR ".join([f'"{t}"*' for t in tokens])
-        
-        # Combine strategies
-        # Note: SQLite FTS5 rank is lower = better.
-        # If we just do OR, the ones with more matches appear first naturally.
-        # But "AND" matches are effectively a subset of "OR".
-        # We can just run the OR query. The ranking function (bm25 default) 
-        # naturally ranks documents containing ALL terms higher than those with 1.
-        # So we don't need complex boolean logic, just an OR of all terms with prefix.
-        
-        # However, to prioritize "phrase" matches, we might want to boost them?
-        # FTS5 standard ranking handles term proximity to some extent.
-        # Let's try: (term1* OR term2* OR ...)
-        
-        final_query = or_terms
-        
-        # Execute
-        return self.db.advanced_search(final_query)
+            for file in files:
+                if not file.endswith('.md'): continue
+                
+                path = os.path.join(root, file)
+                rel_path = self.fm._get_rel_path(path)
+                
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    content_lower = content.lower()
+                    title = os.path.splitext(file)[0]
+                    title_lower = title.lower()
+                    
+                    # Check Match (Title OR Content)
+                    # Simplified: Check if ALL terms match either Title or Content
+                    # For snippet extraction we need to find positions.
+                    
+                    match = True
+                    for term in terms:
+                        if term not in title_lower and term not in content_lower:
+                            match = False
+                            break
+                    
+                    if match:
+                        # Extract Snippet (first term match)
+                        snippet = ""
+                        idx = content_lower.find(terms[0])
+                        if idx != -1:
+                            start = max(0, idx - 20)
+                            end = min(len(content), idx + 50)
+                            snippet = content[start:end].replace("\n", " ")
+                        elif terms[0] in title_lower:
+                            snippet = "Coincidencia en título"
+                            
+                        results.append((rel_path, title, snippet))
+                        
+                except Exception as e:
+                    print(f"Error searching {path}: {e}")
+                    
+        return results

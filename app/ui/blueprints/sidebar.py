@@ -8,9 +8,8 @@ class Sidebar(QWidget):
     note_selected = Signal(str, bool, str)  # note_id (path), is_folder, title
     action_requested = Signal(str, object) # action_name, args
 
-    def __init__(self, db_manager, file_manager, parent=None):
+    def __init__(self, file_manager, parent=None):
         super().__init__(parent)
-        self.db = db_manager
         self.fm = file_manager
         self.setup_ui()
 

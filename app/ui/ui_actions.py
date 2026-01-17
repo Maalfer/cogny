@@ -8,14 +8,14 @@ import os
 class UiActionsMixin:
     def create_actions(self):
         # File Actions
-        self.act_new_db = QAction("Nueva Bóveda...", self) # Concept shift?
-        self.act_new_db.triggered.connect(self.new_database)
+        self.act_new_vault = QAction("Nueva Bóveda...", self) 
+        self.act_new_vault.triggered.connect(self.new_vault)
         
-        self.act_open_db = QAction("Abrir Bóveda...", self)
-        self.act_open_db.triggered.connect(self.open_database)
+        self.act_open_vault = QAction("Abrir Bóveda...", self)
+        self.act_open_vault.triggered.connect(self.open_vault)
         
-        self.act_save_as_db = QAction("Guardar Como...", self) # Copy current DB to new location and switch
-        self.act_save_as_db.triggered.connect(self.save_as_database)
+        # self.act_save_as_db removed
+
         
         self.act_read_later_list = QAction("Notas Guardadas...", self)
         self.act_read_later_list.triggered.connect(self.show_read_later_dialog)
@@ -101,7 +101,7 @@ class UiActionsMixin:
         self.act_about = QAction("Acerca de", self)
         self.act_about.triggered.connect(self.show_about)
 
-    def new_database(self):
+    def new_vault(self):
         # Create New Vault (Folder)
         # We need a parent directory to create the new vault INSIDE.
         dialog = QFileDialog(self, "Seleccionar ubicación para la nueva bóveda", os.path.expanduser("~/Documentos"))
@@ -120,8 +120,8 @@ class UiActionsMixin:
                         os.makedirs(full_path, exist_ok=False)
                         # Create .obsidian folder (optional but nice)
                         os.makedirs(os.path.join(full_path, ".obsidian"), exist_ok=True)
-                        # Create 'Adjuntos' folder
-                        os.makedirs(os.path.join(full_path, "Adjuntos"), exist_ok=True)
+                        # Create 'images' folder (updated from Adjuntos)
+                        os.makedirs(os.path.join(full_path, "images"), exist_ok=True)
                         
                         self.load_vault(full_path)
                         ModernInfo.show(self, "Éxito", f"Bóveda creada: {name}")
@@ -130,61 +130,34 @@ class UiActionsMixin:
                     except Exception as e:
                         ModernAlert.show(self, "Error", f"No se pudo crear la bóveda: {e}")
 
-    def open_database(self):
+    def open_vault(self):
         # OPEN VAULT (FOLDER)
-        # Use explicit dialog instance for better control over directory selection behavior
         dialog = QFileDialog(self, "Abrir Bóveda (Seleccionar Carpeta)", os.path.expanduser("~/Documentos"))
         dialog.setFileMode(QFileDialog.Directory)
         dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        
-        # Try to enforce native dialog if available, but ensure it respects directory selection
-        # On some Linux DEs, native dialogs can be finicky about "Open" vs "Enter".
-        # If issues persist, we might consider DontUseNativeDialog.
-        # For now, let's stick to standard configuration which usually works if setFileMode is correct.
         
         if dialog.exec():
              selected_files = dialog.selectedFiles()
              if selected_files:
                  self.load_vault(selected_files[0])
 
-    def save_as_database(self):
-        # Save current DB content to a new file.
-        # Since SQLite is a file, we can checkpoint/backup or just copy.
-        # But simpler: switch to new path (created empty) and user copies content?
-        # "Save As" usually means "Save current state to new file and switch".
-        # SQLite `VACUUM INTO` or backup API is best. 
-        # For simplicity in this iteration: We will just COPY the file.
-        path, _ = QFileDialog.getSaveFileName(self, "Guardar Base de Datos Como...", 
-                                            os.path.expanduser("~/Documentos"), 
-                                            "Cogny Database (*.cdb)")
-        if path:
-            if not path.endswith(".cdb"): path += ".cdb"
-            
-            # Flush current changes
-            self.editor_area.save_current_note()
-            
-            # Copy file
-            import shutil
-            try:
-                shutil.copy2(self.db.db_path, path)
-                self.switch_database(path)
-                ModernInfo.show(self, "Éxito", f"Base de datos guardada en:\\n{path}")
-            except Exception as e:
-                ModernAlert.show(self, "Error", f"No se pudo guardar como:\\n{str(e)}")
+    # save_as_database removed
 
-    def switch_database(self, new_path):
+
+    def switch_vault(self, new_path):
         # 1. Update Settings
         settings = QSettings()
-        settings.setValue("last_db_path", new_path)
+        settings.setValue("last_vault_path", new_path)
         
         # Clear Draft Flag
         self.is_draft = False
         
-        # 2. Re-initialize DB Manager
-        from app.database.manager import DatabaseManager
-        self.db = DatabaseManager(new_path)
+        # 2. Re-initialize FM
+        from app.storage.file_manager import FileManager
+        self.fm = FileManager(new_path)
+        self.vault_path = new_path
         
-        # 3. Clear image cache (different DB = different images)
+        # 3. Clear image cache
         from app.ui.editor import NoteEditor
         NoteEditor.clear_image_cache()
         
@@ -193,14 +166,10 @@ class UiActionsMixin:
         for toolbar in self.findChildren(QToolBar):
             self.removeToolBar(toolbar)
             
-        # Clear Central Widget (Splitter)
         if self.centralWidget():
             self.centralWidget().deleteLater()
             
-        # Re-run setup
         self.setup_ui()
-            
-        # Update Title
         self.setWindowTitle(f"Cogny - {os.path.basename(new_path)}")
 
     def on_sidebar_note_selected(self, note_id, is_folder, title):
@@ -227,19 +196,43 @@ class UiActionsMixin:
     def on_save_triggered(self):
         # Intercept Save if we are in Draft Mode
         if getattr(self, "is_draft", False):
-            # Prompt user to save the whole database
-            self.save_as_database()
+            self.save_as_vault()
             return
 
         title = self.editor_area.save_current_note()
         if title and self.editor_area.current_note_id:
-             # Need to update sidebar title in tree?
-             # Sidebar model might need refresh or manual update.
-             # Ideally sidebar listens to DB changes or we call a method.
-             # We can't access model item easily here. 
-             # Let's rely on Sidebar refreshing or simple "Reload" logic if needed.
-             # Or we can notify sidebar.
              pass
+
+    def save_as_vault(self):
+        # Prompt user to select destination PARENT folder
+        dialog = QFileDialog(self, "Guardar Bóveda en...", os.path.expanduser("~/Documentos"))
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        
+        if dialog.exec():
+            selected_files = dialog.selectedFiles()
+            if selected_files:
+                parent_path = selected_files[0]
+                from app.ui.widgets import ModernInput
+                name, ok = ModernInput.get_text(self, "Guardar Bóveda", "Nombre de la carpeta:")
+                
+                if ok and name.strip():
+                    dest_path = os.path.join(parent_path, name.strip())
+                    
+                    if os.path.exists(dest_path):
+                        ModernAlert.show(self, "Error", "La carpeta de destino ya existe.")
+                        return
+
+                    try:
+                        import shutil
+                        shutil.copytree(self.fm.root_path, dest_path)
+                        
+                        # Switch to new vault
+                        self.switch_vault(dest_path)
+                        ModernInfo.show(self, "Éxito", f"Bóveda guardada en: {dest_path}")
+                        
+                    except Exception as e:
+                        ModernAlert.show(self, "Error", f"No se pudo guardar la bóveda: {e}")
 
     def toggle_editor_toolbar(self, checked):
         self.editor_toolbar.setVisible(checked)
@@ -256,13 +249,12 @@ class UiActionsMixin:
 
         # 2. Single Note Export (Legacy Flow)
         try:
-            note_data = self.db.get_note(note_id)
-            if not note_data:
+            content = self.fm.read_note(note_id)
+            if content is None:
                 ModernAlert.show(self, "Error", "No se pudo recuperar la nota.")
                 return
             
-            title = note_data['title']
-            content = note_data['content']
+            title = os.path.splitext(os.path.basename(note_id))[0]
             
             default_name = f"{title}.pdf"
             default_name = "".join([c for c in default_name if c.isalpha() or c.isdigit() or c in (' ', '.', '-', '_')]).strip()
@@ -276,9 +268,9 @@ class UiActionsMixin:
                 
             from app.exporters.pdf_exporter import PDFExporter
             
-            # Force Light theme for PDF export (standard white paper look)
-            exporter = PDFExporter(self.db)
-            exporter.export_to_pdf(title, content, path, theme_name="Light")
+            # Ensure PDFExporter works without DB
+            exporter = PDFExporter() 
+            exporter.export_to_pdf(title, content, path, theme_name="Light", resolve_image_callback=lambda src: self.fm.get_abs_path(src) if src else None)
             
             ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\\n{path}")
             
@@ -299,7 +291,7 @@ class UiActionsMixin:
             
             from app.exporters.export_varios_pdf import MultiPDFExporter
             
-            exporter = MultiPDFExporter(self.db)
+            exporter = MultiPDFExporter(self.fm)
             # We force Light theme for printing
             success = exporter.export_multiple(selection, path, theme_name="Light")
             
@@ -312,10 +304,8 @@ class UiActionsMixin:
             ModernAlert.show(self, "Error de Exportación Múltiple", str(e))
 
     def show_about(self):
-        ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y SQLite.")
+        ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y Archivos Markdown.")
 
     def show_read_later_dialog(self):
-        from app.ui.dialogs.read_later_dialog import ReadLaterDialog
-        dlg = ReadLaterDialog(self.db, self)
-        dlg.note_selected.connect(self.sidebar.select_note)
-        dlg.exec()
+        # Disabled for now as it relied on DB
+        ModernInfo.show(self, "Información", "Esta funcionalidad está siendo migrada fuera de la base de datos.")

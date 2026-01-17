@@ -94,7 +94,7 @@ class SetupDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Bienvenido a Cogny")
         self.setFixedSize(600, 400)
-        self.selected_db_path = None
+        self.selected_vault_path = None
         
         # Load Styles directly here for simplicity or use theme manager
         # Using a dark-ish theme by default for the setup dialog for "premium" look
@@ -141,8 +141,7 @@ class SetupDialog(QDialog):
         # Header
         header_layout = QHBoxLayout()
         
-        # Icon (Assuming assets/logo.png exists relative to execution or we use standard path)
-        # We'll try to load it safely
+        # Icon
         icon_label = QLabel()
         logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets/logo.png")
         if os.path.exists(logo_path):
@@ -166,13 +165,13 @@ class SetupDialog(QDialog):
         layout.addSpacing(20)
 
         # Actions
-        btn_new = QPushButton("✨  Crear Nueva Base de Datos")
+        btn_new = QPushButton("✨  Crear Nueva Bóveda")
         btn_new.setCursor(Qt.PointingHandCursor)
-        btn_new.clicked.connect(self.create_new_db)
+        btn_new.clicked.connect(self.create_new_vault)
         
-        btn_open = QPushButton("📂  Abrir Base de Datos Existente")
+        btn_open = QPushButton("📂  Abrir Bóveda Existente")
         btn_open.setCursor(Qt.PointingHandCursor)
-        btn_open.clicked.connect(self.open_existing_db)
+        btn_open.clicked.connect(self.open_existing_vault)
         
         btn_draft = QPushButton("📝  Empezar sin Guardar (Borrador)")
         btn_draft.setCursor(Qt.PointingHandCursor)
@@ -189,24 +188,25 @@ class SetupDialog(QDialog):
         version_label.setStyleSheet("color: #666; font-size: 12px;")
         layout.addWidget(version_label)
 
-    def create_new_db(self):
+    def create_new_vault(self):
+        # Re-use the dialog but rename attributes if needed
         dialog = CreateVaultDialog(self)
         if dialog.exec():
-            self.selected_db_path = dialog.vault_path
+            self.selected_vault_path = dialog.vault_path
             self.accept()
 
-    def open_existing_db(self):
-        file_path, _ = QFileDialog.getOpenFileName(
+    def open_existing_vault(self):
+        dir_path = QFileDialog.getExistingDirectory(
             self, 
-            "Abrir Base de Datos", 
-            os.path.expanduser("~/Documentos"), 
-            "Cogny Database (*.cdb)"
+            "Abrir Bóveda (Seleccionar Carpeta)", 
+            os.path.expanduser("~/Documentos"),
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
         )
-        if file_path:
-            self.selected_db_path = file_path
+        if dir_path:
+            self.selected_vault_path = dir_path
             self.accept()
 
     def start_draft_mode(self):
-        # Magic string to signal temporary DB
-        self.selected_db_path = "__TEMP__" 
+        # Magic string to signal temporary 
+        self.selected_vault_path = "__TEMP__" 
         self.accept()

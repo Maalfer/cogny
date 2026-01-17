@@ -6,18 +6,16 @@ from app.ui.editor import NoteEditor
 from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm
 from app.ui.highlighter import MarkdownHighlighter
 from app.ui.themes import ThemeManager
-from app.ui.blueprints.workers import NoteLoaderWorker
 from app.ui.blueprints.markdown import MarkdownRenderer
 
 class EditorArea(QWidget):
     status_message = Signal(str, int) # message, timeout
 
-    def __init__(self, db_manager, file_manager, parent=None):
+    def __init__(self, file_manager, parent=None):
         super().__init__(parent)
-        self.db = db_manager
         self.fm = file_manager
         self.current_note_id = None
-        self.note_loader = None
+        # self.note_loader = None removed
         self.setup_ui()
 
     def set_file_manager(self, file_manager):
@@ -51,7 +49,7 @@ class EditorArea(QWidget):
         self.title_edit.return_pressed.connect(lambda: self.text_editor.setFocus())
         
         # Content
-        self.text_editor = NoteEditor(self.db, self.fm)
+        self.text_editor = NoteEditor(self.fm)
         
         # Highlighter
         self.highlighter = MarkdownHighlighter(self.text_editor.document())
@@ -203,10 +201,14 @@ class EditorArea(QWidget):
             with open(path, 'rb') as f:
                 data = f.read()
             
-            # Using database table 'attachments' for storage.
-            # Passing note_id=0 as a global bucket.
-            att_id = self.db.add_attachment(0, filename, data)
-            self.text_editor.insert_attachment(att_id, filename) 
+            # Save using FileManager (reusing save_image logic which saves to 'images' folder)
+            rel_path = self.fm.save_image(data, filename)
+            
+            # Insert Standard Markdown Link
+            # [Filename](images/filename.ext)
+            # Ensure path uses forward slashes
+            url_path = rel_path.replace("\\", "/")
+            self.text_editor.textCursor().insertText(f"[{filename}]({url_path})")
             
         except Exception as e:
             ModernAlert.show(self, "Error", f"No se pudo adjuntar el archivo: {e}")

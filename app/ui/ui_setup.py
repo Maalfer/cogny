@@ -13,13 +13,14 @@ class UiSetupMixin:
         self.setCentralWidget(self.splitter)
 
         # 1. Sidebar Blueprint
-        self.sidebar = Sidebar(self.db, self.fm, self)
+        # print(f"DEBUG: Initializing Sidebar. self.fm type: {type(self.fm)}, self type: {type(self)}")
+        self.sidebar = Sidebar(file_manager=self.fm, parent=self)
         self.sidebar.note_selected.connect(self.on_sidebar_note_selected)
         self.sidebar.action_requested.connect(self.on_sidebar_action)
         self.splitter.addWidget(self.sidebar)
 
         # 2. Editor Blueprint
-        self.editor_area = EditorArea(self.db, self.fm, self)
+        self.editor_area = EditorArea(file_manager=self.fm, parent=self)
         self.editor_area.status_message.connect(self.on_editor_status)
         self.splitter.addWidget(self.editor_area)
         
@@ -39,7 +40,8 @@ class UiSetupMixin:
         
         # Search Bar
         # We need to link SearchManager to Sidebar's tree and model
-        self.search_manager = SearchManager(self.db, self.sidebar.tree_view, self.sidebar.proxy_model, self.sidebar.on_selection_changed)
+        # SearchManager logic will need update to use FM or removed if it relied purely on DB FTS
+        self.search_manager = SearchManager(self.fm, self.sidebar.tree_view, self.sidebar.proxy_model, self.sidebar.on_selection_changed)
         toolbar.addWidget(self.search_manager.get_widget())
         
         toolbar.addSeparator()
@@ -55,9 +57,9 @@ class UiSetupMixin:
 
         # File Menu
         file_menu = menubar.addMenu("&Archivo")
-        file_menu.addAction(self.act_new_db)
-        file_menu.addAction(self.act_open_db)
-        file_menu.addAction(self.act_save_as_db)
+        file_menu.addAction(self.act_new_vault) # Renamed from db action 
+        file_menu.addAction(self.act_open_vault)
+        # file_menu.addAction(self.act_save_as_db) # Removed in refactor
         
         file_menu.addSeparator()
         file_menu.addAction(self.act_read_later_list)
@@ -117,10 +119,7 @@ class UiSetupMixin:
         action_export_obsidian = QAction("Exportar a Obsidian...", self)
         action_export_obsidian.triggered.connect(self.export_obsidian_vault)
         tools_menu.addAction(action_export_obsidian)
-        
-        action_optimize = QAction("Optimizar Base de Datos", self)
-        action_optimize.triggered.connect(self.optimize_database_action)
-        tools_menu.addAction(action_optimize)
+        # Removed Optimize Database action
         
         # Help Menu
         help_menu = menubar.addMenu("&Ayuda")

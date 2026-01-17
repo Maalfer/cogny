@@ -170,11 +170,12 @@ class NoteTreeModel(QStandardItemModel):
         
         # If dropping on root (invalid parent), new_parent_id remains None
         
-        self.layoutAboutToBeChanged.emit()
+        # If dropping on root (invalid parent), new_parent_id remains None
         
+        # Remove manual layout signals as load_notes() handles model reset
         try:
             while not stream.atEnd():
-                note_id = stream.readQString() # Was readInt32
+                note_id = stream.readQString()
                 
                 if note_id == new_parent_id:
                     continue
@@ -195,7 +196,6 @@ class NoteTreeModel(QStandardItemModel):
                          continue
                     
                     # Move in File System
-                    # We utilize the file manager's move_item method which handles the move logic.
                     new_id = self.fm.move_item(note_id, new_parent_id)
                     
                     if not new_id: continue
@@ -203,12 +203,14 @@ class NoteTreeModel(QStandardItemModel):
                     # Since IDs are paths, moving invalidates all IDs in the subtree.
                     # We must reload the model to ensure consistency.
                     self.load_notes() 
+                    
+                    # Return True to signal success. 
+                    # Note: Since we reset the model, the View's attempt to removeRows (if any)
+                    # should be harmless or fail silently against the new model state.
                     return True
 
-
-        finally:
-             self.layoutChanged.emit()
-             self.refresh_icons()
+        except Exception as e:
+            print(f"Error in dropMimeData: {e}")
              
-        return True
+        return False
 

@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import QTextEdit, QToolButton, QApplication
 from PySide6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QSize
 from PySide6.QtGui import QImage, QTextDocument, QColor, QTextFormat, QIcon, QGuiApplication, QTextCursor, QKeySequence, QTextLength
-from app.database.manager import DatabaseManager
 from app.ui.themes import ThemeManager
 
 class NoteEditor(QTextEdit):
@@ -10,9 +9,8 @@ class NoteEditor(QTextEdit):
     _image_cache_order = []  # For LRU eviction
     _max_cached_images = 100  # Limit memory usage
     
-    def __init__(self, db_manager: DatabaseManager, file_manager, parent=None):
+    def __init__(self, file_manager, parent=None):
         super().__init__(parent)
-        self.db = db_manager
         self.fm = file_manager
         self.cursorPositionChanged.connect(self.update_highlighting)
         # Optimized: Use contentsChange for incremental updates instead of full textChanged scan
@@ -271,38 +269,8 @@ class NoteEditor(QTextEdit):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(2000, lambda b=sender: b.setText("Copy"))
         
-    def insert_attachment(self, att_id, filename):
-        from PySide6.QtWidgets import QFileIconProvider
-        from PySide6.QtCore import QFileInfo
-        from PySide6.QtGui import QPixmap
-        
-        info = QFileInfo(filename)
-        icon_provider = QFileIconProvider()
-        icon = icon_provider.icon(info)
-        pixmap = icon.pixmap(48, 48)
-        
-        ba = QByteArray()
-        buffer = QBuffer(ba)
-        buffer.open(QIODevice.WriteOnly)
-        pixmap.save(buffer, "PNG")
-        base64_data = ba.toBase64().data().decode()
-        
-        html = f"""
-        <table border="0" style="margin-top: 10px; margin-bottom: 10px;">
-            <tr>
-                <td align="center">
-                    <a href="attachment://{att_id}"><img src="data:image/png;base64,{base64_data}" width="48" height="48" /></a>
-                </td>
-            </tr>
-            <tr>
-                <td align="center">
-                    <a href="attachment://{att_id}" style="color: #666; text-decoration: none; font-size: 10px;">{filename}</a>
-                </td>
-            </tr>
-        </table>
-        <br>
-        """
-        self.textCursor().insertHtml(html)
+    # insert_attachment removed
+
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Backspace, Qt.Key_Delete):
@@ -321,12 +289,8 @@ class NoteEditor(QTextEdit):
                          check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
             
             if check_cursor and (check_cursor.hasSelection() or (not cursor.hasSelection() and check_cursor.position() != cursor.position())):
-                is_att, att_id, table_range = self.cursor_contains_attachment(check_cursor)
-                if is_att:
-                    self.delete_attachment_interactive(att_id, table_range)
-                    return
-                              
-                elif self.cursor_contains_image(check_cursor):
+                # Removed attachment deletion logic
+                if self.cursor_contains_image(check_cursor):
                     from PySide6.QtWidgets import QMessageBox
                     ret = QMessageBox.question(self, "Eliminar Imagen", 
                                                "¿Estás seguro de que quieres eliminar la(s) imagen(es) seleccionada(s)?",
@@ -398,152 +362,14 @@ class NoteEditor(QTextEdit):
 
         return False
 
-    def cursor_contains_attachment(self, cursor):
-        """Checks if the given cursor range contains an attachment link.
-           Returns: (Found_Bool, Attachment_ID, (StartPos, EndPos))
-        """
-        start = min(cursor.anchor(), cursor.position())
-        end = max(cursor.anchor(), cursor.position())
-        
-        doc = self.document()
-        
-        # Check if we are inside a table structure that represents an attachment
-        # Iterate over blocks in range
-        block = doc.findBlock(start)
-        end_block = doc.findBlock(end)
-        
-        while block.isValid():
-            it = block.begin()
-            while not it.atEnd():
-                frag = it.fragment()
-                frag_start = frag.position()
-                frag_end = frag_start + frag.length()
-                
-                # Intersection check
-                if frag_end > start and frag_start < end:
-                    fmt = frag.charFormat()
-                    href = fmt.anchorHref()
-                    if href.startswith("attachment://"):
-                         try:
-                             att_id = int(href.replace("attachment://", ""))
-                             
-                             # Identify the containing table range to ensure clean deletion
-                             # If we are in a table, currentTable() might help if we use a cursor there.
-                             # But we are iterating blocks.
-                             # A block inside a table cell knows it's in a table (Qt internals).
-                             # We can check textTable() for the cursor at this position.
-                             temp_cursor = QTextCursor(doc)
-                             temp_cursor.setPosition(frag_start)
-                             table = temp_cursor.currentTable()
-                             
-                             if table:
-                                 # Return the range of the whole table
-                                 t_start = table.firstCursorPosition().position()
-                                 t_end = table.lastCursorPosition().position()
-                                 # We want to include the surrounding frame chars if possible?
-                                 # Actually, selecting first to last pos of table content leaves the frame.
-                                 # To remove the table, we need to select the range covering the table.
-                                 # Table is usually an object in the parent frame.
-                                 # Ideally: select range from position before table to position after.
-                                 # But simplified: Just returning None for range lets default delete happen if we don't care about residuals.
-                                 # But user complained about partial deletion.
-                                 
-                                 # Workaround: Select from start of table - 1 to end of table + 1?
-                                 # Or uses `table.firstCursorPosition().block().position()` etc.
-                                 # Let's try to get precise range.
-                                 return True, att_id, (t_start - 1, t_end + 1)
-                             else:
-                                 return True, att_id, None
-                         except:
-                             return True, None, None
-                             
-                it += 1
-                
-            if block == end_block:
-                break
-            block = block.next()
-            
-        return False, None, None
-
     def contextMenuEvent(self, event):
-        # 1. Determine Attachment ID and Range at mouse position
-        anchor = self.anchorAt(event.pos())
-        att_id = None
-        table_range = None
+        menu = self.createStandardContextMenu()
         
-        # We need to find the range to support deletion from UI
-        cursor = self.cursorForPosition(event.pos())
-        
-        # Helper to scan for attachment at cursor block
-        block = cursor.block()
-        if block.isValid():
-             it = block.begin()
-             while not it.atEnd():
-                 frag = it.fragment()
-                 fmt = frag.charFormat()
-                 href = fmt.anchorHref()
-                 if href.startswith("attachment://"):
-                     try:
-                         found_id = int(href.replace("attachment://", ""))
-                         
-                         # If anchorAt found simple link, it matches. 
-                         # If anchorAt failed but we found a fragment at cursor, use it.
-                         # We check if cursor is roughly inside or we just take the first one in the block (simple structure assumption)?
-                         # Better: Check point intersection.
-                         # cursor.position() is a single point.
-                         f_start = frag.position()
-                         f_end = f_start + frag.length()
-                         c_pos = cursor.position()
-                         
-                         # Check if click is within this fragment (inclusive)
-                         # OR if we relied on anchorAt which implies we clicked the link
-                         if (c_pos >= f_start and c_pos <= f_end) or (anchor == href):
-                             att_id = found_id
-                             
-                             # Get Table Range
-                             temp_cursor = QTextCursor(self.document())
-                             temp_cursor.setPosition(f_start)
-                             table = temp_cursor.currentTable()
-                             if table:
-                                 t_start = table.firstCursorPosition().position()
-                                 t_end = table.lastCursorPosition().position()
-                                 table_range = (t_start - 1, t_end + 1)
-                             break
-                     except ValueError:
-                         pass
-                 it += 1
-
-        if att_id:
-            try:
-                menu = self.createStandardContextMenu()
-                
-                # Attachment Actions
-                action_open = menu.addAction("Abrir Archivo")
-                action_open.triggered.connect(lambda _: self.open_attachment(att_id))
-                
-                action_save_as = menu.addAction("Guardar Como...")
-                action_save_as.triggered.connect(lambda _: self.save_attachment_as(att_id))
-                
-                # Remove standard delete if present to avoid confusion
-                for action in menu.actions():
-                    if "Delete" in action.text() or "Eliminar" in action.text():
-                         menu.removeAction(action)
-                         
-                action_delete = menu.addAction("Eliminar Archivo")
-                # Pass table_range to delete handler to remove text too
-                action_delete.triggered.connect(lambda _: self.delete_attachment_interactive(att_id, table_range))
-                
-                menu.exec(event.globalPos())
-                return 
-            except ValueError:
-                pass
-                
         # --- TABLE CONTEXT MENU ---
         # Obtain cursor at MOUSE position, not current caret position
         cursor = self.cursorForPosition(event.pos())
         table = cursor.currentTable()
         if table:
-            menu = self.createStandardContextMenu()
             menu.addSeparator()
             
             # Table Actions
@@ -569,18 +395,8 @@ class NoteEditor(QTextEdit):
             
         super().contextMenuEvent(event)
 
-    def delete_attachment_interactive(self, att_id, table_range):
-        from app.ui.widgets import ModernConfirm
-        if ModernConfirm.show(self, "Eliminar Archivo", "¿Estás seguro de que quieres eliminar este archivo permanentemente de la base de datos?", "Eliminar", "Cancelar"):
-             # DB Delete
-             self.db.delete_attachment(att_id)
-             
-             # UI Delete
-             if table_range:
-                 cursor = self.textCursor()
-                 cursor.setPosition(table_range[0])
-                 cursor.setPosition(table_range[1], QTextCursor.KeepAnchor)
-                 cursor.removeSelectedText()
+    # delete_attachment_interactive removed
+
 
     def mouseDoubleClickEvent(self, event):
         # Prevent double click from doing anything special with attachments
@@ -600,57 +416,8 @@ class NoteEditor(QTextEdit):
         # We disabled click-to-open for attachments.
         super().mouseReleaseEvent(event)
 
-    def open_attachment(self, att_id):
-        # Retrieve from DB
-        data_row = self.db.get_attachment(att_id)
-        if not data_row:
-            return
-            
-        filename, data = data_row
-        
-        # Save to temp file
-        import tempfile
-        import os
-        import subprocess
-        import sys
-        from PySide6.QtGui import QDesktopServices
-        
-        # We try to keep the extension
-        name, ext = os.path.splitext(filename)
-        
-        try:
-            fd, path = tempfile.mkstemp(suffix=ext, prefix=f"cogny_{name}_")
-            with os.fdopen(fd, 'wb') as f:
-                f.write(data)
-            
-            # Open using subprocess and xdg-open for Linux (more robust)
-            if sys.platform.startswith('linux'):
-                 subprocess.Popen(['xdg-open', path])
-            else:
-                 QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-                 
-        except Exception as e:
-            print(f"Error opening attachment: {e}")
+    # open/save attachment removed
 
-    def save_attachment_as(self, att_id):
-        from PySide6.QtWidgets import QFileDialog
-        
-        # Retrieve from DB
-        data_row = self.db.get_attachment(att_id)
-        if not data_row:
-            return
-            
-        filename, data = data_row
-        
-        # Ask user for location
-        save_path, _ = QFileDialog.getSaveFileName(self, "Guardar Adjunto", filename)
-        
-        if save_path:
-            try:
-                with open(save_path, 'wb') as f:
-                     f.write(data)
-            except Exception as e:
-                print(f"Error saving attachment: {e}")
 
     def on_contents_change(self, position, charsRemoved, charsAdded):
         """Standard optimization: Only update blocks affected by the change."""
@@ -814,6 +581,13 @@ class NoteEditor(QTextEdit):
                 try:
                     rel_path_root = self.fm.save_image(data, filename)
                     
+                    full_abs_path = os.path.join(self.fm.root_path, rel_path_root)
+                    
+                    # Optimization: Pre-process and cache the image to avoid reloading it from disk immediately
+                    # This skips disk read + PNG decompression in loadResource
+                    processed_img = self._process_image(image)
+                    self._cache_image(full_abs_path, processed_img) # Key is absolute path
+                    
                     # Calculate relative path from current note to image
                     # rel_path_root is "images/file.png"
                     
@@ -839,8 +613,6 @@ class NoteEditor(QTextEdit):
                     # without complex relative resolution guesswork during the insert event.
                     # loadResource will still be called, but with an absolute path check first.
                     
-                    full_abs_path = os.path.join(self.fm.root_path, rel_path_root)
-                    
                     from PySide6.QtGui import QTextImageFormat
                     fmt = QTextImageFormat()
                     # We use the absolute path for the runtime object name/source
@@ -853,15 +625,67 @@ class NoteEditor(QTextEdit):
             return
         return super().insertFromMimeData(source)
     
+    
+    # Async Loading Components
+    _loading_images = set() # Set of image paths currently being loaded
+    _thread_pool = None
+    
+    @classmethod
+    def get_thread_pool(cls):
+        if cls._thread_pool is None:
+            from PySide6.QtCore import QThreadPool
+            cls._thread_pool = QThreadPool()
+            cls._thread_pool.setMaxThreadCount(4) 
+        return cls._thread_pool
+
+    def _start_async_image_load(self, path):
+        NoteEditor._loading_images.add(path)
+        
+        loader = ImageLoader(path, self._process_image_static)
+        loader.signals.finished.connect(self._on_image_loaded)
+        
+        pool = self.get_thread_pool()
+        pool.start(loader)
+
+    @staticmethod
+    def _process_image_static(image):
+        if image.isNull(): return image
+        
+        # Static version used by worker thread
+        target_width = 600
+        if image.width() != target_width:
+             image = image.scaledToWidth(target_width, Qt.FastTransformation)
+             
+        out_img = QImage(image.size(), QImage.Format_ARGB32)
+        out_img.fill(Qt.transparent)
+        
+        from PySide6.QtGui import QPainter, QPainterPath
+        painter = QPainter(out_img)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        path = QPainterPath()
+        rect = out_img.rect()
+        path.addRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
+        
+        painter.setClipPath(path)
+        painter.drawImage(0, 0, image)
+        painter.end()
+        return out_img
+
+    def _process_image(self, image: QImage) -> QImage:
+        """Wrapper for static method to maintain compatibility."""
+        return self._process_image_static(image)
+
+
     def loadResource(self, type, name):
-        import os  # Import at top of function to ensure availability
+        import os
+        from PySide6.QtGui import QColor, QPainter
         
         if type == QTextDocument.ImageResource:
             url = name.toString() if isinstance(name, QUrl) else str(name)
             
-            # 1. Handle DB Images (Legacy support - TO BE REMOVED, but keeping structure valid for now)
+            # 1. Handle DB Images (Legacy support)
             if url.startswith("image://db/"):
-                 # We will remove this block correctly in the next step when stripping DB code
                  pass
             
             # 2. Handle Local Files
@@ -871,43 +695,138 @@ class NoteEditor(QTextEdit):
             
             # 3. Path Resolution Strategy
             candidate_paths = []
+            candidate_paths.append(path) # Absolute
             
-            # Priority A: Absolute Path (as passed by insertFromMimeData)
-            candidate_paths.append(path)
-            
-            # Priority C: Relative to Note, Relative to Root
             if self.fm:
-                # Relative to Vault Root (Standard)
+                # Relative resolution
                 candidate_paths.append(os.path.join(self.fm.root_path, path))
-                
-                # Relative to images (Obsidian style)
                 candidate_paths.append(os.path.join(self.fm.root_path, "images", path))
-                
-                # Relative to Current Note Directory (if available and path is relative)
                 if hasattr(self, "current_note_path") and self.current_note_path and not os.path.isabs(path):
                      note_dir = os.path.dirname(os.path.join(self.fm.root_path, self.current_note_path))
                      candidate_paths.append(os.path.join(note_dir, path))
 
             # 4. Attempt Load
+            resolved_path = None
             for p in candidate_paths:
                 if os.path.exists(p) and os.path.isfile(p):
-                     try:
-                         # Normalize separators
-                         p = os.path.normpath(p)
-                         
-                         # Check Cache (using path key)
-                         if p in NoteEditor._image_cache:
-                              return NoteEditor._image_cache[p]
-                         
-                         img = QImage(p)
-                         if not img.isNull():
-                             processed_img = self._process_image(img)
-                             self._cache_image(p, processed_img)
-                             return processed_img
-                     except Exception as e:
-                         print(f"Error loading image {p}: {e}")
+                    resolved_path = os.path.normpath(p)
+                    break
+            
+            if resolved_path:
+                # A. Check Cache
+                if resolved_path in NoteEditor._image_cache:
+                    return NoteEditor._image_cache[resolved_path]
+                
+                # B. Check if already loading
+                if resolved_path in NoteEditor._loading_images:
+                     # Return Placeholder
+                     return self._get_placeholder_image()
+                
+                # C. Start Async Load
+                self._start_async_image_load(resolved_path)
+                
+                # Return Placeholder temporarily
+                return self._get_placeholder_image()
 
         return super().loadResource(type, name)
+
+    def _get_placeholder_image(self):
+        if not hasattr(NoteEditor, "_placeholder_img"):
+             # Create a simple gray placeholder
+             img = QImage(600, 100, QImage.Format_ARGB32) # Generic size
+             img.fill(QColor("#f0f0f0"))
+             
+             from PySide6.QtGui import QPainter, QPen
+             p = QPainter(img)
+             p.setPen(QPen(QColor("#bbbbbb")))
+             p.drawText(img.rect(), Qt.AlignCenter, "Cargando imagen...")
+             p.end()
+             NoteEditor._placeholder_img = img
+        return NoteEditor._placeholder_img
+
+    def _start_async_image_load(self, path):
+        NoteEditor._loading_images.add(path)
+        
+        from PySide6.QtCore import QRunnable, QObject, Signal
+        
+        class ImageLoaderSignals(QObject):
+            finished = Signal(str, QImage)
+            
+        class ImageLoader(QRunnable):
+            def __init__(self, path, processor):
+                super().__init__()
+                self.path = path
+                self.processor = processor
+                self.signals = ImageLoaderSignals()
+                
+            def run(self):
+                try:
+                    img = QImage(self.path)
+                    if not img.isNull():
+                        # Process off-thread
+                        processed = self.processor(img)
+                        self.signals.finished.emit(self.path, processed)
+                except Exception as e:
+                    print(f"Async load error {self.path}: {e}")
+                    
+        loader = ImageLoader(path, self._process_image_static)
+        # Connect signal to update UI
+        loader.signals.finished.connect(self._on_image_loaded)
+        
+        pool = self.get_thread_pool()
+        pool.start(loader)
+
+    @staticmethod
+    def _process_image_static(image):
+        # Static version used by worker thread
+        target_width = 600
+        if image.width() != target_width:
+             image = image.scaledToWidth(target_width, Qt.FastTransformation)
+             
+        out_img = QImage(image.size(), QImage.Format_ARGB32)
+        out_img.fill(Qt.transparent)
+        
+        from PySide6.QtGui import QPainter, QPainterPath, QBrush
+        painter = QPainter(out_img)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        path = QPainterPath()
+        rect = out_img.rect()
+        path.addRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
+        
+        painter.setClipPath(path)
+        painter.drawImage(0, 0, image)
+        painter.end()
+        return out_img
+
+    def _on_image_loaded(self, path, image):
+        if path in NoteEditor._loading_images:
+            NoteEditor._loading_images.remove(path)
+            
+        # Add to Cache
+        self._cache_image(path, image)
+        
+        # Force Document to reload this resource
+        doc = self.document()
+        doc.addResource(QTextDocument.ImageResource, QUrl.fromLocalFile(path), image)
+        
+        # Trigger Layout Update
+        # We need to force a redraw. 
+        # setLineWrapColumnOrWidth trick or viewport update.
+        self.viewport().update()
+        
+        # Sometimes document needs a kick to re-layout if size changed
+        # We can emit a signal or slightly adjust width?
+        # A clearer way is to iterate over the document and mark formats as dirty, but that's complex.
+        # Usually addResource + update() is enough if the name matches.
+        # But loadResource uses the name.
+        # We used QUrl.fromLocalFile(path) as key in addResource.
+        # We need to ensure that matches what render_images inserted (fmt.name).
+        
+        # render_images sets fmt.setName(resolved_path) -> which is a string path.
+        # So we should use string path as key?
+        doc.addResource(QTextDocument.ImageResource, QUrl(path), image) # Try both or string
+
     
     def render_images(self):
         """Scans the document for Markdown image links (Standard & WikiLink) and inserts QTextImageFormat objects."""
@@ -1033,9 +952,10 @@ class NoteEditor(QTextEdit):
         target_width = 600
         
         # 1. Scale uniform width
-        # Use SmoothTransformation for quality
+        # Use FastTransformation for performance (Smooth is too slow for large images)
         if image.width() != target_width:
-             image = image.scaledToWidth(target_width, Qt.SmoothTransformation)
+             # print(f"DEBUG: Scaling image {image.width()}x{image.height()} -> {target_width}")
+             image = image.scaledToWidth(target_width, Qt.FastTransformation)
              
         # 2. Apply Rounded Corners
         # Create a new transparent image of same size
@@ -1058,3 +978,26 @@ class NoteEditor(QTextEdit):
         painter.end()
         
         return out_img
+
+# Worker Classes (Global Scope for Signals)
+from PySide6.QtCore import QRunnable, QObject, Signal
+
+class ImageLoaderSignals(QObject):
+    finished = Signal(str, QImage)
+
+class ImageLoader(QRunnable):
+    def __init__(self, path, processor):
+        super().__init__()
+        self.path = path
+        self.processor = processor
+        self.signals = ImageLoaderSignals()
+        
+    def run(self):
+        try:
+            img = QImage(self.path)
+            if not img.isNull():
+                # Process off-thread
+                processed = self.processor(img)
+                self.signals.finished.emit(self.path, processed)
+        except Exception as e:
+            print(f"Async load error {self.path}: {e}")

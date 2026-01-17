@@ -37,45 +37,37 @@ def main():
     # Apply Theme
     app.setPalette(ThemeManager.get_palette(theme_name))
     
-    # Database Selection Logic
-    db_path = settings.value("last_db_path", "")
+    # Vault Selection Logic
+    vault_path = settings.value("last_vault_path", "")
     
-    # Verify if file exists (if it was supposed to) or if it's empty
-    # If path is invalid or empty, show setup
-    show_setup = False
-    # If path is invalid or empty, show setup
+    # Verify if directory exists
     show_setup = False
     
-    # Check if db_path is valid (File or Directory)
-    if not db_path or not os.path.exists(db_path):
+    # Check if vault_path is valid
+    if not vault_path or not os.path.exists(vault_path) or not os.path.isdir(vault_path):
         show_setup = True
     
-    # If it is a directory (Vault), check if internal DB exists inside
-    if not show_setup and os.path.isdir(db_path):
-        internal_db = os.path.join(db_path, ".cogny.cdb")
-        # We don't force setup here if internal db is missing, 
-        # because MainWindow might create it? 
-        # Actually better to rely on MainWindow handling the init if the path is a dir.
-        pass
-        
     if show_setup:
         from app.ui.dialogs_setup import SetupDialog
         setup_dialog = SetupDialog()
         if setup_dialog.exec():
-            db_path = setup_dialog.selected_db_path
+            vault_path = setup_dialog.selected_vault_path
             
             # Handle Draft Mode
-            if db_path == "__TEMP__":
+            if vault_path == "__TEMP__":
                 import tempfile
                 import uuid
-                # Create a unique temp name so we don't conflict
-                temp_name = f"cogny_draft_{uuid.uuid4().hex[:8]}.cdb"
-                db_path = os.path.join(tempfile.gettempdir(), temp_name)
-                # Do NOT save to settings.value("last_db_path")
+                # Create a unique temp name
+                temp_name = f"cogny_draft_{uuid.uuid4().hex[:8]}"
+                vault_path = os.path.join(tempfile.gettempdir(), temp_name)
+                # Ensure it exists
+                os.makedirs(vault_path, exist_ok=True)
+                
+                # Do NOT save to settings.value("last_vault_path")
                 # So next time app opens, it asks again.
                 is_draft = True
             else:
-                settings.setValue("last_db_path", db_path)
+                settings.setValue("last_vault_path", vault_path)
                 is_draft = False
         else:
             # User closed dialog
@@ -83,7 +75,7 @@ def main():
     else:
         is_draft = False
     
-    window = MainWindow(db_path, is_draft=is_draft)
+    window = MainWindow(vault_path, is_draft=is_draft)
     window.show()
     sys.exit(app.exec())
 

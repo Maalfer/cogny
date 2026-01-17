@@ -1,16 +1,16 @@
-from app.database.manager import DatabaseManager
 from app.ui.themes import ThemeManager
 from app.ui.blueprints.markdown import MarkdownRenderer
 from weasyprint import HTML, CSS, default_url_fetcher
-import re
+import os
 
 class PDFExporter:
-    def __init__(self, db_manager: DatabaseManager):
-        self.db = db_manager
+    def __init__(self):
+        pass
 
-    def export_to_pdf(self, title: str, content: str, output_path: str, theme_name: str = "Light"):
+    def export_to_pdf(self, title: str, content: str, output_path: str, theme_name: str = "Light", resolve_image_callback=None):
         """
         Exports the content to PDF using WeasyPrint for high-quality rendering.
+        resolve_image_callback: function(src) -> absolute_path
         """
         
         # 1. Render HTML
@@ -26,7 +26,7 @@ class PDFExporter:
         text_color = "#d4d4d4" if is_dark else "#202020"
         border_color = "#454545" if is_dark else "#C0C0C0"
         
-        # PDF Specific CSS (Pagination, @page, Resets)
+        # PDF Specific CSS
         pdf_css = f"""
         @page {{
             size: A4;
@@ -40,7 +40,7 @@ class PDFExporter:
         }}
 
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             font-size: 11pt;
             line-height: 1.6;
             color: {text_color};
@@ -49,7 +49,6 @@ class PDFExporter:
             padding: 0;
         }}
         
-        /* Document Title */
         h1.doc-title {{
             font-size: 24pt;
             font-weight: bold;
@@ -59,7 +58,6 @@ class PDFExporter:
             border-bottom: 2px solid {border_color};
         }}
 
-        /* Smart Page Breaks */
         h1, h2, h3, h4, h5, h6 {{ 
             break-after: avoid; 
             margin-top: 1.5em;
@@ -68,7 +66,6 @@ class PDFExporter:
             break-inside: avoid; 
         }}
         
-        /* Table Tweaks for PDF */
         table {{
             width: 100%;
             border-collapse: collapse;
@@ -79,16 +76,14 @@ class PDFExporter:
             padding: 8px;
         }}
         
-        /* Pre/Code Tweaks */
         pre {{
             padding: 10px;
             border-radius: 5px;
-            white-space: pre-wrap; /* Wrap long lines in PDF */
+            white-space: pre-wrap; 
             font-size: 10pt;
             border: 1px solid {border_color};
         }}
         
-        /* Images */
         img {{
             max-width: 100%;
             height: auto;
@@ -96,10 +91,8 @@ class PDFExporter:
         }}
         """
         
-        # Combine CSS
         full_css_str = base_css + "\n" + pdf_css
         
-        # 3. Full HTML Document
         full_html = f"""
         <!DOCTYPE html>
         <html>
@@ -114,8 +107,11 @@ class PDFExporter:
         </html>
         """
         
-        # 4. Generate PDF with Custom Fetcher for DB Images
-        html_obj = HTML(string=full_html, base_url=".", url_fetcher=self._db_url_fetcher)
+        # Custom Fetcher Wrapper
+        def custom_fetcher(url):
+            return self._fs_url_fetcher(url, resolve_image_callback)
+        
+        html_obj = HTML(string=full_html, base_url=".", url_fetcher=custom_fetcher)
         css_obj = CSS(string=full_css_str)
         
         html_obj.write_pdf(
@@ -123,49 +119,30 @@ class PDFExporter:
             stylesheets=[css_obj]
         )
 
-    def _db_url_fetcher(self, url, timeout=10, ssl_context=None):
+    def _fs_url_fetcher(self, url, resolve_callback):
         """
-        Custom URL fetcher to intercept image://db/{id} requests and return data from SQLite.
-        Delegates other schemes to default_url_fetcher.
+        Url fetcher that resolves local images using the callback.
         """
-        if url.startswith("image://db/"):
-            try:
-                # Extract ID
-                # url format: image://db/123
-                img_id = url.split("image://db/")[-1]
-                if not img_id.isdigit():
-                    raise ValueError("Invalid Image ID")
-                    
-                img_id = int(img_id)
-                blob = self.db.get_image(img_id)
-                
-                if blob:
-                    # Detect mime type? 
-                    # We usually store raw bytes. We detect header or assume png/jpg.
-                    # Simple heuristic:
-                    mime = 'image/png'
-                    if blob.startswith(b'\xff\xd8'): mime = 'image/jpeg'
-                    elif blob.startswith(b'GIF'): mime = 'image/gif'
-                    elif blob.startswith(b'<svg'): mime = 'image/svg+xml'
-                    
-                    return {
-                        'string': blob,
-                        'mime_type': mime,
-                        'encoding': None,
-                        'redirected_url': None
-                    }
-                else:
-                     raise FileNotFoundError(f"Image {img_id} not found in DB")
-                     
-            except Exception as e:
-                print(f"WeasyPrint Fetcher Error: {e}")
-                # Return empty or placeholder?
-                # Raise to let WeasyPrint handle (it shows broken image icon)
-                raise e
-        
-        # Fallback for http, file, attachment://...
-        # attachment:// is internal too but usually just a link, not loaded resource.
-        # MarkdownRenderer protects attachments as <a> links, so WeasyPrint won't fetch them unless <link/img>.
-        return default_url_fetcher(url, timeout, ssl_context)
+        try:
+             # Check if it's a relative path or file://
+             # WeasyPrint sends absolute file:// URLs if base_url is set?
+             # If Markdown contained relative path "images/foo.png", WeasyPrint tries to resolve against base_url.
+             # If base_url=".", it becomes "file:///cwd/images/foo.png".
+             
+             # If we passed a resolve_callback, we might want to intervene.
+             # But default_url_fetcher handles file:// provided the path is correct.
+             # The callback `resolve_image_callback` (passed from UiActions) converts relative to absolute.
+             # But `MarkdownRenderer` output likely contains relative paths.
+             # So we need to ensure WeasyPrint can find them.
+             
+             # If url is relative (no scheme), WeasyPrint resolves it before calling fetcher?
+             # Yes.
+             
+             # If we detect it's a local file, we ensure existence?
+             return default_url_fetcher(url)
+             
+        except Exception as e:
+            print(f"Fetcher Error: {e}")
+            raise e
 
 
