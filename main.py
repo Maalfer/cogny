@@ -14,7 +14,7 @@ def main():
     app.setOrganizationName("CognyApp")
     app.setApplicationName("Cogny")
     
-    # Linux Desktop Integration
+    # Linux Desktop Integration plus
     # Crucial for wayland/gnome to associate window with .desktop file
     app.setDesktopFileName("cogny") 
     
