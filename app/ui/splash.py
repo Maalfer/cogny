@@ -59,12 +59,6 @@ class WarmupWorker(QThread):
             self.finished_warmup.emit()
 
 class SplashWindow(QMainWindow):
-    def closeEvent(self, event):
-        import traceback
-        print("DEBUG: SplashWindow closeEvent called!")
-        traceback.print_stack()
-        super().closeEvent(event)
-
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)

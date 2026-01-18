@@ -160,7 +160,6 @@ class EditorArea(QWidget):
                 # Define callback to resume
                 def resume_loading():
                     from PySide6.QtCore import QThread
-                    print(f"DEBUG: resume_loading called from thread: {QThread.currentThread()}")
                     self._start_rendering(markdown_content)
                     
                 self.text_editor.preload_images(all_paths, resume_loading)
