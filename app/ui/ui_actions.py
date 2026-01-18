@@ -264,7 +264,7 @@ class UiActionsMixin:
                 content, 
                 path, 
                 theme_name="Light", 
-                resolve_image_callback=lambda src: self.fm.get_abs_path(src) if src else None,
+                resolve_image_callback=lambda src: self.fm.resolve_file_path(src),
                 base_url=self.fm.root_path
             )
             

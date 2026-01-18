@@ -124,33 +124,35 @@ class PDFExporter:
         """
         Url fetcher that resolves local images using the callback.
         """
+    def _fs_url_fetcher(self, url, resolve_callback):
+        """
+        Url fetcher that resolves local images using the callback.
+        """
         try:
-             # Check if it's a relative path or file://
-             # WeasyPrint sends absolute file:// URLs if base_url is set?
-             # If Markdown contained relative path "images/foo.png", WeasyPrint tries to resolve against base_url.
-             # If base_url=".", it becomes "file:///cwd/images/foo.png".
-             
-             # If we passed a resolve_callback, we might want to intervene.
-             # But default_url_fetcher handles file:// provided the path is correct.
-             # The callback `resolve_image_callback` (passed from UiActions) converts relative to absolute.
-             # But `MarkdownRenderer` output likely contains relative paths.
-             # So we need to ensure WeasyPrint can find them.
-             
-             # If url is relative (no scheme), WeasyPrint resolves it before calling fetcher?
-             # Yes.
-             
-             # If we detect it's a local file, we ensure existence?
-             
-             # Fallback to callback if provided and URL seems like a relative path or custom scheme
-             if resolve_callback:
-                 resolved = resolve_callback(url)
+            from urllib.parse import unquote
+            
+            # Prepare a clean path if it's a file URL or looks like one
+            path_to_check = url
+            if url.startswith("file://"):
+                path_to_check = url[7:]
+            
+            # Always unquote (WeasyPrint might encode spaces)
+            path_to_check = unquote(path_to_check)
+            
+            # 1. Direct Check (Absolute or relative if CWD matches)
+            if os.path.exists(path_to_check):
+                 return default_url_fetcher(url)
+            
+            # 2. Fallback to callback (Smart Search)
+            if resolve_callback:
+                 # Pass the CLEANED path, not the raw URL
+                 resolved = resolve_callback(path_to_check)
                  if resolved and os.path.exists(resolved):
-                     # Convert back to file URL for WeasyPrint default fetcher if needed, 
-                     # OR just read it? default_url_fetcher expects a URL.
                      from weasyprint.urls import path2url
                      return default_url_fetcher(path2url(resolved))
-             
-             return default_url_fetcher(url)
+            
+            # 3. Last resort
+            return default_url_fetcher(url)
              
         except Exception as e:
             print(f"Fetcher Error: {e}")

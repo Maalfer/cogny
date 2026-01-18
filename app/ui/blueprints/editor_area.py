@@ -86,15 +86,31 @@ class EditorArea(QWidget):
              return
 
         self.current_note_id = note_id
-        
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
         
+        # 1. Immediate UI Feedback
         self.status_message.emit(f"Cargando nota: {title}...", 0)
+        self.title_edit.setPlainText(title)
         
-        # Set title
-        self.title_edit.setPlainText(title) # Title is usually part of note_id (filename)
+        # Show specific loading state in editor
+        # We use a simple HTML placeholder to indicate activity
+        self.text_editor.setUpdatesEnabled(True) # Ensure repaint
+        self.text_editor.setHtml("<div style='text-align: center; margin-top: 50px; color: #888;'><h2>Cargando...</h2></div>")
+        self.text_editor.set_loading_state(True)
         
+        # 2. Defer heavy loading to next event loop iteration
+        # This allows the UI to repaint the "Loading..." message properly.
+        from PySide6.QtCore import QTimer
+        # 10ms is enough to let the event loop process the paint events
+        QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title))
+
+    def _perform_load_note(self, note_id, title):
+        # Check if the user changed selection during the delay?
+        # If current_note_id changed, abort.
+        if self.current_note_id != note_id:
+            return
+
         # Pass current note path to editor for relative link calculation
         self.text_editor.current_note_path = note_id
         
@@ -108,7 +124,8 @@ class EditorArea(QWidget):
         self.text_editor.blockSignals(True)
         # CRITICAL OPTIMIZATION: Block document signals to prevent "contentsChange" for every image insertion
         self.text_editor.document().blockSignals(True)
-        self.text_editor.set_loading_state(True)
+        # self.text_editor.set_loading_state(True) # Already set in load_note
+        
         try:
             # Set Base URL for resolving local images
             from PySide6.QtCore import QUrl

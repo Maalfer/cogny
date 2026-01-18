@@ -38,6 +38,48 @@ class FileManager(QObject):
         """Public alias for _get_abs_path"""
         return self._get_abs_path(rel_path)
 
+    def resolve_file_path(self, filename_or_path: str) -> Optional[str]:
+        """
+        Smart resolution of a file path.
+        1. Checks if it's already an absolute path.
+        2. Checks relative to root.
+        3. Checks in common asset folders.
+        4. Recursively searches the vault.
+        """
+        # 1. Absolute Path
+        if os.path.isabs(filename_or_path):
+            if os.path.exists(filename_or_path):
+                return filename_or_path
+            # If absolute but invalid, try treating basename as search target
+            filename = os.path.basename(filename_or_path)
+        else:
+            filename = os.path.basename(filename_or_path)
+            # 2. Relative Path (Direct)
+            direct_path = self._get_abs_path(filename_or_path)
+            if os.path.exists(direct_path):
+                return direct_path
+
+        # 3. Common Folders
+        common_folders = ["images", "assets", "adjuntos", "Adjuntos"]
+        for folder in common_folders:
+            candidate = os.path.join(self.root_path, folder, filename)
+            if os.path.exists(candidate):
+                return candidate
+        
+        # 4. Check root directly (if not checked by relative above)
+        root_candidate = os.path.join(self.root_path, filename)
+        if os.path.exists(root_candidate):
+            return root_candidate
+
+        # 5. Recursive Search
+        for root, dirs, files in os.walk(self.root_path):
+            # Skip hidden
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            if filename in files:
+                return os.path.join(root, filename)
+                
+        return None
+
     def list_files(self) -> List[Dict]:
         """
         Returns a flat list of files for the tree builder.
