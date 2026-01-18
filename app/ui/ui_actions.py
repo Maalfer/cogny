@@ -259,7 +259,14 @@ class UiActionsMixin:
             
             # Ensure PDFExporter works without DB
             exporter = PDFExporter() 
-            exporter.export_to_pdf(title, content, path, theme_name="Light", resolve_image_callback=lambda src: self.fm.get_abs_path(src) if src else None)
+            exporter.export_to_pdf(
+                title, 
+                content, 
+                path, 
+                theme_name="Light", 
+                resolve_image_callback=lambda src: self.fm.get_abs_path(src) if src else None,
+                base_url=self.fm.root_path
+            )
             
             ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\\n{path}")
             

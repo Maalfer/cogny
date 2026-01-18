@@ -7,10 +7,11 @@ class PDFExporter:
     def __init__(self):
         pass
 
-    def export_to_pdf(self, title: str, content: str, output_path: str, theme_name: str = "Light", resolve_image_callback=None):
+    def export_to_pdf(self, title: str, content: str, output_path: str, theme_name: str = "Light", resolve_image_callback=None, base_url: str = "."):
         """
         Exports the content to PDF using WeasyPrint for high-quality rendering.
         resolve_image_callback: function(src) -> absolute_path
+        base_url: Root path of the vault for resolving relative links
         """
         
         # 1. Render HTML
@@ -111,7 +112,7 @@ class PDFExporter:
         def custom_fetcher(url):
             return self._fs_url_fetcher(url, resolve_image_callback)
         
-        html_obj = HTML(string=full_html, base_url=".", url_fetcher=custom_fetcher)
+        html_obj = HTML(string=full_html, base_url=base_url, url_fetcher=custom_fetcher)
         css_obj = CSS(string=full_css_str)
         
         html_obj.write_pdf(
@@ -139,6 +140,16 @@ class PDFExporter:
              # Yes.
              
              # If we detect it's a local file, we ensure existence?
+             
+             # Fallback to callback if provided and URL seems like a relative path or custom scheme
+             if resolve_callback:
+                 resolved = resolve_callback(url)
+                 if resolved and os.path.exists(resolved):
+                     # Convert back to file URL for WeasyPrint default fetcher if needed, 
+                     # OR just read it? default_url_fetcher expects a URL.
+                     from weasyprint.urls import path2url
+                     return default_url_fetcher(path2url(resolved))
+             
              return default_url_fetcher(url)
              
         except Exception as e:

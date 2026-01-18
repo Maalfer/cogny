@@ -57,12 +57,10 @@ class UiSetupMixin:
 
         # File Menu
         file_menu = menubar.addMenu("&Archivo")
-        file_menu.addAction(self.act_new_vault) # Renamed from db action 
+        file_menu.addAction(self.act_new_vault) 
         file_menu.addAction(self.act_open_vault)
         
-        file_menu.addSeparator()
-        
-        file_menu.addSeparator()
+
         
         file_menu.addAction(self.act_new_root)
         file_menu.addAction(self.act_new_folder_root)

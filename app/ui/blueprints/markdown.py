@@ -20,6 +20,19 @@ class MarkdownRenderer:
         text = text.replace(r'\```', '```')
         text = text.replace(r'!\[', '![')
         text = text.replace(r'\]', ']')
+
+        # 0.1 Convert Obsidian/WikiLinks ![[image.png|options]] -> ![image.png](image.png)
+        # Simple regex to catch ![[filename|...]] or ![[filename]]
+        # We assume the user wants to display them.
+        def wikilink_sub(match):
+            content = match.group(1)
+            if '|' in content:
+                filename = content.split('|')[0]
+            else:
+                filename = content
+            return f"![{filename}]({filename})"
+        
+        text = re.sub(r'!\[\[(.*?)\]\]', wikilink_sub, text)
         
         # 1. Protect Internal HTML (Attachments Only - Images handled by Extension)
         placeholders = {}

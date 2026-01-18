@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject
 class FileManager(QObject):
     """
     Manages file system operations for the note application.
-    Acts as an Obsidian-compatible vault manager with file-system based operations.
+    Manages file system operations for the note application.
     """
     def __init__(self, root_path: str):
         super().__init__()
@@ -33,6 +33,10 @@ class FileManager(QObject):
 
     def _get_abs_path(self, rel_path: str) -> str:
         return os.path.join(self.root_path, rel_path)
+
+    def get_abs_path(self, rel_path: str) -> str:
+        """Public alias for _get_abs_path"""
+        return self._get_abs_path(rel_path)
 
     def list_files(self) -> List[Dict]:
         """
@@ -105,9 +109,7 @@ class FileManager(QObject):
                      if entry.name.startswith('.'): 
                          continue
                      
-                     if entry.name == "Adjuntos":
-                         continue
-                         
+
                      if entry.is_dir():
                          rel_path = self._get_rel_path(entry.path)
                          items.append({

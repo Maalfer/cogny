@@ -799,9 +799,8 @@ class NoteEditor(QTextEdit):
         NoteEditor._image_cache[image_id] = image
         NoteEditor._image_cache_order.append(image_id)
     
-    @classmethod
     def clear_image_cache(cls):
-        """Clear the image cache (useful when switching databases)."""
+        """Clear the image cache."""
         cls._image_cache.clear()
         cls._image_cache_order.clear()
 

@@ -146,7 +146,7 @@ class NoteTreeModel(QStandardItemModel):
         for index in indexes:
             if index.isValid():
                 item = self.itemFromIndex(index)
-                stream.writeQString(item.note_id) # Was writeInt32
+                stream.writeQString(item.note_id)
         
         mime.setData("application/x-cogny-note-id", encoded_data)
         return mime
