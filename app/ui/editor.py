@@ -395,7 +395,6 @@ class NoteEditor(QTextEdit):
             
         super().contextMenuEvent(event)
 
-    # delete_attachment_interactive removed
 
 
     def mouseDoubleClickEvent(self, event):
@@ -405,10 +404,10 @@ class NoteEditor(QTextEdit):
             return
             
         # Fallback check
-        cursor = self.cursorForPosition(event.pos())
-        is_att, _, _ = self.cursor_contains_attachment(cursor)
-        if is_att:
-            return
+        # cursor = self.cursorForPosition(event.pos())
+        # is_att, _, _ = self.cursor_contains_attachment(cursor)
+        # if is_att:
+        #    return
             
         super().mouseDoubleClickEvent(event)
 
@@ -416,7 +415,6 @@ class NoteEditor(QTextEdit):
         # We disabled click-to-open for attachments.
         super().mouseReleaseEvent(event)
 
-    # open/save attachment removed
 
 
     def on_contents_change(self, position, charsRemoved, charsAdded):
@@ -678,52 +676,33 @@ class NoteEditor(QTextEdit):
 
     def loadResource(self, type, name):
         import os
-        from PySide6.QtGui import QColor, QPainter
+        from PySide6.QtGui import QTextDocument, QImage
+        from PySide6.QtCore import QUrl
         
         if type == QTextDocument.ImageResource:
             url = name.toString() if isinstance(name, QUrl) else str(name)
-            
-            # 1. Handle DB Images (Legacy support) - REMOVED
-            
-            # 2. Handle Local Files
             path = url
             if isinstance(name, QUrl) and name.isLocalFile():
                 path = name.toLocalFile()
             
-            # 3. Path Resolution Strategy
-            candidate_paths = []
-            candidate_paths.append(path) # Absolute
+            # Normalize path for consistency
+            path = os.path.normpath(path)
             
-            if self.fm:
-                # Relative resolution
-                candidate_paths.append(os.path.join(self.fm.root_path, path))
-                candidate_paths.append(os.path.join(self.fm.root_path, "images", path))
-                if hasattr(self, "current_note_path") and self.current_note_path and not os.path.isabs(path):
-                     note_dir = os.path.dirname(os.path.join(self.fm.root_path, self.current_note_path))
-                     candidate_paths.append(os.path.join(note_dir, path))
-
-            # 4. Attempt Load
-            resolved_path = None
-            for p in candidate_paths:
-                if os.path.exists(p) and os.path.isfile(p):
-                    resolved_path = os.path.normpath(p)
-                    break
+            # 1. Fast Check: Cache Hit
+            if path in NoteEditor._image_cache:
+                return NoteEditor._image_cache[path]
             
-            if resolved_path:
-                # A. Check Cache
-                if resolved_path in NoteEditor._image_cache:
-                    return NoteEditor._image_cache[resolved_path]
-                
-                # B. Check if already loading
-                if resolved_path in NoteEditor._loading_images:
-                     # Return Placeholder
-                     return self._get_placeholder_image()
-                
-                # C. Start Async Load
-                self._start_async_image_load(resolved_path)
-                
-                # Return Placeholder temporarily
+            # 2. Fast Check: Already Loading
+            if path in NoteEditor._loading_images:
                 return self._get_placeholder_image()
+            
+            # 3. Async Load (Handles path resolution, searching, and loading)
+            # We delegate ALL non-cached loading to the background thread.
+            # This avoids UI freezes and handles complicated path lookups.
+            # print(f"DEBUG: loadResource starting async load for {path}")
+            self._start_async_image_load(path)
+            
+            return self._get_placeholder_image()
 
         return super().loadResource(type, name)
 
@@ -744,30 +723,77 @@ class NoteEditor(QTextEdit):
     def _start_async_image_load(self, path):
         NoteEditor._loading_images.add(path)
         
-        from PySide6.QtCore import QRunnable, QObject, Signal
+        from PySide6.QtCore import QRunnable, QObject, Signal, QImage
+        import os
         
         class ImageLoaderSignals(QObject):
             finished = Signal(str, QImage)
             
         class ImageLoader(QRunnable):
-            def __init__(self, path, processor):
+            def __init__(self, path, processor, root_path):
                 super().__init__()
                 self.path = path
                 self.processor = processor
+                self.root_path = root_path
                 self.signals = ImageLoaderSignals()
                 
             def run(self):
-                try:
-                    img = QImage(self.path)
-                    if not img.isNull():
-                        # Process off-thread
-                        processed = self.processor(img)
-                        self.signals.finished.emit(self.path, processed)
-                except Exception as e:
-                    print(f"Async load error {self.path}: {e}")
+                from PySide6.QtGui import QImage
+                target_path = self.path
+                found = False
+                
+                if os.path.exists(target_path) and os.path.isfile(target_path):
+                    found = True
+                else:
+                    # Smart Search
+                    basename = os.path.basename(self.path)
+                    print(f"DEBUG: Searching for {basename} in vault...")
                     
-        loader = ImageLoader(path, self._process_image_static)
-        # Connect signal to update UI
+                    # 1. Quick check commonly used folders
+                    candidates = [
+                        os.path.join(self.root_path, "images", basename),
+                        os.path.join(self.root_path, "adjuntos", basename), # lowercase
+                        os.path.join(self.root_path, "Adjuntos", basename), # Title case
+                        os.path.join(self.root_path, "assets", basename),
+                        os.path.join(self.root_path, basename)
+                    ]
+                    
+                    for c in candidates:
+                        if os.path.exists(c) and os.path.isfile(c):
+                            target_path = c
+                            found = True
+                            print(f"DEBUG: Found in quick candidate: {target_path}")
+                            break
+                    
+                    # 2. Recursive Search (if not found in candidates)
+                    if not found:
+                         for root, dirs, files in os.walk(self.root_path):
+                            dirs[:] = [d for d in dirs if not d.startswith('.')]
+                            if basename in files:
+                                target_path = os.path.join(root, basename)
+                                found = True
+                                print(f"DEBUG: Found via recursive walk: {target_path}")
+                                break
+
+                img = QImage()
+                if found:
+                    try:
+                        loaded = QImage(target_path)
+                        if not loaded.isNull():
+                            img = loaded
+                            if self.processor:
+                                img = self.processor(img)
+                        else:
+                            print(f"DEBUG: Failed to load QImage from {target_path}")
+                    except Exception as e:
+                         print(f"ERROR: Image load exception: {e}")
+                else:
+                    print(f"DEBUG: Could not find image {self.path} anywhere.")
+                                        
+                # Always emit signal (with valid image or null) to cleanup loading state
+                self.signals.finished.emit(self.path, img)
+
+        loader = ImageLoader(path, self._process_image_static, self.fm.root_path)
         loader.signals.finished.connect(self._on_image_loaded)
         
         pool = self.get_thread_pool()
@@ -799,8 +825,6 @@ class NoteEditor(QTextEdit):
     def _on_image_loaded(self, path, image):
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QTextDocument
-        # DEBUG
-        # print(f"Image loaded async: {path}")
         
         if path in NoteEditor._loading_images:
             NoteEditor._loading_images.remove(path)
@@ -808,38 +832,25 @@ class NoteEditor(QTextEdit):
         # Add to Cache
         self._cache_image(path, image)
         
-        # Force Document to reload this resource
+        # Update Document Resources
+        # Since we set the name to the Absolute Path in render_images, 
+        # that IS the key.
         doc = self.document()
         
-        # Use QUrl.fromLocalFile which handles scheme correctly
-        url = QUrl.fromLocalFile(path)
-        doc.addResource(QTextDocument.ImageResource, url, image)
-        
-        # Also try the string path as QUrl (sometimes Qt uses this internally if not strict)
+        # We try both URL and String forms to be safe
+        doc.addResource(QTextDocument.ImageResource, QUrl.fromLocalFile(path), image)
         doc.addResource(QTextDocument.ImageResource, QUrl(path), image)
         
         # Force Layout Update
-        # Just viewport().update() might not enough if geometry didn't change (same size placeholder?)
-        # But our placeholder is fixed size, real image might differ.
         self.viewport().update()
         
-        # Force re-layout by toggling wrap mode slightly or just setSame
-        # This is a hack but ensures the document re-queries resources
-        # self.document().setPageSize(self.document().pageSize()) # Minimal impact
+        # Force redraw
+        doc.markContentsDirty(0, doc.characterCount())
         
-        # Try finding the block and marking it dirty?
-        # A simpler way often used:
-        cursor = self.textCursor()
-        # triggering a fake content change
-        # invalidating the frame
-        
-        # Actually, simply addResource matches the URL name used in insertImage.
-        # render_images used: fmt.setName(resolved_path) -> String absolute path.
-        # So QUrl(resolved_path) IS likely the key.
-        # But QUrl("c:/foo") is not valid URL? QUrl::fromLocalFile("c:/foo") -> file:///c:/foo
-        
-        # Let's ensure we cover the "scheme-less" variant if that's what's happening.
-        pass
+        # Line wrap hack
+        mode = self.lineWrapMode()
+        self.setLineWrapMode(self.LineWrapMode.NoWrap if mode == self.LineWrapMode.WidgetWidth else self.LineWrapMode.WidgetWidth)
+        self.setLineWrapMode(mode)
 
     
     def render_images(self):
@@ -853,7 +864,7 @@ class NoteEditor(QTextEdit):
         matches = []
         
         # A. Standard Markdown: ![alt](url)
-        from PySide6.QtCore import QRegularExpression
+        from PySide6.QtCore import QRegularExpression, QUrl
         regex_std = QRegularExpression(r"!\[.*?\]\((.*?)\)")
         it_std = regex_std.globalMatch(text)
         while it_std.hasNext():
@@ -878,64 +889,17 @@ class NoteEditor(QTextEdit):
         matches.sort(key=lambda x: x[0], reverse=True)
         
         for start, end, target, is_wikilink in matches:
-            # Resolve Path
-            # self.fm is available?
-            resolved_path = target
+            # OPTIMIZATION: Use the target string directly.
+            # We let loadResource handle the resolution lazily and correctly using the context (current_note_path).
+            # This avoids ALL I/O in the layout pass.
             
-            if hasattr(self, "fm") and self.fm:
-                # 1. Try Absolute (if already absolute)
-                import os
-                if os.path.exists(target):
-                    resolved_path = target
-                else:
-                    # 2. Try Relative to Current Note (BaseUrl approach)
-                    # We need the current note's directory.
-                    # self.current_note_path might be set by EditorArea?
-                    # EditorArea sets `self.text_editor.current_note_path = note_id`
-                    
-                    found = False
-                    
-                    # Search Paths:
-                    # a. Same directory as note
-                    # b. 'Adjuntos' folder in vault root
-                    # c. Vault root
-                    
-                    if hasattr(self, "current_note_path") and self.current_note_path:
-                        # note_id usually is relative to root.
-                        # fm.root_path is root.
-                        
-                        note_abs_path = os.path.join(self.fm.root_path, self.current_note_path)
-                        note_dir = os.path.dirname(note_abs_path)
-                        
-                        # Check same dir
-                        path_a = os.path.join(note_dir, target)
-                        if os.path.exists(path_a):
-                            resolved_path = path_a
-                            found = True
-                    
-                    if not found:
-                        # Check root Adjuntos
-                        path_b = os.path.join(self.fm.root_path, "Adjuntos", target)
-                        if os.path.exists(path_b):
-                            resolved_path = path_b
-                            found = True
-                            
-                    if not found:
-                        # Check root
-                        path_c = os.path.join(self.fm.root_path, target)
-                        if os.path.exists(path_c):
-                            resolved_path = path_c
-                            found = True
-
             # Insert Image
             cursor.setPosition(end)
             
             from PySide6.QtGui import QTextImageFormat
             fmt = QTextImageFormat()
-            fmt.setName(resolved_path) # Absolute path works best here
+            fmt.setName(target) 
             fmt.setWidth(600) # Default
-            
-            # TODO: Parse size from WikiLink ("|100") if needed
             
             cursor.insertImage(fmt)
 

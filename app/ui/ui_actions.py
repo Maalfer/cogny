@@ -2,7 +2,6 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QFileDialog, QToolBar
 from app.ui.widgets import ModernInfo, ModernAlert
-# MarkdownRenderer import removed (unused)
 import os
 
 class UiActionsMixin:
@@ -14,10 +13,8 @@ class UiActionsMixin:
         self.act_open_vault = QAction("Abrir Bóveda...", self)
         self.act_open_vault.triggered.connect(self.open_vault)
         
-        # self.act_save_as_db removed
 
         
-        # Read Later action removed
 
         self.act_new_root = QAction("Nueva Nota Raíz", self)
         self.act_new_root.triggered.connect(self.sidebar.add_root_note)
@@ -30,8 +27,6 @@ class UiActionsMixin:
         
         self.act_new_folder_child = QAction("Nueva Carpeta Hija", self)
         self.act_new_folder_child.triggered.connect(self.sidebar.add_child_folder)
-        
-        # Legacy Import/Export actions removed
 
         self.act_export_pdf = QAction("Exportar PDF", self)
         self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
@@ -136,7 +131,6 @@ class UiActionsMixin:
              if selected_files:
                  self.load_vault(selected_files[0])
 
-    # save_as_database removed
 
 
     def switch_vault(self, new_path):

@@ -59,10 +59,8 @@ class UiSetupMixin:
         file_menu = menubar.addMenu("&Archivo")
         file_menu.addAction(self.act_new_vault) # Renamed from db action 
         file_menu.addAction(self.act_open_vault)
-        # file_menu.addAction(self.act_save_as_db) # Removed in refactor
         
         file_menu.addSeparator()
-        # Read Later feature removed
         
         file_menu.addSeparator()
         
@@ -72,7 +70,6 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_child)
         file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
-        # Legacy Import/Export items removed from File Menu
         file_menu.addAction(self.act_export_pdf)
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
@@ -110,8 +107,6 @@ class UiSetupMixin:
         tools_menu = menubar.addMenu("&Herramientas")
         tools_menu.addAction(self.act_theme)
         
-        # Legacy Import/Export items removed from Tools Menu
-        # Removed Optimize Database action
         
         # Help Menu
         help_menu = menubar.addMenu("&Ayuda")

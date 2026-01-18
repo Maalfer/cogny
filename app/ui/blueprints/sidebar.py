@@ -155,7 +155,6 @@ class Sidebar(QWidget):
                  action_create_folder.triggered.connect(self.add_sibling_folder)
             menu.addAction(action_create_folder)
 
-            # Read Later Option removed
             
             action_delete = QAction("Eliminar", self)
             action_delete.triggered.connect(self.delete_note)
@@ -311,7 +310,6 @@ class Sidebar(QWidget):
                 self.tree_view.setCurrentIndex(proxy_index)
                 self.tree_view.scrollTo(proxy_index)
 
-    # Read Later feature removed
 
     def get_selected_notes(self):
         """Returns a list of tuples (note_id, title) for all selected items."""

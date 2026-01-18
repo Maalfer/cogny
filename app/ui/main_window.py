@@ -6,11 +6,10 @@ import os
 from app.storage.file_manager import FileManager
 from app.ui.ui_state import UiStateMixin
 from app.ui.ui_theme import UiThemeMixin
-from app.ui.ui_workers import UiWorkersMixin
 from app.ui.ui_actions import UiActionsMixin
 from app.ui.ui_setup import UiSetupMixin
 
-class MainWindow(UiStateMixin, UiThemeMixin, UiWorkersMixin, UiActionsMixin, UiSetupMixin, QMainWindow):
+class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMainWindow):
     def __init__(self, vault_path=None, is_draft=False):
         super().__init__()
         self.is_draft = is_draft
