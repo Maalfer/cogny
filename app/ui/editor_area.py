@@ -6,7 +6,7 @@ from app.ui.editor import NoteEditor
 from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm
 from app.ui.highlighter import MarkdownHighlighter
 from app.ui.themes import ThemeManager
-from app.ui.blueprints.markdown import MarkdownRenderer
+from app.ui.markdown_renderer import MarkdownRenderer
 
 class EditorArea(QWidget):
     status_message = Signal(str, int) # message, timeout

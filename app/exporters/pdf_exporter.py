@@ -1,5 +1,5 @@
 from app.ui.themes import ThemeManager
-from app.ui.blueprints.markdown import MarkdownRenderer
+from app.ui.markdown_renderer import MarkdownRenderer
 from weasyprint import HTML, CSS, default_url_fetcher
 import os
 

@@ -3,8 +3,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from app.ui.buscador import SearchManager
 from app.ui.barra_herramientas import FormatToolbar
-from app.ui.blueprints.sidebar import Sidebar
-from app.ui.blueprints.editor_area import EditorArea
+from app.ui.sidebar import Sidebar
+from app.ui.editor_area import EditorArea
 
 class UiSetupMixin:
     def setup_ui(self):

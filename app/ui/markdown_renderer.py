@@ -49,7 +49,7 @@ class MarkdownRenderer:
         
         # 2. Convert Markdown to HTML
         try:
-            from app.ui.blueprints.custom_markdown import CognyInternalExtension
+            from app.ui.custom_markdown import CognyInternalExtension
             
             html_content = markdown.markdown(
                 text, 
