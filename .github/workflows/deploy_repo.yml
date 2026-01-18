@@ -28,23 +28,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y reprepro
 
-      - name: Import GPG Key
-        id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-
       - name: Build and Update Repo
         env:
-          GPG_KEY_ID: ${{ steps.import_gpg.outputs.keyid }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           chmod +x compilar-deb.sh gestion-repositorio.sh
           # Run the management script
-          # validation of GPG_KEY_ID happens inside
-           ./gestion-repositorio.sh
+          ./gestion-repositorio.sh
 
       - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5

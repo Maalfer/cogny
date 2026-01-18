@@ -161,11 +161,19 @@ class UiActionsMixin:
         self.setup_ui()
         self.setWindowTitle(f"Cogny - {os.path.basename(new_path)}")
 
-    def on_sidebar_note_selected(self, note_id, is_folder, title):
+    def on_sidebar_note_selected(self, note_id, is_folder):
         # Auto-save previous note
         self.editor_area.save_current_note()
+
+        name = os.path.basename(note_id)
+        self.editor_area.load_note(note_id, is_folder, title=name)
+        
+        # Save State
+        if not is_folder:
+            settings = QSettings()
+            settings.setValue(f"last_note_{self.vault_path}", note_id)
         # Load new note with metadata from sidebar (avoids DB query)
-        self.editor_area.load_note(note_id, is_folder=is_folder, title=title)
+        self.editor_area.load_note(note_id, is_folder=is_folder, title=name)
 
     def on_sidebar_action(self, action, arg):
         if action == "export_pdf":

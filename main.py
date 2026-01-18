@@ -34,16 +34,10 @@ def main():
     splash.show()
     
     def launch_main_app():
-        # This function runs after warm-up
+        # This function runs after backend warm-up
         
         # Load Theme (now fast due to warm-up)
-        # from PySide6.QtCore import QSettings # redundant import, but safe
-        # settings = QSettings()
-        # theme_name = settings.value("theme", "Dark")
-        # app.setPalette(ThemeManager.get_palette(theme_name))
-        # Note: ThemeManager usage in Splash does not set app palette, 
-        # but it caches the palette generation. We must set it here.
-        from PySide6.QtCore import QSettings
+        from PySide6.QtCore import QSettings, QTimer
         settings = QSettings()
         theme_name = settings.value("theme", "Dark")
         app.setPalette(ThemeManager.get_palette(theme_name))
@@ -58,6 +52,12 @@ def main():
         is_draft = False
         if show_setup:
             from app.ui.dialogs_setup import SetupDialog
+            # Ensure splash is hidden or closed if we need to show infinite dialog?
+            # Actually, we can keep splash hidden or show setup on top.
+            # But SetupDialog is modal. Splash is TopMost.
+            # We should probably hide splash while setup is running.
+            splash.hide()
+            
             setup_dialog = SetupDialog()
             if setup_dialog.exec():
                 vault_path = setup_dialog.selected_vault_path
@@ -71,16 +71,33 @@ def main():
                 else:
                     settings.setValue("last_vault_path", vault_path)
                     is_draft = False
+                
+                # Show splash again for the final loading phase
+                splash.show()
+                splash.status_label.setText("Cargando entorno...")
             else:
                 sys.exit(0)
         
-        # Launch Main Window
+        # Instantiate Main Window (Hidden)
         global window # Keep reference
-        window = MainWindow(vault_path, is_draft=is_draft)
-        window.show()
+        # Pass splash reference to update status? Or use signal?
         
-        # Re-enable quit on close
-        app.setQuitOnLastWindowClosed(True)
+        window = MainWindow(vault_path, is_draft=is_draft)
+        # window.show() REMOVED early show
+        
+        def show_and_close_splash():
+            window.show()
+            # Restore quit on close
+            app.setQuitOnLastWindowClosed(True)
+            splash.close()
+            
+        # Connect ready signal
+        window.ready.connect(show_and_close_splash)
+        
+        # Trigger Preload
+        splash.status_label.setText("Abriendo última nota...")
+        # Use singleShot to allow event loop to process the status update
+        QTimer.singleShot(10, window.preload_initial_state)
         
     # Connect Splash Signal
     splash.worker.finished_warmup.connect(launch_main_app)

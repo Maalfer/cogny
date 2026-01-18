@@ -38,6 +38,11 @@ class FileManager(QObject):
         """Public alias for _get_abs_path"""
         return self._get_abs_path(rel_path)
 
+    def file_exists(self, rel_path: str) -> bool:
+        """Checks if a file exists given its relative path."""
+        path = self._get_abs_path(rel_path)
+        return os.path.exists(path) and os.path.isfile(path)
+
     def resolve_file_path(self, filename_or_path: str) -> Optional[str]:
         """
         Smart resolution of a file path.

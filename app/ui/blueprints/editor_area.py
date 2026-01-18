@@ -10,6 +10,7 @@ from app.ui.blueprints.markdown import MarkdownRenderer
 
 class EditorArea(QWidget):
     status_message = Signal(str, int) # message, timeout
+    note_loaded = Signal(bool) # success
 
     def __init__(self, file_manager, parent=None):
         super().__init__(parent)
@@ -79,7 +80,7 @@ class EditorArea(QWidget):
         if hasattr(self, "highlighter"):
              self.highlighter.set_theme(theme_name)
 
-    def load_note(self, note_id, is_folder=None, title=None):
+    def load_note(self, note_id, is_folder=None, title=None, preload_images=False):
         if is_folder:
              self.current_note_id = None
              self.show_folder_placeholder(title)
@@ -103,9 +104,9 @@ class EditorArea(QWidget):
         # This allows the UI to repaint the "Loading..." message properly.
         from PySide6.QtCore import QTimer
         # 10ms is enough to let the event loop process the paint events
-        QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title))
+        QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title, preload_images))
 
-    def _perform_load_note(self, note_id, title):
+    def _perform_load_note(self, note_id, title, preload_images=False):
         if self.current_note_id != note_id:
             return
 
@@ -132,6 +133,43 @@ class EditorArea(QWidget):
         except Exception as e:
             print(f"Error checking base url: {e}")
 
+        # Trigger Preload if requested
+        if preload_images and markdown_content:
+            # Simple Regex Extraction to find image paths
+            import re
+            # Match standard and wikilink images
+            # This is a 'best effort' to find top images quickly
+            # We scan the first 20k chars (usually header/intro images)
+            scan_text = markdown_content[:20000] 
+            
+            # Standard: ![...](path)
+            std_matches = re.findall(r"!\[.*?\]\((.*?)\)", scan_text)
+            
+            # Wiki: ![[path|...]] or ![[path]]
+            wiki_matches = []
+            for m in re.findall(r"!\[\[(.*?)\]\]", scan_text):
+                if "|" in m:
+                    wiki_matches.append(m.split("|")[0])
+                else:
+                    wiki_matches.append(m)
+            
+            all_paths = std_matches + wiki_matches
+            
+            if all_paths:
+                # We block the flow here until images are loaded
+                # Define callback to resume
+                def resume_loading():
+                    from PySide6.QtCore import QThread
+                    print(f"DEBUG: resume_loading called from thread: {QThread.currentThread()}")
+                    self._start_rendering(markdown_content)
+                    
+                self.text_editor.preload_images(all_paths, resume_loading)
+                return
+
+        # If no preload needed or no images, proceed directly
+        self._start_rendering(markdown_content)
+
+    def _start_rendering(self, markdown_content):
         # --- PROGRESSIVE LOADING STRATEGY ---
         CHUNK_SIZE = 10000 # Characters per frame (approx 2-3 pages)
         
@@ -201,6 +239,7 @@ class EditorArea(QWidget):
         # Force one final update
         self.text_editor.update_extra_selections()
         self.status_message.emit("Nota cargada (completa).", 2000)
+        self.note_loaded.emit(True)
 
     def show_folder_placeholder(self, title):
         self.title_edit.setPlainText(title)

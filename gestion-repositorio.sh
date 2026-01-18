@@ -59,10 +59,20 @@ fi
 # ============================================
 echo -e "\n${YELLOW}→ Configurando firmado GPG...${NC}"
 
-# Si no se especificó KEY_ID, intentar detectarla
+# Si no se especificó KEY_ID, intentar detectarla o importarla
 if [ -z "$GPG_KEY_ID" ]; then
-    echo -e "${YELLOW}→ Buscando clave GPG disponible...${NC}"
-    GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+    # Revisar si se pasaron claves por variables de entorno (CI/CD)
+    if [ -n "$GPG_PRIVATE_KEY" ]; then
+        echo -e "${YELLOW}→ Importando clave privada GPG desde variable de entorno...${NC}"
+        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+        
+        # Opcional: Configurar confianza final, aunque usualmente basta con importar
+        # Obtener el ID de la clave recién importada
+        GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+    else
+        echo -e "${YELLOW}→ Buscando clave GPG disponible en el sistema...${NC}"
+        GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+    fi
     
     if [ -z "$GPG_KEY_ID" ]; then
         echo -e "${RED}Error: No se encontró ninguna clave GPG.${NC}"
@@ -86,7 +96,20 @@ echo -e "\n${YELLOW}→ Configurando estructura del repositorio...${NC}"
 mkdir -p ${APT_REPO_DIR}/conf
 
 # Crear archivo de configuración distributions
-cat > ${APT_REPO_DIR}/conf/distributions <<EOF
+if [ -n "$GPG_PASSPHRASE" ] && [ -n "$GPG_PRIVATE_KEY" ]; then
+    # En CI/CD con passphrase, firmamos manualmente para evitar problemas con gpg-agent
+    cat > ${APT_REPO_DIR}/conf/distributions <<EOF
+Origin: Cogny
+Label: Cogny App
+Codename: stable
+Architectures: amd64
+Components: main
+Description: Repositorio Oficial de Cogny
+EOF
+    DO_MANUAL_SIGN=true
+else
+    # En local o sin passphrase explícita, dejamos que reprepro firme (usa gpg-agent local)
+    cat > ${APT_REPO_DIR}/conf/distributions <<EOF
 Origin: Cogny
 Label: Cogny App
 Codename: stable
@@ -95,6 +118,8 @@ Components: main
 Description: Repositorio Oficial de Cogny
 SignWith: ${GPG_KEY_ID}
 EOF
+    DO_MANUAL_SIGN=false
+fi
 
 echo -e "${GREEN}✓ Configuración del repositorio creada.${NC}"
 
@@ -108,6 +133,22 @@ reprepro -b ${APT_REPO_DIR} remove stable ${APP_NAME} 2>/dev/null || true
 
 # Añadir nueva versión
 reprepro -b ${APT_REPO_DIR} includedeb stable ${DEB_FILE}
+
+# Firmado manual si es necesario
+if [ "$DO_MANUAL_SIGN" = true ]; then
+    echo -e "${YELLOW}→ Firmando manualmente Release e InRelease...${NC}"
+    RELEASE_FILE="${APT_REPO_DIR}/dists/stable/Release"
+    
+    # Release.gpg (detached signature)
+    rm -f "${RELEASE_FILE}.gpg"
+    echo "$GPG_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback -u "$GPG_KEY_ID" --detach-sign --armor --output "${RELEASE_FILE}.gpg" "$RELEASE_FILE"
+    
+    # InRelease (clearsign)
+    rm -f "${APT_REPO_DIR}/dists/stable/InRelease"
+    echo "$GPG_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback -u "$GPG_KEY_ID" --clearsign --output "${APT_REPO_DIR}/dists/stable/InRelease" "$RELEASE_FILE"
+    
+    echo -e "${GREEN}✓ Firmado manual completado.${NC}"
+fi
 
 echo -e "${GREEN}✓ Paquete añadido al repositorio.${NC}"
 

@@ -636,6 +636,74 @@ class NoteEditor(QTextEdit):
         pool = self.get_thread_pool()
         pool.start(loader)
 
+    def preload_images(self, paths, on_finish_callback=None):
+        """
+        Pre-loads a list of image paths into the cache in background.
+        Calls on_finish_callback() when all are done or failed (best effort).
+        """
+        if not paths:
+            if on_finish_callback:
+                on_finish_callback()
+            return
+
+        # Filter out already cached
+        needed = [p for p in paths if p not in NoteEditor._image_cache]
+        
+        if not needed:
+            if on_finish_callback:
+                on_finish_callback()
+            return
+            
+        # We need a way to track progress for this specific batch
+        # We'll use a simple counter mechanism or a group loader
+        # Since this is likely called once during splash, we can keep it simple.
+        
+        # Keep references to prevent GC premature collection crashing signals
+        # We attach it to the editor instance to persist until done
+        self._active_preloaders = []
+        
+        total = len(needed)
+        processed = 0
+
+        def check_done():
+            nonlocal processed
+            processed += 1
+            if processed >= total:
+                # Cleanup references
+                self._active_preloaders = []
+                
+                if on_finish_callback:
+                    # Enforce Main Thread for UI updates (callback starts rendering)
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(0, self, on_finish_callback)
+                    
+        # Launch loaders
+        for path in needed:
+            # We reuse ImageLoader but we need to intercept the finished signal 
+            # to decrement our local counter, while ALSO updating the cache globally.
+            
+            loader = ImageLoader(path, self._process_image_static, self.fm.root_path)
+            
+            # CRITICAL: Disable autoDelete to prevent C++ from deleting the object
+            # while Python still holds a reference or signals are emitting.
+            # We will let Python GC handle it when we clear _active_preloaders.
+            loader.setAutoDelete(False)
+            self._active_preloaders.append(loader)
+            
+            # Connect to global cache update first
+            loader.signals.finished.connect(self._on_image_loaded_no_ui) 
+            
+            # Then connect to our progress tracker
+            # We need to wrap check_done to accept arguments or ignore them
+            loader.signals.finished.connect(lambda p, i: check_done())
+            
+            pool = self.get_thread_pool()
+            pool.start(loader)
+
+    def _on_image_loaded_no_ui(self, path, image):
+        """Callback for preloading that only updates cache, no UI repaint."""
+        self._cache_image(path, image)
+
     @staticmethod
     def _process_image_static(image):
         # Static version used by worker thread

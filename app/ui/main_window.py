@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QMainWindow, QToolBar
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Signal
 import os
 
 from app.storage.file_manager import FileManager
@@ -10,6 +10,7 @@ from app.ui.ui_actions import UiActionsMixin
 from app.ui.ui_setup import UiSetupMixin
 
 class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMainWindow):
+    ready = Signal()
     def __init__(self, vault_path=None, is_draft=False):
         super().__init__()
         self.is_draft = is_draft
@@ -37,6 +38,34 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         settings = QSettings()
         current_theme = settings.value("theme", "Dark")
         self.switch_theme(current_theme)
+
+    def preload_initial_state(self):
+        """Called by splash to pre-load content before showing window."""
+        # 1. Check for last opened note
+        settings = QSettings()
+        # We need to implement last_note saving/loading if not present.
+        # Assuming we can get it from UiStateMixin or just store it.
+        # Let's check if Sidebar stores current selection.
+        # Ideally, we should add 'last_opened_note' to settings when saving/opening.
+        
+        last_note = settings.value(f"last_note_{self.vault_path}", "")
+        
+        if last_note and self.fm.file_exists(last_note): # Check existence
+             # Connect to editor area loaded signal
+             self.editor_area.note_loaded.connect(self._on_preload_finished)
+             
+             # Determine title (basename)
+             title = os.path.basename(last_note)
+             
+             # Trigger Load
+             self.editor_area.load_note(last_note, is_folder=False, title=title, preload_images=True)
+        else:
+             # Nothing to load, ready immediately
+             self.ready.emit()
+             
+    def _on_preload_finished(self, success):
+        self.editor_area.note_loaded.disconnect(self._on_preload_finished)
+        self.ready.emit()
 
     def load_vault(self, vault_path):
         import os
