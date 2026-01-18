@@ -106,8 +106,6 @@ class EditorArea(QWidget):
         QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title))
 
     def _perform_load_note(self, note_id, title):
-        # Check if the user changed selection during the delay?
-        # If current_note_id changed, abort.
         if self.current_note_id != note_id:
             return
 
@@ -117,49 +115,92 @@ class EditorArea(QWidget):
         # Load Content from FS
         markdown_content = self.fm.read_note(note_id)
         if markdown_content is None:
-            markdown_content = "" # New or empty
+            markdown_content = ""
             
-        # Prepare Editor for bulk update
-        self.text_editor.setUpdatesEnabled(False)
-        self.text_editor.blockSignals(True)
-        # CRITICAL OPTIMIZATION: Block document signals to prevent "contentsChange" for every image insertion
-        self.text_editor.document().blockSignals(True)
-        # self.text_editor.set_loading_state(True) # Already set in load_note
-        
+        # Clean Content
+        if markdown_content:
+            markdown_content = markdown_content.replace('\ufffc', '')
+
+        # Setup Base URL
         try:
-            # Set Base URL for resolving local images
             from PySide6.QtCore import QUrl
             import os
-            # Base Path should be the directory containing the note
             full_path = os.path.join(self.fm.root_path, note_id)
             note_dir = os.path.dirname(full_path)
             base_url = QUrl.fromLocalFile(note_dir + os.sep)
             self.text_editor.document().setBaseUrl(base_url)
-            
-            # Load Plain Text (Source Mode) to allow Highlighter to work (Live Preview)
-            # Fix: older saves might have \ufffc (obj replacement char). Strip it on load.
-            if markdown_content:
-                markdown_content = markdown_content.replace('\ufffc', '')
-            
-            self.text_editor.setPlainText(markdown_content)
-            
-            # Helper to render images inline (Live Preview Style)
-            # We process the text to find image links and insert image objects
-            self.text_editor.render_images()
-            
-            # Restore Visuals
-            self.highlighter.setDocument(self.text_editor.document())
-            
-        finally:
-            self.text_editor.set_loading_state(False)
-            self.text_editor.document().blockSignals(False)
-            self.text_editor.blockSignals(False)
-            self.text_editor.setUpdatesEnabled(True)
-            
-            # Force one final update after unblocking
-            self.text_editor.update_extra_selections()
+        except Exception as e:
+            print(f"Error checking base url: {e}")
+
+        # --- PROGRESSIVE LOADING STRATEGY ---
+        CHUNK_SIZE = 10000 # Characters per frame (approx 2-3 pages)
         
-        self.status_message.emit("Nota cargada.", 1000)
+        # 1. Initial Setup (Block heavy signals but allow updates?)
+        self.text_editor.setUpdatesEnabled(False)
+        self.text_editor.blockSignals(True)
+        # We block document signals initially to load the first chunk fast
+        self.text_editor.document().blockSignals(True)
+        
+        # Split content
+        self._pending_chunks = [markdown_content[i:i+CHUNK_SIZE] for i in range(0, len(markdown_content), CHUNK_SIZE)]
+        
+        # 2. Load First Chunk Immediately (Synchronous)
+        if self._pending_chunks:
+            first_chunk = self._pending_chunks.pop(0)
+            self.text_editor.setPlainText(first_chunk)
+            # Render images for this chunk range
+            self.text_editor.render_images(0, len(first_chunk))
+            
+            # Restore visuals for first chunk
+            self.highlighter.setDocument(self.text_editor.document())
+        else:
+            self.text_editor.setPlainText("")
+            
+        # 3. Enable Updates so user sees first chunk
+        self.text_editor.document().blockSignals(False)
+        self.text_editor.blockSignals(False)
+        self.text_editor.setUpdatesEnabled(True)
+        
+        # 4. Schedule rest of the content (if any)
+        if self._pending_chunks:
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._load_next_chunk)
+        else:
+            self._finish_loading()
+
+    def _load_next_chunk(self):
+        if not self._pending_chunks or self.current_note_id is None:
+            self._finish_loading()
+            return
+            
+        # Take next chunk
+        chunk = self._pending_chunks.pop(0)
+        
+        # Append without blocking global signals (so UI paints?)
+        # Actually, appending triggers layout. If we block signals, we might suppress painting?
+        # QWidget UpdatesEnabled handles painting.
+        # layout changes happen on document modification.
+        # We want the user to see it growing.
+        
+        try:
+            self.text_editor.append_chunk(chunk)
+        except Exception as e:
+            print(f"Error appending chunk: {e}")
+            
+        # Schedule next
+        if self._pending_chunks:
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._load_next_chunk)
+        else:
+            self._finish_loading()
+
+    def _finish_loading(self):
+        if getattr(self.text_editor, "is_loading", False):
+             self.text_editor.set_loading_state(False)
+             
+        # Force one final update
+        self.text_editor.update_extra_selections()
+        self.status_message.emit("Nota cargada (completa).", 2000)
 
     def show_folder_placeholder(self, title):
         self.title_edit.setPlainText(title)

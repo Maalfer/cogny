@@ -675,39 +675,66 @@ class NoteEditor(QTextEdit):
         self.setLineWrapMode(mode)
 
     
-    def render_images(self):
-        """Scans the document for Markdown image links (Standard & WikiLink) and inserts QTextImageFormat objects."""
+    def render_images(self, start_pos=0, end_pos=None):
+        """
+        Scans the document for Markdown image links and inserts QTextImageFormat objects.
+        Supports incremental rendering via start_pos/end_pos.
+        """
         text = self.toPlainText()
+        if end_pos is None:
+            end_pos = len(text)
+            
+        # Optimization: Only scan the relevant substring (plus some context if needed?)
+        # For simplicity, we scan the whole text but only process matches within range.
+        # Scanning large text is fast; inserting images is expensive.
+        # Ideally, we substring: substring = text[start_pos:end_pos]
+        # But offsets need adjustment.
+        
         cursor = self.textCursor()
         
         # 1. Collect all matches (Standard + WikiLink)
-        # We need to handle them in reverse order of position to avoid invalidating offsets.
-        # Format: (start, end, image_source_or_name, is_wikilink)
         matches = []
         
         # A. Standard Markdown: ![alt](url)
-        from PySide6.QtCore import QRegularExpression, QUrl
+        from PySide6.QtCore import QRegularExpression
         regex_std = QRegularExpression(r"!\[.*?\]\((.*?)\)")
-        it_std = regex_std.globalMatch(text)
+        
+        # Use match iterator on the global text but verify range
+        # Note: If text is HUGE, substring extraction might be better for regex PERF.
+        # Let's try substring extraction for the scope.
+        search_text = text[start_pos:end_pos]
+        
+        it_std = regex_std.globalMatch(search_text)
         while it_std.hasNext():
             m = it_std.next()
-            matches.append((m.capturedStart(), m.capturedEnd(), m.captured(1), False))
+            # Adjust offsets to global
+            g_start = start_pos + m.capturedStart()
+            g_end = start_pos + m.capturedEnd()
+            matches.append((g_start, g_end, m.captured(1), False))
             
         # B. Obsidian WikiLink: ![[filename|options]] or ![[filename]]
-        # Note: We need to capture the filename part before any '|'
         regex_wiki = QRegularExpression(r"!\[\[(.*?)\]\]")
-        it_wiki = regex_wiki.globalMatch(text)
+        it_wiki = regex_wiki.globalMatch(search_text)
         while it_wiki.hasNext():
             m = it_wiki.next()
             content = m.captured(1)
-            # Handle piping for dimensions: "image.png|100"
             if "|" in content:
                 filename = content.split("|")[0]
             else:
                 filename = content
-            matches.append((m.capturedStart(), m.capturedEnd(), filename.strip(), True))
             
-        # Sort matches by start position (descending) to process bottom-up
+            g_start = start_pos + m.capturedStart()
+            g_end = start_pos + m.capturedEnd()
+            matches.append((g_start, g_end, filename.strip(), True))
+            
+        # Sort matches by start position (descending) to prevent offset drift
+        # Wait, if we use beginEditBlock and fixed offsets...
+        # If we insert images, we replace characters? No, we insert AT position.
+        # But we are NOT replacing the text code `![...]`. We are inserting the image
+        # typically *after* or *as replacement*?
+        # Original code: `cursor.setPosition(end); cursor.insertImage(...)`
+        # This appends the image object AFTER the markdown text. It doesn't replace it.
+        # So we process descending is still good practice.
         matches.sort(key=lambda x: x[0], reverse=True)
         
         if not matches: return
@@ -715,21 +742,28 @@ class NoteEditor(QTextEdit):
         cursor.beginEditBlock()
         try:
             for start, end, target, is_wikilink in matches:
-                # OPTIMIZATION: Use the target string directly.
-                # We let loadResource handle the resolution lazily and correctly using the context (current_note_path).
-                # This avoids ALL I/O in the layout pass.
-                
-                # Insert Image
                 cursor.setPosition(end)
                 
                 from PySide6.QtGui import QTextImageFormat
                 fmt = QTextImageFormat()
                 fmt.setName(target) 
-                fmt.setWidth(600) # Default
+                fmt.setWidth(600) 
                 
                 cursor.insertImage(fmt)
         finally:
             cursor.endEditBlock()
+
+    def append_chunk(self, chunk_text):
+        """Appends text chunk and renders images only within that chunk."""
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        
+        start_pos = cursor.position()
+        cursor.insertText(chunk_text)
+        end_pos = cursor.position()
+        
+        # Render images in the new chunk
+        self.render_images(start_pos, end_pos)
 
     def _cache_image(self, image_id, image):
         """Add image to cache with LRU eviction. Key can be int or str."""
