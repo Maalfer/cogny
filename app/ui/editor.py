@@ -707,20 +707,26 @@ class NoteEditor(QTextEdit):
         # Sort matches by start position (descending) to process bottom-up
         matches.sort(key=lambda x: x[0], reverse=True)
         
-        for start, end, target, is_wikilink in matches:
-            # OPTIMIZATION: Use the target string directly.
-            # We let loadResource handle the resolution lazily and correctly using the context (current_note_path).
-            # This avoids ALL I/O in the layout pass.
-            
-            # Insert Image
-            cursor.setPosition(end)
-            
-            from PySide6.QtGui import QTextImageFormat
-            fmt = QTextImageFormat()
-            fmt.setName(target) 
-            fmt.setWidth(600) # Default
-            
-            cursor.insertImage(fmt)
+        if not matches: return
+
+        cursor.beginEditBlock()
+        try:
+            for start, end, target, is_wikilink in matches:
+                # OPTIMIZATION: Use the target string directly.
+                # We let loadResource handle the resolution lazily and correctly using the context (current_note_path).
+                # This avoids ALL I/O in the layout pass.
+                
+                # Insert Image
+                cursor.setPosition(end)
+                
+                from PySide6.QtGui import QTextImageFormat
+                fmt = QTextImageFormat()
+                fmt.setName(target) 
+                fmt.setWidth(600) # Default
+                
+                cursor.insertImage(fmt)
+        finally:
+            cursor.endEditBlock()
 
     def _cache_image(self, image_id, image):
         """Add image to cache with LRU eviction. Key can be int or str."""

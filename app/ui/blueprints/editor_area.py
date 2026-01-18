@@ -103,33 +103,37 @@ class EditorArea(QWidget):
         if markdown_content is None:
             markdown_content = "" # New or empty
             
-        # Set Base URL for resolving local images
-        # We point to Root so "Adjuntos/img.png" resolves
-        from PySide6.QtCore import QUrl
-        import os
-        # Base Path should be the directory containing the note
-        # FileManager has _get_abs_path but it is internal. `read_note` handles it.
-        # We can reconstruct it: root + note_id
-        # Let's use fm.root_path
-        full_path = os.path.join(self.fm.root_path, note_id)
-        note_dir = os.path.dirname(full_path)
-        base_url = QUrl.fromLocalFile(note_dir + os.sep)
-        self.text_editor.document().setBaseUrl(base_url)
-        
-        # Load Plain Text (Source Mode) to allow Highlighter to work (Live Preview)
-        # Fix: older saves might have \ufffc (obj replacement char). Strip it on load.
-        if markdown_content:
-            markdown_content = markdown_content.replace('\ufffc', '')
-        
-        self.text_editor.setPlainText(markdown_content)
-        
-        # Helper to render images inline (Live Preview Style)
-        # We process the text to find image links and insert image objects
-        self.text_editor.render_images()
-        
-        # Restore Visuals
-        self.highlighter.setDocument(self.text_editor.document())
-        self.text_editor.update_extra_selections()
+        # Prepare Editor for bulk update
+        self.text_editor.setUpdatesEnabled(False)
+        self.text_editor.blockSignals(True)
+        try:
+            # Set Base URL for resolving local images
+            from PySide6.QtCore import QUrl
+            import os
+            # Base Path should be the directory containing the note
+            full_path = os.path.join(self.fm.root_path, note_id)
+            note_dir = os.path.dirname(full_path)
+            base_url = QUrl.fromLocalFile(note_dir + os.sep)
+            self.text_editor.document().setBaseUrl(base_url)
+            
+            # Load Plain Text (Source Mode) to allow Highlighter to work (Live Preview)
+            # Fix: older saves might have \ufffc (obj replacement char). Strip it on load.
+            if markdown_content:
+                markdown_content = markdown_content.replace('\ufffc', '')
+            
+            self.text_editor.setPlainText(markdown_content)
+            
+            # Helper to render images inline (Live Preview Style)
+            # We process the text to find image links and insert image objects
+            self.text_editor.render_images()
+            
+            # Restore Visuals
+            self.highlighter.setDocument(self.text_editor.document())
+            self.text_editor.update_extra_selections()
+            
+        finally:
+            self.text_editor.blockSignals(False)
+            self.text_editor.setUpdatesEnabled(True)
         
         self.status_message.emit("Nota cargada.", 1000)
 
