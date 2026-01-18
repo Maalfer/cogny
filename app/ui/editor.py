@@ -723,76 +723,6 @@ class NoteEditor(QTextEdit):
     def _start_async_image_load(self, path):
         NoteEditor._loading_images.add(path)
         
-        from PySide6.QtCore import QRunnable, QObject, Signal, QImage
-        import os
-        
-        class ImageLoaderSignals(QObject):
-            finished = Signal(str, QImage)
-            
-        class ImageLoader(QRunnable):
-            def __init__(self, path, processor, root_path):
-                super().__init__()
-                self.path = path
-                self.processor = processor
-                self.root_path = root_path
-                self.signals = ImageLoaderSignals()
-                
-            def run(self):
-                from PySide6.QtGui import QImage
-                target_path = self.path
-                found = False
-                
-                if os.path.exists(target_path) and os.path.isfile(target_path):
-                    found = True
-                else:
-                    # Smart Search
-                    basename = os.path.basename(self.path)
-                    print(f"DEBUG: Searching for {basename} in vault...")
-                    
-                    # 1. Quick check commonly used folders
-                    candidates = [
-                        os.path.join(self.root_path, "images", basename),
-                        os.path.join(self.root_path, "adjuntos", basename), # lowercase
-                        os.path.join(self.root_path, "Adjuntos", basename), # Title case
-                        os.path.join(self.root_path, "assets", basename),
-                        os.path.join(self.root_path, basename)
-                    ]
-                    
-                    for c in candidates:
-                        if os.path.exists(c) and os.path.isfile(c):
-                            target_path = c
-                            found = True
-                            print(f"DEBUG: Found in quick candidate: {target_path}")
-                            break
-                    
-                    # 2. Recursive Search (if not found in candidates)
-                    if not found:
-                         for root, dirs, files in os.walk(self.root_path):
-                            dirs[:] = [d for d in dirs if not d.startswith('.')]
-                            if basename in files:
-                                target_path = os.path.join(root, basename)
-                                found = True
-                                print(f"DEBUG: Found via recursive walk: {target_path}")
-                                break
-
-                img = QImage()
-                if found:
-                    try:
-                        loaded = QImage(target_path)
-                        if not loaded.isNull():
-                            img = loaded
-                            if self.processor:
-                                img = self.processor(img)
-                        else:
-                            print(f"DEBUG: Failed to load QImage from {target_path}")
-                    except Exception as e:
-                         print(f"ERROR: Image load exception: {e}")
-                else:
-                    print(f"DEBUG: Could not find image {self.path} anywhere.")
-                                        
-                # Always emit signal (with valid image or null) to cleanup loading state
-                self.signals.finished.emit(self.path, img)
-
         loader = ImageLoader(path, self._process_image_static, self.fm.root_path)
         loader.signals.finished.connect(self._on_image_loaded)
         
@@ -960,23 +890,70 @@ class NoteEditor(QTextEdit):
 
 # Worker Classes (Global Scope for Signals)
 from PySide6.QtCore import QRunnable, QObject, Signal
+from PySide6.QtGui import QImage
+import os
 
 class ImageLoaderSignals(QObject):
     finished = Signal(str, QImage)
 
 class ImageLoader(QRunnable):
-    def __init__(self, path, processor):
+    def __init__(self, path, processor, root_path):
         super().__init__()
         self.path = path
         self.processor = processor
+        self.root_path = root_path
         self.signals = ImageLoaderSignals()
         
     def run(self):
-        try:
-            img = QImage(self.path)
-            if not img.isNull():
-                # Process off-thread
-                processed = self.processor(img)
-                self.signals.finished.emit(self.path, processed)
-        except Exception as e:
-            print(f"Async load error {self.path}: {e}")
+        target_path = self.path
+        found = False
+        
+        if os.path.exists(target_path) and os.path.isfile(target_path):
+            found = True
+        elif self.root_path:
+            # Smart Search
+            basename = os.path.basename(self.path)
+            # print(f"DEBUG: Searching for {basename} in vault...")
+            
+            # 1. Quick check commonly used folders
+            candidates = [
+                os.path.join(self.root_path, "images", basename),
+                os.path.join(self.root_path, "adjuntos", basename), 
+                os.path.join(self.root_path, "Adjuntos", basename),
+                os.path.join(self.root_path, "assets", basename),
+                os.path.join(self.root_path, basename)
+            ]
+            
+            for c in candidates:
+                if os.path.exists(c) and os.path.isfile(c):
+                    target_path = c
+                    found = True
+                    # print(f"DEBUG: Found in quick candidate: {target_path}")
+                    break
+            
+            # 2. Recursive Search (if not found in candidates)
+            if not found:
+                    for root, dirs, files in os.walk(self.root_path):
+                        dirs[:] = [d for d in dirs if not d.startswith('.')]
+                        if basename in files:
+                            target_path = os.path.join(root, basename)
+                            found = True
+                            # print(f"DEBUG: Found via recursive walk: {target_path}")
+                            break
+
+        img = QImage()
+        if found:
+            try:
+                loaded = QImage(target_path)
+                if not loaded.isNull():
+                    img = loaded
+                    if self.processor:
+                        img = self.processor(img)
+                else:
+                    print(f"DEBUG: Failed to load QImage from {target_path}")
+            except Exception as e:
+                    print(f"ERROR: Image load exception: {e}")
+        else:
+            print(f"DEBUG: Could not find image {self.path} - Root: {self.root_path}")
+                                
+        self.signals.finished.emit(self.path, img)
