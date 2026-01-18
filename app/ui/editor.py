@@ -635,39 +635,7 @@ class NoteEditor(QTextEdit):
             cls._thread_pool.setMaxThreadCount(4) 
         return cls._thread_pool
 
-    def _start_async_image_load(self, path):
-        NoteEditor._loading_images.add(path)
-        
-        loader = ImageLoader(path, self._process_image_static)
-        loader.signals.finished.connect(self._on_image_loaded)
-        
-        pool = self.get_thread_pool()
-        pool.start(loader)
 
-    @staticmethod
-    def _process_image_static(image):
-        if image.isNull(): return image
-        
-        # Static version used by worker thread
-        target_width = 600
-        if image.width() != target_width:
-             image = image.scaledToWidth(target_width, Qt.FastTransformation)
-             
-        out_img = QImage(image.size(), QImage.Format_ARGB32)
-        out_img.fill(Qt.transparent)
-        
-        from PySide6.QtGui import QPainter, QPainterPath
-        painter = QPainter(out_img)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        path = QPainterPath()
-        rect = out_img.rect()
-        path.addRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
-        
-        painter.setClipPath(path)
-        painter.drawImage(0, 0, image)
-        painter.end()
-        return out_img
 
     def _process_image(self, image: QImage) -> QImage:
         """Wrapper for static method to maintain compatibility."""
@@ -735,22 +703,7 @@ class NoteEditor(QTextEdit):
         target_width = 600
         if image.width() != target_width:
              image = image.scaledToWidth(target_width, Qt.FastTransformation)
-             
-        out_img = QImage(image.size(), QImage.Format_ARGB32)
-        out_img.fill(Qt.transparent)
-        
-        from PySide6.QtGui import QPainter, QPainterPath, QBrush
-        painter = QPainter(out_img)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        path = QPainterPath()
-        rect = out_img.rect()
-        path.addRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
-        
-        painter.setClipPath(path)
-        painter.drawImage(0, 0, image)
-        painter.end()
-        return out_img
+        return image
 
     def _on_image_loaded(self, path, image):
         from PySide6.QtCore import QUrl
@@ -852,41 +805,7 @@ class NoteEditor(QTextEdit):
         cls._image_cache.clear()
         cls._image_cache_order.clear()
 
-    def _process_image(self, image: QImage) -> QImage:
-        """Process image to enforce uniform style: 
-           - Fixed Width (600px)
-           - Rounded Corners (12px)
-        """
-        target_width = 600
-        from PySide6.QtCore import Qt
-        
-        # 1. Scale uniform width
-        # Use FastTransformation for performance (Smooth is too slow for large images)
-        if image.width() != target_width:
-             # print(f"DEBUG: Scaling image {image.width()}x{image.height()} -> {target_width}")
-             image = image.scaledToWidth(target_width, Qt.FastTransformation)
-             
-        # 2. Apply Rounded Corners
-        # Create a new transparent image of same size
-        out_img = QImage(image.size(), QImage.Format_ARGB32)
-        out_img.fill(Qt.transparent)
-        
-        from PySide6.QtGui import QPainter, QBrush, QPainterPath
-        
-        painter = QPainter(out_img)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Create rounded path
-        path = QPainterPath()
-        rect = out_img.rect()
-        path.addRoundedRect(0, 0, rect.width(), rect.height(), 12, 12)
-        
-        # Clip to path and draw original image
-        painter.setClipPath(path)
-        painter.drawImage(0, 0, image)
-        painter.end()
-        
-        return out_img
+
 
 # Worker Classes (Global Scope for Signals)
 from PySide6.QtCore import QRunnable, QObject, Signal
