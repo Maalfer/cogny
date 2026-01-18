@@ -669,13 +669,17 @@ class NoteEditor(QTextEdit):
             nonlocal processed
             processed += 1
             if processed >= total:
-                # Cleanup references
-                self._active_preloaders = []
-                
                 if on_finish_callback:
                     # Enforce Main Thread for UI updates (callback starts rendering)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(0, self, on_finish_callback)
+                
+                # Defer cleanup to ensure signals finish emitting and Python doesn't GC objects mid-flight
+                from PySide6.QtCore import QTimer
+                # We use a helper to clear
+                def cleanup():
+                     self._active_preloaders = []
+                QTimer.singleShot(500, self, cleanup)
                     
         # Launch loaders
         for path in needed:

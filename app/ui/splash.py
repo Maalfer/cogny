@@ -59,6 +59,12 @@ class WarmupWorker(QThread):
             self.finished_warmup.emit()
 
 class SplashWindow(QMainWindow):
+    def closeEvent(self, event):
+        import traceback
+        print("DEBUG: SplashWindow closeEvent called!")
+        traceback.print_stack()
+        super().closeEvent(event)
+
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -134,7 +140,6 @@ class SplashWindow(QMainWindow):
         self.worker = WarmupWorker()
         self.worker.progress.connect(self.progress.setValue)
         self.worker.status.connect(self.status_label.setText)
-        self.worker.finished_warmup.connect(self.close)
         
         # We don't start worker immediately here, caller handles it? 
         # Or we start it automatically? Let's start it automatically for simplicity.

@@ -86,16 +86,21 @@ def main():
         # window.show() REMOVED early show
         
         def show_and_close_splash():
+            print("DEBUG: Window Ready. Showing Window and Closing Splash.")
             window.show()
             # Restore quit on close
             app.setQuitOnLastWindowClosed(True)
-            splash.close()
+            
+            # Delay closing splash to ensure window is fully painted and visible
+            # effectively overlapping the transition
+            QTimer.singleShot(600, splash.close)
             
         # Connect ready signal
         window.ready.connect(show_and_close_splash)
         
         # Trigger Preload
         splash.status_label.setText("Abriendo última nota...")
+        print("DEBUG: Triggering Preload...")
         # Use singleShot to allow event loop to process the status update
         QTimer.singleShot(10, window.preload_initial_state)
         
