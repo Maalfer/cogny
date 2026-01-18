@@ -418,6 +418,9 @@ class NoteEditor(QTextEdit):
 
 
     def on_contents_change(self, position, charsRemoved, charsAdded):
+        if getattr(self, "is_loading", False):
+            return
+            
         # Trigger visual update logic deferred to allow highlighter to update states
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, self.update_extra_selections)

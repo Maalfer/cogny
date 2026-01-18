@@ -106,6 +106,9 @@ class EditorArea(QWidget):
         # Prepare Editor for bulk update
         self.text_editor.setUpdatesEnabled(False)
         self.text_editor.blockSignals(True)
+        # CRITICAL OPTIMIZATION: Block document signals to prevent "contentsChange" for every image insertion
+        self.text_editor.document().blockSignals(True)
+        self.text_editor.set_loading_state(True)
         try:
             # Set Base URL for resolving local images
             from PySide6.QtCore import QUrl
@@ -129,11 +132,15 @@ class EditorArea(QWidget):
             
             # Restore Visuals
             self.highlighter.setDocument(self.text_editor.document())
-            self.text_editor.update_extra_selections()
             
         finally:
+            self.text_editor.set_loading_state(False)
+            self.text_editor.document().blockSignals(False)
             self.text_editor.blockSignals(False)
             self.text_editor.setUpdatesEnabled(True)
+            
+            # Force one final update after unblocking
+            self.text_editor.update_extra_selections()
         
         self.status_message.emit("Nota cargada.", 1000)
 
