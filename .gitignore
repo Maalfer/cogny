@@ -12,6 +12,7 @@ build/
 .venv/
 venv/
 ENV/
+venv_build/
 
 # Database files
 *.cdb
@@ -40,26 +41,32 @@ Thumbs.db
 *.qmlc
 *.jsc
 
-# Packaging (específico para evitar problemas con docs/)
-/cogny_*.deb          # Bloquear .deb en raíz
-build_deb/*.deb       # Bloquear .deb en build_deb/
-/cogny.gpg.key        # Bloquear .gpg.key en raíz
-apt-repo/             # La carpeta apt-repo/ completa (se usa docs/ para GitHub Pages)
+# Packaging (Debian)
+/cogny_*.deb
+build_deb/
+/cogny.gpg.key
+apt-repo/
+
+# Packaging (Windows / Inno Setup / PyInstaller)
+Output/
+installer_output/
 *.spec
-venv_build/
+dist/
+build/
+*.exe
 
-# Nota: docs/ NO está bloqueado, se sube completo a GitHub Pages
+# Private Keys
+*.asc
+scripts/*.asc
+private_key.asc
 
-
-# Test outputs
+# Tests
 tests/test_*.pdf
 tests/test_*.zip
 
-# PyInstaller
-*.spec
-
-# User data (example/demo database)
+# User data
 conocimientoo/
+__TEMP__/
 
 # Temporary files
 repro_*.py

@@ -6,8 +6,7 @@ import os
 from app.storage.file_manager import FileManager
 from app.ui.ui_state import UiStateMixin
 from app.ui.ui_theme import UiThemeMixin
-from app.ui.ui_actions import UiActionsMixin
-from app.ui.ui_setup import UiSetupMixin
+from app.ui.botones_dropdown.botones_dropdown import UiActionsMixin, UiSetupMixin
 
 class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMainWindow):
     ready = Signal()
