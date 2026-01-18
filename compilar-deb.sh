@@ -3,7 +3,7 @@ set -e
 
 # Configuration
 APP_NAME="cogny"
-VERSION="1.0.2"
+VERSION="1.0.3"
 ARCH="amd64"
 DEB_NAME="${APP_NAME}_${VERSION}_${ARCH}"
 BUILD_DIR="build_deb"

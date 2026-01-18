@@ -12,7 +12,7 @@ set -e
 
 # Configuración
 APP_NAME="cogny"
-VERSION="1.0.2"
+VERSION="1.0.3"
 ARCH="amd64"
 DEB_FILE="${APP_NAME}_${VERSION}_${ARCH}.deb"
 APT_REPO_DIR="docs"  # Usar docs/ directamente para GitHub Pages
@@ -64,7 +64,11 @@ if [ -z "$GPG_KEY_ID" ]; then
     # Revisar si se pasaron claves por variables de entorno (CI/CD)
     if [ -n "$GPG_PRIVATE_KEY" ]; then
         echo -e "${YELLOW}→ Importando clave privada GPG desde variable de entorno...${NC}"
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+        # Ensure we handle newlines correctly if passed as a single line or with escaped newlines
+        echo "$GPG_PRIVATE_KEY" | sed 's/\\n/\n/g' | tr -d '\r' | gpg --batch --import || {
+             echo -e "${RED}Error: Falló la importación de la clave GPG.${NC}"
+             exit 1
+        }
         
         # Opcional: Configurar confianza final, aunque usualmente basta con importar
         # Obtener el ID de la clave recién importada
