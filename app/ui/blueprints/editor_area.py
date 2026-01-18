@@ -129,7 +129,7 @@ class EditorArea(QWidget):
         
         # Restore Visuals
         self.highlighter.setDocument(self.text_editor.document())
-        self.text_editor.update_code_block_visuals()
+        self.text_editor.update_extra_selections()
         
         self.status_message.emit("Nota cargada.", 1000)
 

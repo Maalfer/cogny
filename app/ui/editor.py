@@ -86,7 +86,7 @@ class NoteEditor(QTextEdit):
         frame_fmt.setBottomMargin(0)
         root_frame.setFrameFormat(frame_fmt)
         
-        self.update_code_block_visuals()
+        self.update_extra_selections()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -418,107 +418,43 @@ class NoteEditor(QTextEdit):
 
 
     def on_contents_change(self, position, charsRemoved, charsAdded):
-        """Standard optimization: Only update blocks affected by the change."""
-        if self.is_loading: return
-        
-        doc = self.document()
-        
-        # Determine range of change
-        start_block = doc.findBlock(position)
-        # End block is where the change ends (position + length of added text)
-        # If charsRemoved > 0, we might have merged blocks, so checking current state at pos is usually enough?
-        # Actually, safely check from start block to a reasonable lookahead or just until end of change.
-        # But for code blocks, start/end of block tags matter. Status propagates.
-        # So we should iterate from start block until ... status stops changing?
-        # For simplicity in this optimization step:
-        # Update from start_block to end of document? No, that's slow.
-        # Update from start_block to end_block of the changed region.
-        
-        end_pos = position + charsAdded
-        end_block = doc.findBlock(end_pos)
-        
-        # However, if we deleted a ```, the Whole rest of the document might change status.
-        # Ideally, we should check if block state changed.
-        # But QSyntaxHighlighter handles the state. We just apply Visuals based on it.
-        # Since Visuals (Background) depend on State, and State depends on Highlighter...
-        # We need to run AFTER highlighter. contentChange runs BEFORE highlighter usually?
-        # Actually QTextDocument signals: contentsChange happens, then Highlighter updates.
-        # So here, states might be stale?
-        # Let's verify. If states are stale, we can't use this signal directly for visual update based on state.
-        # We might need to listen to `highlighter.update`? PySide6 highlighter doesn't carry a signal.
-        
-        # Alternative: Use a timer to coalesce updates?
-        # Or just trust that we can simply iterate the visible range or the whole doc if needed.
-        # But we want to avoid iterating whole doc.
-        
-        # Valid Strategy:
-        # 1. Update visual for modified range immediately (or via timer).
-        # 2. If it's a structural change (contains ```), usually the user pauses typing.
-        # Let's rely on the fact that for standard typing inside a block, only that block changes.
-        
-        self.update_code_block_visuals(start_block, end_block)
+        # Trigger visual update logic deferred to allow highlighter to update states
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self.update_extra_selections)
 
-    def update_code_block_visuals(self, start_block=None, end_block_limit=None):
-        # Use QTextBlockFormat for background color. 
-        # This ensures it respects indentation and margins (unlike ExtraSelection).
+    def update_extra_selections(self):
+        """Updates background colors and other visuals using ExtraSelections (does not affect Undo stack)."""
+        extra_selections = []
         
-        # Prevent Recursion (setBlockFormat triggers textChanged -> contentsChange might be triggered?)
-        # contentsChange is triggered by structural changes. setBlockFormat DOES trigger it.
-        # So blocking signals is CRITICAL.
-        self.blockSignals(True)
-        try:
-            # 1. Get Color
-            color = getattr(self, "code_bg_color", QColor("#EEF1F4"))
-            
-            cursor = self.textCursor()
-            cursor.beginEditBlock()
-            
-            if start_block is None:
-                block = self.document().begin()
-            else:
-                block = start_block
-                
-            while block.isValid():
-                state = block.userState()
-                
-                # Check End Limit
-                if end_block_limit and block.blockNumber() > end_block_limit.blockNumber():
-                    # Optimization: If state matches previous behavior, we might stop?
-                    # For now just stop at the modified range end.
-                    # BUT if we are typing ``` start, the rest needs update.
-                    # For strict correctness we should check if we changed the visual state.
-                    # If we didn't change the visual state, we can simpler stop.
-                    # Let's just process the range for speed. If scan is needed, user forces refresh or we assume highlighter handles?
-                    # Actually, if I type ``` at top, the state changes for the whole doc.
-                    # Highlighter updates states. I read them.
-                    # If I read STALE states, I'm wrong.
-                    # Since this runs on `contentsChange`, states might be STALE. 
-                    # We might need `QTimer.singleShot(0, ...)` to run after highlighter.
-                    break
-                
-                # Create Modifier Format
-                fmt = block.blockFormat()
-                
-                if state > 0:
-                    # Inside Code Block: Apply Background
-                    if fmt.background().color() != color:
-                        fmt.setBackground(color)
-                        cursor.setPosition(block.position())
-                        cursor.setBlockFormat(fmt)
-                else:
-                    # Normal Text: Clear Background
-                    if fmt.background().style() != Qt.NoBrush:
-                         fmt.clearBackground()
-                         cursor.setPosition(block.position())
-                         cursor.setBlockFormat(fmt)
-                
-                block = block.next()
-                
-            cursor.endEditBlock()
-        finally:
-            self.blockSignals(False)
+        # 1. Code Block Backgrounds
+        code_bg_color = getattr(self, "code_bg_color", QColor("#EEF1F4"))
         
-        # ExtraSelections cleanup removed
+        block = self.document().begin()
+        while block.isValid():
+            state = block.userState()
+            
+            if state > 0 and state != 100: # Inside Code Block (and not just the end marker if separated)
+                # But typically state > 0 means "is code".
+                # User implementation: state=1 (generic), state>=2 (lang).
+                # We want background for these.
+                
+                from PySide6.QtWidgets import QTextEdit
+                sel = QTextEdit.ExtraSelection()
+                sel.format.setBackground(code_bg_color)
+                sel.format.setProperty(QTextFormat.FullWidthSelection, True) 
+                
+                cursor = self.textCursor()
+                cursor.setPosition(block.position())
+                cursor.setPosition(block.position() + block.length() - 1, QTextCursor.KeepAnchor) # -1 to exclude newline usually
+                sel.cursor = cursor
+                extra_selections.append(sel)
+                
+            block = block.next()
+            
+        self.setExtraSelections(extra_selections)
+        
+        # 2. Update Copy Buttons positions if needed
+        self.update_copy_buttons()
 
     def update_highlighting(self):
         # Notify highlighter about the active block
