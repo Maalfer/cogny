@@ -155,14 +155,7 @@ class Sidebar(QWidget):
                  action_create_folder.triggered.connect(self.add_sibling_folder)
             menu.addAction(action_create_folder)
 
-            menu.addSeparator()
-
-            # Read Later Option
-            action_read_later = QAction("Ver más tarde", self)
-            action_read_later.triggered.connect(lambda: self.toggle_read_later(item.note_id))
-            menu.addAction(action_read_later)
-
-            menu.addSeparator()
+            # Read Later Option removed
             
             action_delete = QAction("Eliminar", self)
             action_delete.triggered.connect(self.delete_note)
@@ -318,18 +311,7 @@ class Sidebar(QWidget):
                 self.tree_view.setCurrentIndex(proxy_index)
                 self.tree_view.scrollTo(proxy_index)
 
-    def toggle_read_later(self, note_id):
-        # Read Later is Metadata logic. 
-        # Since we moved to Files, we don't have a DB "notes" table record for every file necessarily unless we sync?
-        # The user wanted "eliminar totalmente que las notas y todo se guarden en la base de datos".
-        # So "Read Later" feature might be deprecated or needs a separate DB table mapping Path -> State.
-        # Check `db.toggle_read_later` implementation. It uses `UPDATE notes`.
-        # Since we aren't using `notes` table for content, but we might keep it for metadata?
-        # User said "eliminar totalmente que las notas... se guarden en la base de datos".
-        # This implies we shouldn't rely on `notes` table ID.
-        # The `note_id` is now a STRING (path). DB expects INT.
-        # Feature disabled for now or requires refactor to use Path in DB.
-        ModernAlert.show(self, "No Disponible", "La función 'Ver más tarde' está deshabilitada en el modo de archivos locales por ahora.")
+    # Read Later feature removed
 
     def get_selected_notes(self):
         """Returns a list of tuples (note_id, title) for all selected items."""

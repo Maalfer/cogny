@@ -62,7 +62,7 @@ class UiSetupMixin:
         # file_menu.addAction(self.act_save_as_db) # Removed in refactor
         
         file_menu.addSeparator()
-        file_menu.addAction(self.act_read_later_list)
+        # Read Later feature removed
         
         file_menu.addSeparator()
         
@@ -72,9 +72,7 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_child)
         file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
-        file_menu.addAction(self.act_import_obsidian)
-        file_menu.addAction(self.act_export_obsidian)
-        file_menu.addSeparator()
+        # Legacy Import/Export items removed from File Menu
         file_menu.addAction(self.act_export_pdf)
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
@@ -112,13 +110,7 @@ class UiSetupMixin:
         tools_menu = menubar.addMenu("&Herramientas")
         tools_menu.addAction(self.act_theme)
         
-        action_import_obsidian = QAction("Importar Obsidian...", self)
-        action_import_obsidian.triggered.connect(self.import_obsidian_vault)
-        tools_menu.addAction(action_import_obsidian)
-
-        action_export_obsidian = QAction("Exportar a Obsidian...", self)
-        action_export_obsidian.triggered.connect(self.export_obsidian_vault)
-        tools_menu.addAction(action_export_obsidian)
+        # Legacy Import/Export items removed from Tools Menu
         # Removed Optimize Database action
         
         # Help Menu

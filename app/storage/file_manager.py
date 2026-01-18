@@ -2,14 +2,14 @@ import os
 import shutil
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
-from app.storage.metadata_cache import MetadataCache
-from app.core.indexer import VaultIndexer, VaultWatcher
+ # Remove MetadataCache and VaultIndexer imports
+from app.storage.watcher import VaultWatcher
 from PySide6.QtCore import QObject
 
 class FileManager(QObject):
     """
     Manages file system operations for the note application.
-    Acts as an Obsidian-compatible vault manager with caching and indexing.
+    Acts as an Obsidian-compatible vault manager with file-system based operations.
     """
     def __init__(self, root_path: str):
         super().__init__()
@@ -21,17 +21,12 @@ class FileManager(QObject):
         if not os.path.exists(self.images_path):
             os.makedirs(self.images_path, exist_ok=True)
 
-        # Advanced Features: Cache, Indexer, Watcher
-        self.cache = MetadataCache(self.root_path)
-        
-        self.indexer = VaultIndexer(self.root_path, self.cache)
+        # File System Watcher
         self.watcher = VaultWatcher(self.root_path)
-        
-        # Connect Watcher -> Indexer
-        self.watcher.file_changed.connect(self.indexer.update_file)
-        
-        # Start Initial Scan
-        self.indexer.scan_all()
+        # Connect Watcher -> We can expose a signal if needed, or just let UI handle reloads
+        # For now, we can emit a signal ourselves if we want to emulate old indexer behavior,
+        # but UI mostly refreshes on its own or triggered actions.
+        # Let's keep the watcher running.
 
     def _get_rel_path(self, abs_path: str) -> str:
         return os.path.relpath(abs_path, self.root_path)
@@ -41,32 +36,18 @@ class FileManager(QObject):
 
     def list_files(self) -> List[Dict]:
         """
-        Returns a tree-like structure or flat list of files.
-        For now, returns a list of dictionaries compatible with the UI tree builder.
+        Returns a flat list of files for the tree builder.
         """
-        # We might need a more complex structure for the tree, but let's start with walking
-        # structure: {'id': path, 'title': filename, 'parent_id': parent_path, 'is_folder': bool}
-        # To maintain compatibility with existing IDs (int), we might need to hash or just change UI to accept strings.
-        # CHANGING UI TO ACCEPT STRING IDs IS BETTER.
-        
         items = []
         
-        # Add Root
-        # items.append({'id': self.root_path, 'title': 'Root', 'is_folder': True, 'parent_id': None})
-        
         for root, dirs, files in os.walk(self.root_path):
-            # Skip hidden directories like .obsidian, .git
+            # Skip hidden directories like .obsidian, .git, .cogny
             dirs[:] = [d for d in dirs if not d.startswith('.')]
             
             rel_dir = os.path.relpath(root, self.root_path)
             if rel_dir == ".":
                 parent_id = None
             else:
-                parent_id = os.path.dirname(rel_dir)
-                if parent_id == ".": parent_id = None # Top level folders have None parent? 
-                # Actually, if rel_dir is "Folder", parent is ".". 
-                # Let's map "." to None for parent_id? 
-                # Or simply: ID is rel_path.
                 parent_id = os.path.dirname(rel_dir)
                 if parent_id == "": parent_id = None
             
@@ -124,10 +105,6 @@ class FileManager(QObject):
                      if entry.name.startswith('.'): 
                          continue
                      
-                     # Filter out default folders from tree view if desired?
-                     # User might want to see 'images'. 
-                     # Previous code filtered 'Adjuntos'. Let's filter 'images' to keep tree clean?
-                     # USER REQUEST: Make images visible.
                      if entry.name == "Adjuntos":
                          continue
                          
@@ -175,9 +152,6 @@ class FileManager(QObject):
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            
-            # Update Indexer
-            self.indexer.update_file(rel_path)
             return True
         except Exception as e:
             print(f"Error saving file {path}: {e}")
@@ -195,9 +169,6 @@ class FileManager(QObject):
                 if not path.endswith('.md'): path += '.md'
                 with open(path, 'w', encoding='utf-8') as f:
                     f.write("")
-            
-            # Update Indexer
-            self.indexer.update_file(rel_path)
             return True
         except Exception as e:
             print(f"Error creating {path}: {e}")
@@ -239,6 +210,7 @@ class FileManager(QObject):
         
         try:
             shutil.move(old_path, new_path)
+            # Indexer update removed (watcher handles it)
             return self._get_rel_path(new_path)
         except Exception as e:
             print(f"Error moving {old_path} to {new_path}: {e}")
@@ -247,9 +219,7 @@ class FileManager(QObject):
     def save_image(self, data: bytes, filename: str) -> str:
         """
         Saves an image to the 'images' directory.
-        Returns the relative path from the root (e.g., "images/image.png").
         """
-        # Ensure dir exists (redundant check but safe)
         if not os.path.exists(self.images_path):
              os.makedirs(self.images_path, exist_ok=True)
              
@@ -266,3 +236,55 @@ class FileManager(QObject):
             f.write(data)
             
         return os.path.join("images", os.path.basename(path))
+
+    def search_content(self, query: str) -> List[Dict]:
+        """
+        Simple file-system based full text search.
+        Case-insensitive.
+        Returns list of {'path': rel_path, 'title': title, 'snippet': snippet}
+        """
+        query = query.lower()
+        results = []
+        
+        # Limit results for performance
+        MAX_RESULTS = 50
+        
+        for root, dirs, files in os.walk(self.root_path):
+            # Skip hidden
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            
+            for f in files:
+                if not f.endswith('.md'): continue
+                
+                path = os.path.join(root, f)
+                rel_path = os.path.relpath(path, self.root_path)
+                
+                try:
+                    with open(path, 'r', encoding='utf-8', errors='ignore') as file_obj:
+                        content = file_obj.read()
+                        
+                        lower_content = content.lower()
+                        if query in lower_content:
+                            # Create Snippet
+                            idx = lower_content.find(query)
+                            start = max(0, idx - 40)
+                            end = min(len(content), idx + len(query) + 40)
+                            snippet = content[start:end].replace('\n', ' ')
+                            
+                            # Highlight match in snippet (HTML bold)
+                            # We need to do this carefully on the original case text
+                            # A simple replace on snippet might miss case, but for now:
+                            # snippet = snippet.replace(query, f"<b>{query}</b>") # Case issue
+                            
+                            results.append({
+                                'path': rel_path,
+                                'title': os.path.splitext(f)[0],
+                                'snippet': f"...{snippet}..."
+                            })
+                            
+                            if len(results) >= MAX_RESULTS:
+                                return results
+                except Exception as e:
+                    print(f"Error searching {rel_path}: {e}")
+                    
+        return results

@@ -520,8 +520,7 @@ class NoteEditor(QTextEdit):
         finally:
             self.blockSignals(False)
         
-        # Clear ExtraSelections (legacy cleanup)
-        self.setExtraSelections([])
+        # ExtraSelections cleanup removed
 
     def update_highlighting(self):
         # Notify highlighter about the active block
@@ -684,9 +683,7 @@ class NoteEditor(QTextEdit):
         if type == QTextDocument.ImageResource:
             url = name.toString() if isinstance(name, QUrl) else str(name)
             
-            # 1. Handle DB Images (Legacy support)
-            if url.startswith("image://db/"):
-                 pass
+            # 1. Handle DB Images (Legacy support) - REMOVED
             
             # 2. Handle Local Files
             path = url

@@ -139,11 +139,7 @@ class EditorArea(QWidget):
         self.text_editor.setHtml(f"<h1 style='color: gray; text-align: center; margin-top: 50px;'>Carpeta: {title}</h1><p style='color: gray; text-align: center;'>Esta es una carpeta.</p>")
         self.text_editor.setReadOnly(True)
 
-    def on_chunk_loaded(self, html_chunk):
-        pass # Deprecated
-
-    def on_note_loading_finished(self, result):
-        pass # Deprecated
+    # Deprecated loading callbacks removed
 
     def save_current_note(self):
         if self.current_note_id is None:

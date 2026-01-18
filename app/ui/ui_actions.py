@@ -2,7 +2,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QFileDialog, QToolBar
 from app.ui.widgets import ModernInfo, ModernAlert
-from app.ui.blueprints.markdown import MarkdownRenderer
+# MarkdownRenderer import removed (unused)
 import os
 
 class UiActionsMixin:
@@ -17,8 +17,7 @@ class UiActionsMixin:
         # self.act_save_as_db removed
 
         
-        self.act_read_later_list = QAction("Notas Guardadas...", self)
-        self.act_read_later_list.triggered.connect(self.show_read_later_dialog)
+        # Read Later action removed
 
         self.act_new_root = QAction("Nueva Nota Raíz", self)
         self.act_new_root.triggered.connect(self.sidebar.add_root_note)
@@ -32,11 +31,7 @@ class UiActionsMixin:
         self.act_new_folder_child = QAction("Nueva Carpeta Hija", self)
         self.act_new_folder_child.triggered.connect(self.sidebar.add_child_folder)
         
-        self.act_import_obsidian = QAction("Importar Bóveda Obsidian...", self)
-        self.act_import_obsidian.triggered.connect(self.import_obsidian_vault)
-
-        self.act_export_obsidian = QAction("Exportar a Obsidian...", self)
-        self.act_export_obsidian.triggered.connect(self.export_obsidian_vault)
+        # Legacy Import/Export actions removed
 
         self.act_export_pdf = QAction("Exportar PDF", self)
         self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
@@ -306,6 +301,4 @@ class UiActionsMixin:
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y Archivos Markdown.")
 
-    def show_read_later_dialog(self):
-        # Disabled for now as it relied on DB
-        ModernInfo.show(self, "Información", "Esta funcionalidad está siendo migrada fuera de la base de datos.")
+    # Read Later feature removed

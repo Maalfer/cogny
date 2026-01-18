@@ -97,15 +97,15 @@ class SearchManager(QObject):
             
     def search_files(self, query):
         """
-        Searches using the persistent Metadata Cache (SQLite FTS).
+        Searches using the file system scanning via FileManager.
         Returns list of (rel_path, title, snippet).
         """
         if not query: return []
         
-        # Use Metadata Cache
-        if hasattr(self.fm, 'cache'):
+        # Use FileManager File Search
+        if hasattr(self.fm, 'search_content'):
             # results is list of dicts: {'path', 'title', 'snippet'}
-            cache_results = self.fm.cache.search_text(query)
+            cache_results = self.fm.search_content(query)
             
             # Adapt to tuple format expected by UI
             results = []
@@ -113,5 +113,5 @@ class SearchManager(QObject):
                 results.append((res['path'], res['title'], res['snippet']))
             return results
         else:
-            print("Warning: Metadata Cache not available")
+            print("Warning: Search not available")
             return []
