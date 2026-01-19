@@ -28,46 +28,63 @@ class ModernDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
+        self.settings = QSettings()
+        self.current_theme = self.settings.value("theme", "Dark")
+        
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
         
+        # Determine specific colors based on theme
+        if self.current_theme == "Dark":
+            bg_color = "#18181b"
+            border_color = "#3f3f46"
+            text_color = "#e4e4e7"
+            subtext_color = "#a1a1aa"
+            shadow_color = QColor(0, 0, 0, 100)
+        else:
+            bg_color = "#ffffff"
+            border_color = "#e4e4e7"
+            text_color = "#18181b"
+            subtext_color = "#52525b"
+            shadow_color = QColor(0, 0, 0, 40)
+
         # Main Container (Rounded, Shadow)
         self.container = QFrame()
-        self.container.setStyleSheet("""
-            QFrame {
-                background-color: #2D2D2D;
-                border: 1px solid #3F3F3F;
+        self.container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {bg_color};
+                border: 1px solid {border_color};
                 border-radius: 12px;
-            }
+            }}
         """)
         
         # Shadow
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 100))
-        shadow.setOffset(0, 5)
+        shadow.setBlurRadius(24)
+        shadow.setColor(shadow_color)
+        shadow.setOffset(0, 8)
         self.container.setGraphicsEffect(shadow)
         
         self.layout.addWidget(self.container)
         
         # Content Layout
         self.content_layout = QVBoxLayout()
-        self.content_layout.setContentsMargins(20, 20, 20, 20)
-        self.content_layout.setSpacing(15)
+        self.content_layout.setContentsMargins(24, 24, 24, 24)
+        self.content_layout.setSpacing(16)
         self.container.setLayout(self.content_layout)
         
         # Title
         if title:
             self.title_label = QLabel(title)
-            self.title_label.setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: bold; border: none;")
+            self.title_label.setStyleSheet(f"color: {text_color}; font-size: 18px; font-weight: 600; border: none;")
             self.content_layout.addWidget(self.title_label)
             
         # Message
         if message:
             self.msg_label = QLabel(message)
             self.msg_label.setWordWrap(True)
-            self.msg_label.setStyleSheet("color: #CCCCCC; font-size: 14px; border: none;")
+            self.msg_label.setStyleSheet(f"color: {subtext_color}; font-size: 14px; border: none; line-height: 1.5;")
             self.content_layout.addWidget(self.msg_label)
             
         # Button Area
@@ -78,46 +95,96 @@ class ModernDialog(QDialog):
     def add_button(self, text, role="normal", callback=None):
         btn = QPushButton(text)
         btn.setCursor(Qt.PointingHandCursor)
-        btn.setFixedHeight(32)
+        btn.setFixedHeight(34)
         
-        if role == "primary":
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #3b82f6; 
-                    color: white; 
-                    border-radius: 6px;
-                    padding: 0 16px;
-                    font-weight: bold;
-                    border: none;
-                }
-                QPushButton:hover { background-color: #2563eb; }
-                QPushButton:pressed { background-color: #1d4ed8; }
-            """)
-        elif role == "danger":
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ef4444; 
-                    color: white; 
-                    border-radius: 6px;
-                    padding: 0 16px;
-                    font-weight: bold;
-                    border: none;
-                }
-                QPushButton:hover { background-color: #dc2626; }
-                QPushButton:pressed { background-color: #b91c1c; }
-            """)
-        else:
-            # Secondary / Cancel
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #3F3F3F; 
-                    color: #E0E0E0; 
-                    border-radius: 6px;
-                    padding: 0 15px;
-                    border: none;
-                }
-                QPushButton:hover { background-color: #4B4B4B; }
-            """)
+        if self.current_theme == "Dark":
+            if role == "primary":
+                # Blue-600 to Blue-700
+                style = """
+                    QPushButton {
+                        background-color: #3b82f6; 
+                        color: white; 
+                        border-radius: 6px;
+                        padding: 0 16px;
+                        font-weight: 600;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #2563eb; }
+                    QPushButton:pressed { background-color: #1d4ed8; }
+                """
+            elif role == "danger":
+                # Red-500 to Red-600
+                style = """
+                    QPushButton {
+                        background-color: #ef4444; 
+                        color: white; 
+                        border-radius: 6px;
+                        padding: 0 16px;
+                        font-weight: 600;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #dc2626; }
+                    QPushButton:pressed { background-color: #b91c1c; }
+                """
+            else:
+                # Zinc-800 to Zinc-700
+                style = """
+                    QPushButton {
+                        background-color: #27272a; 
+                        color: #e4e4e7; 
+                        border: 1px solid #3f3f46;
+                        border-radius: 6px;
+                        padding: 0 16px;
+                        font-weight: 500;
+                    }
+                    QPushButton:hover { background-color: #3f3f46; }
+                    QPushButton:pressed { background-color: #52525b; }
+                """
+        else: # Light
+            if role == "primary":
+                # Blue-600 to Blue-700
+                style = """
+                    QPushButton {
+                        background-color: #2563eb; 
+                        color: white; 
+                        border-radius: 6px;
+                        padding: 0 16px;
+                        font-weight: 600;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #1d4ed8; }
+                    QPushButton:pressed { background-color: #1e40af; }
+                """
+            elif role == "danger":
+                # Red-600 to Red-700
+                style = """
+                    QPushButton {
+                        background-color: #dc2626; 
+                        color: white; 
+                        border-radius: 6px;
+                        padding: 0 16px;
+                        font-weight: 600;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #b91c1c; }
+                    QPushButton:pressed { background-color: #991b1b; }
+                """
+            else:
+                # White/Gray border
+                style = """
+                    QPushButton {
+                        background-color: #ffffff; 
+                        color: #18181b; 
+                        border: 1px solid #e4e4e7;
+                        border-radius: 6px;
+                        padding: 0 16px;
+                        font-weight: 500;
+                    }
+                    QPushButton:hover { background-color: #f4f4f5; }
+                    QPushButton:pressed { background-color: #e4e4e7; border-color: #d4d4d8; }
+                """
+
+        btn.setStyleSheet(style)
             
         if callback:
             btn.clicked.connect(callback)
@@ -173,19 +240,39 @@ class ModernInput(ModernDialog):
         super().__init__(title, label, parent)
         
         self.input = QLineEdit(text)
-        self.input.setStyleSheet("""
-            QLineEdit {
-                background-color: #1E1E1E;
-                color: #FFFFFF;
-                border: 1px solid #3F3F3F;
-                border-radius: 6px;
-                padding: 8px;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3b82f6;
-            }
-        """)
+        
+        if self.current_theme == "Dark":
+            input_style = """
+                QLineEdit {
+                    background-color: #27272a;
+                    color: #e4e4e7;
+                    border: 1px solid #3f3f46;
+                    border-radius: 6px;
+                    padding: 8px;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #3b82f6;
+                    background-color: #18181b;
+                }
+            """
+        else:
+            input_style = """
+                QLineEdit {
+                    background-color: #ffffff;
+                    color: #18181b;
+                    border: 1px solid #e4e4e7;
+                    border-radius: 6px;
+                    padding: 8px;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #2563eb;
+                    background-color: #fcfcfc;
+                }
+            """
+
+        self.input.setStyleSheet(input_style)
         # Insert input before buttons
         self.content_layout.insertWidget(2, self.input)
         
@@ -210,28 +297,55 @@ class ModernSelection(ModernDialog):
         super().__init__(title, label, parent)
         
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background-color: #1E1E1E;
-                color: #FFFFFF;
-                border: 1px solid #3F3F3F;
-                border-radius: 6px;
-                padding: 4px;
-                font-size: 14px;
-                outline: none;
-            }
-            QListWidget::item {
-                padding: 8px;
-                border-radius: 4px;
-            }
-            QListWidget::item:selected {
-                background-color: #3b82f6;
-                color: white;
-            }
-            QListWidget::item:hover:!selected {
-                background-color: #2D2D2D;
-            }
-        """)
+        
+        if self.current_theme == "Dark":
+            list_style = """
+                QListWidget {
+                    background-color: #27272a;
+                    color: #e4e4e7;
+                    border: 1px solid #3f3f46;
+                    border-radius: 6px;
+                    padding: 4px;
+                    font-size: 14px;
+                    outline: none;
+                }
+                QListWidget::item {
+                    padding: 8px;
+                    border-radius: 4px;
+                }
+                QListWidget::item:selected {
+                    background-color: #3b82f6;
+                    color: white;
+                }
+                QListWidget::item:hover:!selected {
+                    background-color: #3f3f46;
+                }
+            """
+        else:
+            list_style = """
+                QListWidget {
+                    background-color: #ffffff;
+                    color: #18181b;
+                    border: 1px solid #e4e4e7;
+                    border-radius: 6px;
+                    padding: 4px;
+                    font-size: 14px;
+                    outline: none;
+                }
+                QListWidget::item {
+                    padding: 8px;
+                    border-radius: 4px;
+                }
+                QListWidget::item:selected {
+                    background-color: #2563eb;
+                    color: white;
+                }
+                QListWidget::item:hover:!selected {
+                    background-color: #f4f4f5;
+                }
+            """
+            
+        self.list_widget.setStyleSheet(list_style)
         
         for item_text in items:
             self.list_widget.addItem(item_text)
@@ -256,27 +370,46 @@ class ThemeSettingsDialog(ModernDialog):
 
     def __init__(self, parent=None):
         super().__init__("Configuración de Tema", None, parent)
-        self.settings = QSettings()
         
         # Grid-like layout manually
         # Row 1: Base Theme
         row1 = QHBoxLayout()
         tk_label = QLabel("Tema Base:")
-        tk_label.setStyleSheet("color: #CCCCCC; font-size: 14px;")
+        tk_label.setStyleSheet("color: #e4e4e7;" if self.current_theme == "Dark" else "color: #18181b;")
         
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Light", "Dark"])
         current_theme = self.settings.value("theme", "Dark")
         self.theme_combo.setCurrentText(current_theme)
-        self.theme_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #1E1E1E;
-                color: white;
-                border: 1px solid #3F3F3F;
-                border-radius: 4px;
-                padding: 4px;
-            }
-        """)
+        
+        if self.current_theme == "Dark":
+            combo_style = """
+                QComboBox {
+                    background-color: #27272a;
+                    color: #e4e4e7;
+                    border: 1px solid #3f3f46;
+                    border-radius: 6px;
+                    padding: 6px;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                }
+            """
+        else:
+             combo_style = """
+                QComboBox {
+                    background-color: #ffffff;
+                    color: #18181b;
+                    border: 1px solid #e4e4e7;
+                    border-radius: 6px;
+                    padding: 6px;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                }
+            """
+        self.theme_combo.setStyleSheet(combo_style)
+
         row1.addWidget(tk_label)
         row1.addWidget(self.theme_combo)
         self.content_layout.addLayout(row1)
@@ -284,7 +417,7 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 2: Editor BG
         row2 = QHBoxLayout()
         editor_label = QLabel("Fondo del Editor:")
-        editor_label.setStyleSheet("color: #CCCCCC; font-size: 14px;")
+        editor_label.setStyleSheet("color: #e4e4e7;" if self.current_theme == "Dark" else "color: #18181b;")
         
         self.editor_bg_btn = QPushButton("Elegir Color")
         self.editor_bg_btn.setCursor(Qt.PointingHandCursor)
@@ -299,7 +432,7 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 3: Sidebar BG
         row3 = QHBoxLayout()
         sidebar_label = QLabel("Fondo de la Barra Lateral:")
-        sidebar_label.setStyleSheet("color: #CCCCCC; font-size: 14px;")
+        sidebar_label.setStyleSheet("color: #e4e4e7;" if self.current_theme == "Dark" else "color: #18181b;")
         
         self.sidebar_bg_btn = QPushButton("Elegir Color")
         self.sidebar_bg_btn.setCursor(Qt.PointingHandCursor)
@@ -314,17 +447,33 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 4: Reset Button
         reset_btn = QPushButton("Restaurar Valores por Defecto")
         reset_btn.setCursor(Qt.PointingHandCursor)
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3F3F3F;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                padding: 6px;
-                margin-top: 10px;
-            }
-            QPushButton:hover { background-color: #4F4F4F; }
-        """)
+        
+        if self.current_theme == "Dark":
+            reset_style = """
+                QPushButton {
+                    background-color: #27272a;
+                    color: #e4e4e7;
+                    border: 1px solid #3f3f46;
+                    border-radius: 6px;
+                    padding: 8px;
+                    margin-top: 10px;
+                }
+                QPushButton:hover { background-color: #3f3f46; }
+            """
+        else:
+            reset_style = """
+                QPushButton {
+                    background-color: #ffffff;
+                    color: #18181b;
+                    border: 1px solid #e4e4e7;
+                    border-radius: 6px;
+                    padding: 8px;
+                    margin-top: 10px;
+                }
+                QPushButton:hover { background-color: #f4f4f5; }
+            """
+        reset_btn.setStyleSheet(reset_style)
+        
         reset_btn.clicked.connect(self.reset_defaults)
         self.content_layout.addWidget(reset_btn)
         
@@ -338,22 +487,33 @@ class ThemeSettingsDialog(ModernDialog):
                     background-color: {color_str};
                     color: {'black' if self.is_light(color_str) else 'white'};
                     border: 1px solid #555555;
-                    border-radius: 4px;
+                    border-radius: 6px;
                     padding: 6px;
                 }}
             """)
             btn.setText(color_str)
         else:
-             btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #3F3F3F;
-                    color: #E0E0E0;
-                    border: 1px solid #555555;
-                    border-radius: 4px;
-                    padding: 6px;
-                }
-             """)
-             btn.setText("Por Defecto")
+            if self.current_theme == "Dark":
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #27272a;
+                        color: #e4e4e7;
+                        border: 1px solid #3f3f46;
+                        border-radius: 6px;
+                        padding: 6px;
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ffffff;
+                        color: #18181b;
+                        border: 1px solid #e4e4e7;
+                        border-radius: 6px;
+                        padding: 6px;
+                    }
+                """)
+            btn.setText("Por Defecto")
 
     def is_light(self, color_str):
         c = QColor(color_str)
@@ -376,8 +536,6 @@ class ThemeSettingsDialog(ModernDialog):
         self.current_sidebar_bg = ""
         self.update_btn_style(self.editor_bg_btn, "")
         self.update_btn_style(self.sidebar_bg_btn, "")
-        # Reset combo to Dark? Or keep current?
-        # User said "volve r a poner todo como estaba al principio" -> Usually default.
         self.theme_combo.setCurrentText("Dark")
 
     def save_settings(self):

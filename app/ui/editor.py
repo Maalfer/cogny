@@ -614,18 +614,35 @@ class NoteEditor(QTextEdit):
         return super().loadResource(type, name)
 
     def _get_placeholder_image(self):
-        if not hasattr(NoteEditor, "_placeholder_img"):
-             # Create a simple gray placeholder
+        # We need to cache per-theme or recreate if theme changes.
+        # Simple approach: Check if cached image matches current theme preference.
+        # Or just don't cache deeply if we want it dynamic.
+        
+        cache_key = f"_placeholder_img_{self.current_theme}"
+        if not hasattr(NoteEditor, cache_key):
+             # Create a simple placeholder
              img = QImage(600, 100, QImage.Format_ARGB32) # Generic size
-             img.fill(QColor("#f0f0f0"))
+             
+             if self.current_theme == "Dark":
+                 bg_color = QColor("#27272a") # Zinc-800
+                 text_color = QColor("#71717a") # Zinc-500
+             else:
+                 bg_color = QColor("#f4f4f5") # Zinc-100
+                 text_color = QColor("#a1a1aa") # Zinc-400
+                 
+             img.fill(bg_color)
              
              from PySide6.QtGui import QPainter, QPen
              p = QPainter(img)
-             p.setPen(QPen(QColor("#bbbbbb")))
+             p.setPen(QPen(text_color))
+             font = p.font()
+             font.setPixelSize(14)
+             p.setFont(font)
              p.drawText(img.rect(), Qt.AlignCenter, "Cargando imagen...")
              p.end()
-             NoteEditor._placeholder_img = img
-        return NoteEditor._placeholder_img
+             setattr(NoteEditor, cache_key, img)
+             
+        return getattr(NoteEditor, cache_key)
 
     def _start_async_image_load(self, path):
         NoteEditor._loading_images.add(path)
