@@ -43,8 +43,8 @@ fi
 # ============================================
 # Paso 2: Compilar el .deb si no existe
 # ============================================
-if [ ! -f "$DEB_FILE" ]; then
-    echo -e "${YELLOW}→ El paquete $DEB_FILE no existe. Compilando...${NC}"
+if [ ! -f "$DEB_FILE" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
+    echo -e "${YELLOW}→ Compilando paquete (Forzado en CI/CD o archivo no encontrado)...${NC}"
     if [ -f "scripts/compilar-deb.sh" ]; then
         ./scripts/compilar-deb.sh
     else
