@@ -54,8 +54,8 @@ class ThemeManager:
             bg_color = editor_bg if editor_bg else "#18181b"
             text_color = "#e4e4e7"
             accent_color = "#60a5fa" # Blue-400 for text accents
-            code_bg = "#27272a"
-            border_color = "#3f3f46"
+            code_bg = "#71717a" # Zinc-500 - Light gray for contrast
+            border_color = "#a1a1aa" # Zinc-400
             
             return f"""
             NoteEditor {{
@@ -337,7 +337,7 @@ class ThemeManager:
     @staticmethod
     def get_code_bg_color(theme: str) -> QColor:
         if theme == "Dark":
-            return QColor("#27272a") # Zinc-800
+            return QColor("#71717a") # Zinc-500
         else:
             return QColor("#f4f4f5") # Zinc-100
 

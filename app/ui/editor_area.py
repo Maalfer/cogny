@@ -87,6 +87,11 @@ class EditorArea(QWidget):
              return
 
         self.current_note_id = note_id
+        
+        # Save Last Opened Note for Splash Screen logic
+        settings = QSettings()
+        settings.setValue(f"last_note_{self.fm.root_path}", note_id)
+        
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
         
@@ -235,8 +240,12 @@ class EditorArea(QWidget):
         if getattr(self.text_editor, "is_loading", False):
              self.text_editor.set_loading_state(False)
              
-        # Force one final update
-        self.text_editor.update_extra_selections()
+        # Force one final update with DELAY
+        # This 100ms delay ensures that the MarkdownHighlighter has finished 
+        # assigning block states (e.g. STATE_CODE_BLOCK) before we try to paint the backgrounds.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, self.text_editor.update_extra_selections)
+        
         self.status_message.emit("Nota cargada (completa).", 2000)
         self.note_loaded.emit(True)
 
