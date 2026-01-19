@@ -33,6 +33,9 @@ class UiActionsMixin:
         self.act_export_pdf = QAction("Exportar PDF", self)
         self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
 
+        self.act_export_doc = QAction("Exportar Documento...", self)
+        self.act_export_doc.triggered.connect(lambda: self.export_note_doc(self.editor_area.current_note_id))
+
         self.act_attach = QAction("Adjuntar Archivo...", self)
         self.act_attach.triggered.connect(self.editor_area.attach_file)
 
@@ -309,6 +312,54 @@ class UiActionsMixin:
         except Exception as e:
             ModernAlert.show(self, "Error de Exportación Múltiple", str(e))
 
+    def export_note_doc(self, note_id):
+        if not note_id:
+            return
+
+        # 1. Ask for Format
+        from app.ui.widgets import ModernSelection, ModernInfo, ModernAlert
+        format_choice, ok = ModernSelection.get_item(self, "Exportar Documento", "Selecciona el formato:", ["ODT (OpenDocument)", "DOCX (Word)"])
+        
+        if not ok or not format_choice:
+            return
+            
+        is_docx = "DOCX" in format_choice
+        ext = ".docx" if is_docx else ".odt"
+        filter_str = "Microsoft Word (*.docx)" if is_docx else "OpenDocument Text (*.odt)"
+        
+        # 2. Get Content & Path
+        try:
+            content = self.editor_area.text_editor.toHtml() # We use HTML for ODT
+            raw_text = self.editor_area.text_editor.toPlainText() # We use Text for DOCX (simple version)
+            
+            title = os.path.splitext(os.path.basename(note_id))[0]
+            default_name = f"{title}{ext}"
+             
+            path, _ = QFileDialog.getSaveFileName(self, f"Guardar {ext.upper()}", 
+                                                os.path.join(os.path.expanduser("~"), default_name), 
+                                                filter_str)
+            
+            if not path: return
+            if not path.endswith(ext): path += ext
+            
+            # 3. Export
+            from app.exporters.document_exporter import DocumentExporter
+            exporter = DocumentExporter(self.fm)
+            
+            success = False
+            if is_docx:
+                success = exporter.export_docx(raw_text, path)
+            else:
+                success = exporter.export_odt(content, path, base_url=self.fm.root_path)
+                
+            if success:
+                ModernInfo.show(self, "Éxito", f"Documento exportado correctamente a:\\n{path}")
+            else:
+                ModernAlert.show(self, "Error", "Ocurrió un error al exportar el documento.")
+                
+        except Exception as e:
+            ModernAlert.show(self, "Error", str(e))
+
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\n\nUna aplicación jerárquica para tomar notas.\nConstruida con PySide6 y Archivos Markdown.")
 
@@ -376,6 +427,7 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
         file_menu.addAction(self.act_export_pdf)
+        file_menu.addAction(self.act_export_doc)
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()
