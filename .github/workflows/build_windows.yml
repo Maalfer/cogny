@@ -24,6 +24,7 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
+      shell: bash
       run: |
         # Generate the executable using cli args directly to be safe
         pyinstaller --noconfirm --onedir --windowed --clean \
