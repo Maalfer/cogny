@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QSplitter, QToolBar, QFileDialog
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QAction, QKeySequence
 import os
+from datetime import datetime
 
 from app.ui.buscador import SearchManager
 from app.ui.barra_herramientas import FormatToolbar
@@ -46,6 +47,10 @@ class UiActionsMixin:
         self.act_exit = QAction("Salir", self)
         self.act_exit.setShortcut(QKeySequence.Quit)
         self.act_exit.triggered.connect(self.close)
+
+        # Backup Action
+        self.act_backup = QAction("Crear Respaldo...", self)
+        self.act_backup.triggered.connect(self.show_backup_dialog)
 
         # Edit Actions (Delegated to text_editor)
         self.act_undo = QAction("Deshacer", self)
@@ -367,6 +372,34 @@ class UiActionsMixin:
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\n\nUna aplicación jerárquica para tomar notas.\nConstruida con PySide6 y Archivos Markdown.")
 
+    def show_backup_dialog(self):
+        from app.ui.dialogs.dialogs_backup import BackupDialog
+        from app.storage.backup_manager import BackupManager
+
+        dlg = BackupDialog(self)
+        if dlg.exec():
+            fmt, password = dlg.get_data() # fmt: 'zip' or 'tar'
+            
+            # Suggest Filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ext = ".zip" if fmt == "zip" else ".tar.gz"
+            default_name = f"Backup_Cogny_{timestamp}{ext}"
+            
+            path, _ = QFileDialog.getSaveFileName(self, "Guardar Respaldo", 
+                                                os.path.join(os.path.expanduser("~"), default_name), 
+                                                f"Archivo {fmt.upper()} (*{ext})")
+            
+            if path:
+                if not path.endswith(ext): path += ext
+                
+                manager = BackupManager(self.fm.root_path)
+                success, msg = manager.create_backup(path, fmt, password)
+                
+                if success:
+                    ModernInfo.show(self, "Backup Completado", msg)
+                else:
+                    ModernAlert.show(self, "Error de Backup", msg)
+
 class UiSetupMixin:
     def setup_ui(self):
         # Central Widget
@@ -431,8 +464,13 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_child)
         file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
-        file_menu.addAction(self.act_export_pdf)
-        file_menu.addAction(self.act_export_doc)
+        # Export / Import Submenu
+        export_menu = file_menu.addMenu("Exportar / Importar")
+        export_menu.addAction(self.act_export_pdf)
+        export_menu.addAction(self.act_export_doc)
+        export_menu.addSeparator()
+        export_menu.addAction(self.act_backup)
+
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()
