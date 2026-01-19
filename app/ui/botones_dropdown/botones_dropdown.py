@@ -329,9 +329,12 @@ class UiActionsMixin:
         filter_str = "Microsoft Word (*.docx)" if is_docx else "OpenDocument Text (*.odt)"
         
         # 2. Get Content & Path
+        # 2. Get Content & Path
         try:
-            content = self.editor_area.text_editor.toHtml() # We use HTML for ODT
-            raw_text = self.editor_area.text_editor.toPlainText() # We use Text for DOCX (simple version)
+            from app.ui.markdown_renderer import MarkdownRenderer
+            raw_text = self.editor_area.text_editor.toPlainText() 
+            content = MarkdownRenderer.process_markdown_content(raw_text) # Render MD for ODT
+            # raw_text already gotten
             
             title = os.path.splitext(os.path.basename(note_id))[0]
             default_name = f"{title}{ext}"
@@ -394,7 +397,7 @@ class UiSetupMixin:
 
     def create_toolbar(self):
         toolbar = QToolBar("Barra Principal")
-        toolbar.setObjectName("MainToolbar")
+        toolbar.setObjectName("MainToolbarV2")
         self.addToolBar(toolbar)
         
         # Search Bar

@@ -58,6 +58,7 @@ class MarkdownRenderer:
                     'nl2br', 
                     'sane_lists', 
                     'codehilite',
+                    'toc', # Table of Contents support
                     CognyInternalExtension()
                 ],
                 extension_configs={
