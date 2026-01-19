@@ -33,9 +33,9 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          chmod +x compilar-deb.sh gestion-repositorio.sh
+          chmod +x scripts/compilar-deb.sh scripts/gestion-repositorio.sh
           # Run the management script
-          ./gestion-repositorio.sh
+          ./scripts/gestion-repositorio.sh
 
       - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5

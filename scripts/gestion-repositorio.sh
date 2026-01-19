@@ -202,30 +202,36 @@ EOF
 # ============================================
 # Paso 8: Publicación Automática en GitHub
 # ============================================
-echo -e "\n${YELLOW}→ Publicando en GitHub...${NC}"
-
-# Verificar si git está instalado
-if ! command -v git >/dev/null 2>&1; then
-    echo -e "${RED}Error: git no está instalado.${NC}"
-    exit 1
-fi
-
-# Añadir cambios
-echo -e "${YELLOW}→ git add docs${NC}"
-git add docs
-
-# Commit
-echo -e "${YELLOW}→ git commit${NC}"
-git commit -m "Update APT repository v${VERSION}" || echo "Nada que commitear"
-
-# Push
-echo -e "${YELLOW}→ git push${NC}"
-if git push origin main; then
-    echo -e "${GREEN}✓ Publicado exitosamente en GitHub.${NC}"
+# Si estamos en GitHub Actions, dejamos que el paso siguiente (git-auto-commit-action) maneje el push
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+    echo -e "\n${YELLOW}→ Entorno GitHub Actions detectado: Saltando push manual.${NC}"
+    echo -e "${YELLOW}Se utilizará git-auto-commit-action para guardar los cambios en 'docs'.${NC}"
 else
-    echo -e "${RED}Error al hacer push. Verifica tu configuración de git remote.${NC}"
-    # Intentar master si main falla, por si acaso
-    # git push origin master
+    echo -e "\n${YELLOW}→ Publicando en GitHub...${NC}"
+
+    # Verificar si git está instalado
+    if ! command -v git >/dev/null 2>&1; then
+        echo -e "${RED}Error: git no está instalado.${NC}"
+        exit 1
+    fi
+
+    # Añadir cambios
+    echo -e "${YELLOW}→ git add docs${NC}"
+    git add docs
+
+    # Commit
+    echo -e "${YELLOW}→ git commit${NC}"
+    git commit -m "Update APT repository v${VERSION}" || echo "Nada que commitear"
+
+    # Push
+    echo -e "${YELLOW}→ git push${NC}"
+    if git push origin main; then
+        echo -e "${GREEN}✓ Publicado exitosamente en GitHub.${NC}"
+    else
+        echo -e "${RED}Error al hacer push. Verifica tu configuración de git remote.${NC}"
+        # Intentar master si main falla, por si acaso
+        # git push origin master
+    fi
 fi
 
 echo -e "\n${GREEN}=== ¡Proceso Completado! ===${NC}\n"
