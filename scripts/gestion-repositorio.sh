@@ -130,7 +130,7 @@ fi
 REQUIRED_LIBS="libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0"
 echo -e "${YELLOW}→ Verificando librerías de sistema para PySide6/Qt...${NC}"
 
-# Check for existence of libraries, install if missing
+# Check for existenc of libraries, install if missing
 NEEDS_INSTALL=""
 for lib in $REQUIRED_LIBS; do
     if ! dpkg -s "$lib" >/dev/null 2>&1; then
