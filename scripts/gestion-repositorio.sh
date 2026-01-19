@@ -126,6 +126,25 @@ if ! command -v reprepro >/dev/null 2>&1; then
     sudo apt install -y reprepro
 fi
 
+# PySide6/Qt Dependencies (Linux)
+REQUIRED_LIBS="libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0"
+echo -e "${YELLOW}→ Verificando librerías de sistema para PySide6/Qt...${NC}"
+
+# Check for existence of libraries, install if missing
+NEEDS_INSTALL=""
+for lib in $REQUIRED_LIBS; do
+    if ! dpkg -s "$lib" >/dev/null 2>&1; then
+        NEEDS_INSTALL="$NEEDS_INSTALL $lib"
+    fi
+done
+
+if [ -n "$NEEDS_INSTALL" ]; then
+    echo -e "${YELLOW}Instalando librerías faltantes:$NEEDS_INSTALL${NC}"
+    sudo apt-get update && sudo apt-get install -y $NEEDS_INSTALL
+else
+    echo -e "${GREEN}✓ Todas las librerías necesarias están instaladas.${NC}"
+fi
+
 # Paso 2: Compilar
 if [ ! -f "$DEB_FILE" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
     echo -e "${YELLOW}→ Compilando paquete...${NC}"

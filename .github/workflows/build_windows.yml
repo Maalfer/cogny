@@ -32,10 +32,13 @@ jobs:
           --hidden-import "PySide6" \
           main.py
 
+    - name: Install Inno Setup
+      run: choco install innosetup
+
     - name: Build Installer with Inno Setup
-      uses: dschwiebert/inno-setup-action@v1
-      with:
-        path: setup.iss
+      run: |
+        $env:Path += ";C:\Program Files (x86)\Inno Setup 6"
+        ISCC.exe setup.iss
 
     - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
