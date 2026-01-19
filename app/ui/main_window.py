@@ -51,7 +51,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         # Let's check if Sidebar stores current selection.
         # Ideally, we should add 'last_opened_note' to settings when saving/opening.
         
-        last_note = settings.value(f"last_note_{self.vault_path}", "")
+        last_note = settings.value(f"last_note_{self.fm.root_path}", "")
         
         if last_note and self.fm.file_exists(last_note): # Check existence
              # Connect to editor area loaded signal

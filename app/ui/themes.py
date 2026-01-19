@@ -5,26 +5,27 @@ class ThemeManager:
     def get_palette(theme: str, sidebar_bg: str = None) -> QPalette:
         palette = QPalette()
         if theme == "Dark":
-            # Zinc-based Dark Theme
-            # Background: #18181b (Zinc-900)
-            # Surface: #27272a (Zinc-800)
-            # Text: #e4e4e7 (Zinc-200)
-            # Accent: #3b82f6 (Blue-500)
+            # Dracula Theme
+            # Background: #282a36
+            # Surface: #44475a
+            # Text: #f8f8f2
+            # Accent: #bd93f9 (Purple) or #8be9fd (Cyan) - keeping Blue for now or matching?
+            # Keeping existing accent logic but updating base.
             
-            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#18181b") 
+            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#282a36") 
             palette.setColor(QPalette.Window, base_bg)
-            palette.setColor(QPalette.WindowText, QColor("#e4e4e7"))
-            palette.setColor(QPalette.Base, QColor("#27272a")) # Slightly lighter than Window
-            palette.setColor(QPalette.AlternateBase, QColor("#3f3f46"))
-            palette.setColor(QPalette.ToolTipBase, QColor("#18181b"))
-            palette.setColor(QPalette.ToolTipText, QColor("#e4e4e7"))
-            palette.setColor(QPalette.Text, QColor("#e4e4e7"))
-            palette.setColor(QPalette.Button, QColor("#27272a"))
-            palette.setColor(QPalette.ButtonText, QColor("#e4e4e7"))
-            palette.setColor(QPalette.BrightText, QColor("#ef4444")) # Red-500
-            palette.setColor(QPalette.Link, QColor("#3b82f6"))      # Blue-500
-            palette.setColor(QPalette.Highlight, QColor("#3b82f6")) # Blue-500
-            palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+            palette.setColor(QPalette.WindowText, QColor("#f8f8f2"))
+            palette.setColor(QPalette.Base, QColor("#44475a")) # Surface
+            palette.setColor(QPalette.AlternateBase, QColor("#6272a4"))
+            palette.setColor(QPalette.ToolTipBase, QColor("#282a36"))
+            palette.setColor(QPalette.ToolTipText, QColor("#f8f8f2"))
+            palette.setColor(QPalette.Text, QColor("#f8f8f2"))
+            palette.setColor(QPalette.Button, QColor("#44475a"))
+            palette.setColor(QPalette.ButtonText, QColor("#f8f8f2"))
+            palette.setColor(QPalette.BrightText, QColor("#ff5555")) 
+            palette.setColor(QPalette.Link, QColor("#8be9fd"))      # Cyan
+            palette.setColor(QPalette.Highlight, QColor("#bd93f9")) # Purple
+            palette.setColor(QPalette.HighlightedText, QColor("#282a36"))
         else:
             # Modern Light Theme
             # Background: #ffffff (White)
@@ -51,11 +52,11 @@ class ThemeManager:
     @staticmethod
     def get_editor_style(theme: str, editor_bg: str = None) -> str:
         if theme == "Dark":
-            bg_color = editor_bg if editor_bg else "#18181b"
-            text_color = "#e4e4e7"
-            accent_color = "#60a5fa" # Blue-400 for text accents
-            code_bg = "#71717a" # Zinc-500 - Light gray for contrast
-            border_color = "#a1a1aa" # Zinc-400
+            bg_color = editor_bg if editor_bg else "#282a36"
+            text_color = "#f8f8f2"
+            accent_color = "#8be9fd" # Cyan
+            code_bg = "#44475a" # Dracula Surface
+            border_color = "#6272a4" # Dracula Comment
             
             return f"""
             NoteEditor {{
@@ -65,8 +66,8 @@ class ThemeManager:
                 padding-bottom: 40px;
                 background-color: {bg_color};
                 color: {text_color};
-                selection-background-color: #3b82f6;
-                selection-color: white;
+                selection-background-color: #bd93f9;
+                selection-color: #282a36;
             }}
             /* Markdown Headers */
             h1 {{ font-size: 28px; color: {text_color}; font-weight: 600; margin-top: 30px; margin-bottom: 15px; letter-spacing: -0.5px; }}
@@ -337,7 +338,7 @@ class ThemeManager:
     @staticmethod
     def get_code_bg_color(theme: str) -> QColor:
         if theme == "Dark":
-            return QColor("#71717a") # Zinc-500
+            return QColor("#44475a") # Dracula Surface
         else:
             return QColor("#f4f4f5") # Zinc-100
 

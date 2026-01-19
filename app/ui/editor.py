@@ -554,7 +554,7 @@ class NoteEditor(QTextEdit):
         while block.isValid():
             state = block.userState()
             
-            if state > 0 and state != 100: # Inside Code Block (and not just the end marker if separated)
+            if state > 0: # Inside Code Block (any positive state, including 100 for end)
                 # But typically state > 0 means "is code".
                 # User implementation: state=1 (generic), state>=2 (lang).
                 # We want background for these.
@@ -566,7 +566,7 @@ class NoteEditor(QTextEdit):
                 
                 cursor = self.textCursor()
                 cursor.setPosition(block.position())
-                cursor.setPosition(block.position() + block.length() - 1, QTextCursor.KeepAnchor) # -1 to exclude newline usually
+                cursor.setPosition(block.position() + block.length(), QTextCursor.KeepAnchor) # Include newline to ensure empty lines are painted and FullWidth works
                 sel.cursor = cursor
                 extra_selections.append(sel)
                 
