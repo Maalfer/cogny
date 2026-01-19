@@ -4,7 +4,7 @@ Hash: SHA512
 Origin: Cogny
 Label: Cogny App
 Codename: stable
-Date: Sun, 18 Jan 2026 19:30:16 UTC
+Date: Mon, 19 Jan 2026 12:53:16 UTC
 Architectures: amd64
 Components: main
 Description: Repositorio Oficial de Cogny
@@ -22,17 +22,17 @@ SHA256:
  0fbd99cf8dc871fda679b93ed3529f4c140a4cb787b1220cbe89b50a9d74a963 109 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEErgfqc5dLcjZvqPDkAZxi/t577pgFAmltNMgACgkQAZxi/t57
-7piIWQ/+IYVmMJvx45TjVM6C6aLnSZf8EEjmndCPjkyi/tBczpeKyV6yPLXFyb3E
-eqPNYNesepOLIn2ldN8GezzttVBiIveEOolcg+gtHR5P1BKuBShI/cr8MuHT8SFP
-C9QR0Voctp9XV1hDYVswizb0BkgG/96FeV6hbfeBAOLtVrLH2DncOumtLOoIHnze
-DpZE0waH/uT4O6owJ/f4MBXuNWxPhUrzYaePZHh601TYge+oDI6IIWIEPT65/fs3
-Y5QAaaFwMy3ZQBTmF6RxPZws2I2UHKacACfqOJiE9xGt3wLN8NvWFbme6NT3FsPr
-XQwu+EZGUShvvmI/nCDPqsCcVPKvDCyyvQ+47FEsn7kwGDUP7V6UBjF8LNqAIEOL
-oQ3XZyk+ikYXv1GkSeErKqSAw+JSpouqGydpC+E+cBlxJr7BQTgz7Zd91WiHn8oK
-2zWvXSc7KbIqoZrnz+wDMZC1DrgtuaMYpxOvyk0iB2zqGhKqPpSqMshMDepS1R8A
-YTSauwFI0SRF5azZvs5Wmc8dL40FNDmKNxcQi2x5Ss7ob3HP5spviYEcJ/gNiGZh
-mJ3f+qjQfEkKwbIULB9Xek/wjMp89u4OZ6DPDNzPz2DKE9LEa/IepVkxwzMbdNe4
-kmcN0eadKDjggoqBiOR+tY3RG1USgNGlyxiyhDinyiT8ylVs1pc=
-=JsZy
+iQIzBAEBCgAdFiEErgfqc5dLcjZvqPDkAZxi/t577pgFAmluKTwACgkQAZxi/t57
+7pgTzg//YSHyELedPv1v8I/ToruSoLUc8mCqwD4Xr6qBpmx++yjX4Qrh3wu/JB3p
+2EDqozPiXgW8GAgW4XEbe5h0yMGOgSUDj1IhKRoYnwmIuwd7JDnDhIIFBMz/pmfJ
+25l2Qym8Hew24eoSPFLBCGN7c8sZRjjeim9HALAHN2yYO8BECRKF7a+YRDqDWA9e
+oysA9fhG0Wqbb1DMeMftRvGz7U8nGtzmre3grVhDhobtJj+V3dxJiIZY1SKfPcqU
+tgclGVMx4AA0XC59r423Ru2ewAoFMwPawu3UTb1RPdJaj6Yu0IMQid6aOZj66jpP
+Hy1juoCyxLSgNkhx6nRLx5iYyflTwJ58IFFbwvwHpO6M9n9btFLXvTKd65OJpOxE
+EVAn7PpraQJ/zPvcFedknd9i33uRIEAh1k9F+u5M4RLoxKt1BB97j9qDKngGYAOo
+FNXa1jCzm1wYeoe0I/BzSAMdJk8Q7NCCZZaJijiBJvuQ2Mz2fHRn6OiXX0KHzqnr
+LEkJIet2k4mBaS6eEV+XRr2Y6VNlIvb4mS74k6oVdB5Xpj37MWx8rcfZFCWEHlQA
+oCnr0txp0mcto94Jb6VAhHxVtUCmJI1TZpVUiLpgQJuyXaPV0EEEc7JCMZ6szdeL
+BnegUJhv5RlnPsYtLh7aNipTySNd6BlAHCsEcmL1WiVUxK2xmcg=
+=18sY
 -----END PGP SIGNATURE-----
