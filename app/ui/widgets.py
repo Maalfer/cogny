@@ -363,13 +363,20 @@ class ModernSelection(ModernDialog):
 class ThemeSettingsDialog(ModernDialog):
     @staticmethod
     def show_dialog(parent):
-        dlg = ThemeSettingsDialog(parent)
+        # We assume parent has config_manager if it's MainWindow
+        if not hasattr(parent, 'config_manager'):
+             print("Error: Parent does not have config_manager")
+             return False
+             
+        dlg = ThemeSettingsDialog(parent.config_manager, parent)
         if dlg.exec() == QDialog.Accepted:
              return True
         return False
 
-    def __init__(self, parent=None):
+    def __init__(self, config_manager, parent=None):
         super().__init__("Configuración de Tema", None, parent)
+        self.config_manager = config_manager
+
         
         # Grid-like layout manually
         # Row 1: Base Theme
@@ -379,7 +386,7 @@ class ThemeSettingsDialog(ModernDialog):
         
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Light", "Dark"])
-        current_theme = self.settings.value("theme", "Dark")
+        current_theme = self.config_manager.get("theme", "Dark")
         self.theme_combo.setCurrentText(current_theme)
         
         if self.current_theme == "Dark":
@@ -421,7 +428,7 @@ class ThemeSettingsDialog(ModernDialog):
         
         self.editor_bg_btn = QPushButton("Elegir Color")
         self.editor_bg_btn.setCursor(Qt.PointingHandCursor)
-        self.current_editor_bg = self.settings.value("theme_custom_editor_bg", "")
+        self.current_editor_bg = self.config_manager.get("theme_custom_editor_bg", "")
         self.update_btn_style(self.editor_bg_btn, self.current_editor_bg)
         self.editor_bg_btn.clicked.connect(self.pick_editor_bg)
         
@@ -436,7 +443,7 @@ class ThemeSettingsDialog(ModernDialog):
         
         self.sidebar_bg_btn = QPushButton("Elegir Color")
         self.sidebar_bg_btn.setCursor(Qt.PointingHandCursor)
-        self.current_sidebar_bg = self.settings.value("theme_custom_sidebar_bg", "")
+        self.current_sidebar_bg = self.config_manager.get("theme_custom_sidebar_bg", "")
         self.update_btn_style(self.sidebar_bg_btn, self.current_sidebar_bg)
         self.sidebar_bg_btn.clicked.connect(self.pick_sidebar_bg)
         
@@ -539,7 +546,9 @@ class ThemeSettingsDialog(ModernDialog):
         self.theme_combo.setCurrentText("Dark")
 
     def save_settings(self):
-        self.settings.setValue("theme", self.theme_combo.currentText())
-        self.settings.setValue("theme_custom_editor_bg", self.current_editor_bg)
-        self.settings.setValue("theme_custom_sidebar_bg", self.current_sidebar_bg)
+        self.config_manager.save_config(items={
+            "theme": self.theme_combo.currentText(),
+            "theme_custom_editor_bg": self.current_editor_bg,
+            "theme_custom_sidebar_bg": self.current_sidebar_bg
+        })
         self.accept()

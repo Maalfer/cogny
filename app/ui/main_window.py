@@ -31,11 +31,15 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
              
         self.fm = FileManager(vault_path)
         
+        # Initialize Config Manager
+        from app.storage.config_manager import ConfigManager
+        self.config_manager = ConfigManager(self.fm.root_path)
+        
         self.setup_ui()
         
         # Apply Initial Theme (Stylesheets)
-        settings = QSettings()
-        current_theme = settings.value("theme", "Dark")
+        # settings = QSettings() -> Removed global settings for theme
+        current_theme = self.config_manager.get("theme", "Dark")
         self.switch_theme(current_theme)
 
     def preload_initial_state(self):
@@ -100,6 +104,10 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         
         # 2. Re-initialize File Manager
         self.fm = FileManager(new_path)
+        
+        # Re-init Config Manager
+        from app.storage.config_manager import ConfigManager
+        self.config_manager = ConfigManager(self.fm.root_path)
         
         # 3. Clear image cache
         from app.ui.editor import NoteEditor
