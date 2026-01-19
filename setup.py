@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="cogny",
-    version="1.0.3",
+    version="1.0.4",
     packages=find_packages(),
     py_modules=["main"],
     install_requires=[

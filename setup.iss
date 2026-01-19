@@ -1,5 +1,5 @@
 #define MyAppName "Cogny"
-#define MyAppVersion "1.0.3"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "Maalfer"
 #define MyAppURL "https://github.com/Maalfer/cogny"
 #define MyAppExeName "Cogny.exe"
