@@ -141,13 +141,43 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 # For now just let it be standard text (or use hidden_format logic from others)
                 pass
 
-        # WikiLink: ![[image]]
+        # WikiLink: ![[image]] or [[#Header]] or [[Note]]
+        # 1. Wiki Images ![[...]]
         img_wiki_pattern = QRegularExpression(r"!\[\[(.*?)\]\]")
         it = img_wiki_pattern.globalMatch(text)
         while it.hasNext():
             match = it.next()
             if not is_active:
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.hidden_format)
+
+        # 2. Internal Links [[#Header]]
+        # We need a clickable style.
+        link_fmt = QTextCharFormat()
+        link_fmt.setForeground(QColor("#4A90E2")) # Link Color
+        link_fmt.setUnderlineStyle(QTextCharFormat.SingleUnderline)
+        
+        # Regex: [[#...]]
+        # But we might want generic [[...]] eventually. For now, specific for headers as requested.
+        # Although generic [[...]] typically implies a note link.
+        # User asked for [[#Header]].
+        internal_link_pattern = QRegularExpression(r"(\[\[)(#.*?)(]])")
+        it = internal_link_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            
+            # Format the content (group 2)
+            self.setFormat(match.capturedStart(2), match.capturedLength(2), link_fmt)
+            
+            # Hide brackets if not active
+            if not is_active:
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
+            else:
+                 # Gray brackets when active
+                 bracket_fmt = QTextCharFormat()
+                 bracket_fmt.setForeground(QColor("gray"))
+                 self.setFormat(match.capturedStart(1), match.capturedLength(1), bracket_fmt)
+                 self.setFormat(match.capturedStart(3), match.capturedLength(3), bracket_fmt)
 
         # Inline Code (`text`)
         # Must be before normal text rules? No, separate regex.

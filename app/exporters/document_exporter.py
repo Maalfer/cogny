@@ -1,6 +1,7 @@
 from PySide6.QtGui import QTextDocument, QTextDocumentWriter
 from PySide6.QtCore import QUrl
 import os
+import re
 
 class DocumentExporter:
     """
@@ -12,13 +13,27 @@ class DocumentExporter:
     def export_odt(self, html_content: str, output_path: str, base_url: str = None) -> bool:
         """
         Exports HTML content to ODT using Qt's built-in writer.
+        We need to ensure images have absolute paths.
         """
         try:
+            # Preprocess HTML to resolve relative paths
+            def replace_path(match):
+                path = match.group(1)
+                if self.fm:
+                    resolved = self.fm.resolve_file_path(path)
+                    if resolved:
+                        return f'src="{resolved}"'
+                return match.group(0)
+
+            # Regex to find src="..." attributes
+            # We use a simple regex for efficiency. HTML is likely well-formed from QTextDocument.
+            processed_html = re.sub(r'src="([^"]+)"', replace_path, html_content)
+            
             doc = QTextDocument()
             if base_url:
                 doc.setBaseUrl(QUrl.fromLocalFile(base_url))
             
-            doc.setHtml(html_content)
+            doc.setHtml(processed_html)
             
             writer = QTextDocumentWriter(output_path)
             writer.setFormat(b"ODF")
@@ -35,15 +50,9 @@ class DocumentExporter:
         """
         try:
             from docx import Document
-            from docx.shared import Pt
+            from docx.shared import Pt, Inches
             
             doc = Document()
-            
-            # Simple Markdown-ish parsing or just dumping text?
-            # User wants "Exportar Documento".
-            # If we pass raw markdown, it looks bad.
-            # If we pass HTML, python-docx doesn't parse HTML natively.
-            # Best effort: Split by lines and try to respect headers/paragraphs.
             
             lines = content_text.split('\n')
             
@@ -52,12 +61,60 @@ class DocumentExporter:
                 if not stripped:
                     continue
                     
+                # Check for headers
                 if stripped.startswith('# '):
                     doc.add_heading(stripped[2:], level=1)
                 elif stripped.startswith('## '):
                     doc.add_heading(stripped[3:], level=2)
                 elif stripped.startswith('### '):
                     doc.add_heading(stripped[4:], level=3)
+                    
+                # Check for images: ![Alt](path)
+                elif stripped.startswith('![') and '](' in stripped and stripped.endswith(')'):
+                    try:
+                        # Extract path
+                        # Regex for ![alt](path)
+                        match = re.search(r'!\[(.*?)\]\((.*?)\)', stripped)
+                        if match:
+                            image_path = match.group(2)
+                            resolved_path = None
+                            if self.fm:
+                                resolved_path = self.fm.resolve_file_path(image_path)
+                            
+                            if resolved_path and os.path.exists(resolved_path):
+                                doc.add_picture(resolved_path, width=Inches(6.0)) # Max width 6 inches
+                            else:
+                                # Fallback: Add as text if image not found
+                                doc.add_paragraph(f"[Imagen no encontrada: {image_path}]")
+                        else:
+                             doc.add_paragraph(stripped)
+                    except Exception as img_err:
+                        print(f"Error inserting image in DOCX: {img_err}")
+                        doc.add_paragraph(stripped)
+
+                # Check for Obsidian-style images: ![[image]]
+                elif stripped.startswith('![[') and stripped.endswith(']]'):
+                    try:
+                        match = re.search(r'!\[\[(.*?)\]\]', stripped)
+                        if match:
+                            content = match.group(1)
+                            # Handle piping for size/alt: [[image.png|100]] or [[image.png|alt]]
+                            image_path = content.split('|')[0]
+                            
+                            resolved_path = None
+                            if self.fm:
+                                resolved_path = self.fm.resolve_file_path(image_path)
+                                
+                            if resolved_path and os.path.exists(resolved_path):
+                                doc.add_picture(resolved_path, width=Inches(6.0))
+                            else:
+                                doc.add_paragraph(f"[Imagen no encontrada: {image_path}]")
+                        else:
+                            doc.add_paragraph(stripped)
+                    except Exception as img_err:
+                        print(f"Error inserting wiki-image in DOCX: {img_err}")
+                        doc.add_paragraph(stripped)
+                        
                 else:
                     # Todo: Detect bullets?
                     if stripped.startswith('- ') or stripped.startswith('* '):

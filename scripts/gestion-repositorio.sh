@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+cd "$(dirname "$0")/.."
 
 # ============================================
 # Script de Gestión del Repositorio APT
@@ -44,10 +45,10 @@ fi
 # ============================================
 if [ ! -f "$DEB_FILE" ]; then
     echo -e "${YELLOW}→ El paquete $DEB_FILE no existe. Compilando...${NC}"
-    if [ -f "compilar-deb.sh" ]; then
-        ./compilar-deb.sh
+    if [ -f "scripts/compilar-deb.sh" ]; then
+        ./scripts/compilar-deb.sh
     else
-        echo -e "${RED}Error: compilar-deb.sh no encontrado.${NC}"
+        echo -e "${RED}Error: scripts/compilar-deb.sh no encontrado.${NC}"
         exit 1
     fi
 else
@@ -70,17 +71,24 @@ if [ -z "$GPG_KEY_ID" ]; then
              exit 1
         }
         
-        # Opcional: Configurar confianza final, aunque usualmente basta con importar
-        # Obtener el ID de la clave recién importada
         GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
     else
         echo -e "${YELLOW}→ Buscando clave GPG disponible en el sistema...${NC}"
-        GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+        # Intentar obtener solo claves secretas, eliminar cabeceras, tomar la primera
+        # Use --with-colons for machine readable output
+        # Format: sec:u:2048:1:KEYID:......
+        GPG_KEY_ID=$(gpg --list-secret-keys --with-colons | grep '^sec' | head -n1 | cut -d':' -f5)
+        
+        if [ -z "$GPG_KEY_ID" ]; then
+            # Fallback to old parsing if --with-colons fails or behaves oddly
+             GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+        fi
     fi
     
     if [ -z "$GPG_KEY_ID" ]; then
-        echo -e "${RED}Error: No se encontró ninguna clave GPG.${NC}"
-        echo -e "${YELLOW}En CI/CD, asegúrate de configurar el secreto GPG_PRIVATE_KEY.${NC}"
+        echo -e "${RED}Error: No se encontró ninguna clave GPG privada en el sistema.${NC}"
+        echo -e "${YELLOW}Debes generar una clave GPG antes de continuar:${NC}"
+        echo -e "${GREEN}  gpg --full-generate-key${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ Clave detectada: $GPG_KEY_ID${NC}"
@@ -173,10 +181,10 @@ Para instalar Cogny desde este repositorio:
 
 \`\`\`bash
 # 1. Añadir la clave GPG
-curl -fsSL https://TU_USUARIO.github.io/cogny/${APP_NAME}.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/${APP_NAME}-archive-keyring.gpg
+curl -fsSL https://Maalfer.github.io/cogny/${APP_NAME}.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/${APP_NAME}-archive-keyring.gpg
 
 # 2. Añadir el repositorio
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/${APP_NAME}-archive-keyring.gpg] https://TU_USUARIO.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/${APP_NAME}.list > /dev/null
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/${APP_NAME}-archive-keyring.gpg] https://Maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/${APP_NAME}.list > /dev/null
 
 # 3. Actualizar e instalar
 sudo apt update
@@ -192,28 +200,34 @@ sudo apt upgrade ${APP_NAME}
 EOF
 
 # ============================================
-# Paso 8: Resumen e Instrucciones
+# Paso 8: Publicación Automática en GitHub
 # ============================================
-echo -e "\n${GREEN}=== ¡Repositorio APT creado exitosamente! ===${NC}\n"
-echo -e "${YELLOW}Siguiente paso: Publicar en GitHub${NC}"
-echo -e "
-El repositorio ya está en la carpeta ${GREEN}docs/${NC} listo para GitHub Pages.
+echo -e "\n${YELLOW}→ Publicando en GitHub...${NC}"
 
-${YELLOW}Comandos para subir a GitHub:${NC}
-   ${GREEN}git add docs
-   git commit -m 'Update APT repository v${VERSION}'
-   git push${NC}
-   
-${YELLOW}Luego en GitHub:${NC}
-   Settings > Pages > Source: 'main' branch, ${GREEN}/docs${NC} folder
+# Verificar si git está instalado
+if ! command -v git >/dev/null 2>&1; then
+    echo -e "${RED}Error: git no está instalado.${NC}"
+    exit 1
+fi
 
-${YELLOW}Los usuarios podrán instalar con:${NC}
-   ${GREEN}curl -fsSL https://TU_USUARIO.github.io/cogny/${APP_NAME}.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/${APP_NAME}-archive-keyring.gpg
-   echo \"deb [arch=amd64 signed-by=/usr/share/keyrings/${APP_NAME}-archive-keyring.gpg] https://TU_USUARIO.github.io/cogny stable main\" | sudo tee /etc/apt/sources.list.d/${APP_NAME}.list
-   sudo apt update && sudo apt install ${APP_NAME}${NC}
-"
+# Añadir cambios
+echo -e "${YELLOW}→ git add docs${NC}"
+git add docs
 
-echo -e "${GREEN}Archivos generados:${NC}"
-echo -e "  - ${DEB_FILE}"
-echo -e "  - ${APT_REPO_DIR}/ (repositorio en docs/ listo para GitHub Pages)"
-echo -e "  - ${APP_NAME}.gpg.key (clave pública)\n"
+# Commit
+echo -e "${YELLOW}→ git commit${NC}"
+git commit -m "Update APT repository v${VERSION}" || echo "Nada que commitear"
+
+# Push
+echo -e "${YELLOW}→ git push${NC}"
+if git push origin main; then
+    echo -e "${GREEN}✓ Publicado exitosamente en GitHub.${NC}"
+else
+    echo -e "${RED}Error al hacer push. Verifica tu configuración de git remote.${NC}"
+    # Intentar master si main falla, por si acaso
+    # git push origin master
+fi
+
+echo -e "\n${GREEN}=== ¡Proceso Completado! ===${NC}\n"
+echo -e "El repositorio debería estar disponible pronto en:"
+echo -e "${GREEN}https://Maalfer.github.io/cogny/${NC}"

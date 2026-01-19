@@ -69,3 +69,12 @@ class FormatToolbar(QToolBar):
         # Using lambda safely since self is retained
         action_table.triggered.connect(lambda: self.text_editor.insert_table(2, 2))
         self.addAction(action_table)
+        
+        # Insert TOC
+        action_toc = QAction("Índice", self)
+        action_toc.setToolTip("Insertar Índice (TOC)")
+        action_toc.triggered.connect(self.text_editor.generate_toc)
+        font = action_toc.font()
+        font.setBold(True)
+        action_toc.setFont(font)
+        self.addAction(action_toc)

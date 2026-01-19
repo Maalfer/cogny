@@ -2,6 +2,8 @@ from PySide6.QtWidgets import QTextEdit, QToolButton, QApplication
 from PySide6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QSize
 from PySide6.QtGui import QImage, QTextDocument, QColor, QTextFormat, QIcon, QGuiApplication, QTextCursor, QKeySequence, QTextLength
 from app.ui.themes import ThemeManager
+import os
+import re
 
 class NoteEditor(QTextEdit):
     # Class-level image cache shared across instances
@@ -448,8 +450,88 @@ class NoteEditor(QTextEdit):
         super().mouseDoubleClickEvent(event)
 
     def mouseReleaseEvent(self, event):
-        # We disabled click-to-open for attachments.
+        # Handle Internal Links Navigation
+        cursor = self.cursorForPosition(event.pos())
+        anchor = self.anchorAt(event.pos()) # Standard HTML links
+        
+        # Check for wiki-style internal links [[#Header]]
+        block = cursor.block()
+        text = block.text()
+        
+        # We need to check if the click was *inside* a [[#...]] pattern
+        # Simple proximity check around cursor
+        pos_in_block = cursor.positionInBlock()
+        
+        import re
+        # Find all link matches in the line
+        for match in re.finditer(r"\[\[(#.*?)\]\]", text):
+            start = match.start()
+            end = match.end()
+            if start <= pos_in_block <= end:
+                target = match.group(1) # "#Header"
+                self.scroll_to_header(target)
+                return
+
         super().mouseReleaseEvent(event)
+
+    def scroll_to_header(self, header_target):
+        """
+        Scrolls to the header matching the target string (e.g. #Introducción).
+        Case-insensitive match.
+        """
+        target_clean = header_target.lstrip('#').strip().lower()
+        
+        block = self.document().begin()
+        while block.isValid():
+            text = block.text().strip()
+            if text.startswith("#"):
+                # Clean header text: remove hashes and strip
+                # e.g. "## Introducción" -> "introducción"
+                # "## Conceptos Clave" -> "conceptos clave"
+                header_content = re.sub(r"^#+\s*", "", text).lower().strip()
+                
+                if header_content == target_clean:
+                    # Found!
+                    cursor = self.textCursor()
+                    cursor.setPosition(block.position())
+                    self.setTextCursor(cursor)
+                    self.ensureCursorVisible()
+                    center_cursor = self.cursorRect(cursor).center()
+                    # self.verticalScrollBar().setValue(...) # ensureCursorVisible handles it usually
+                    return
+            block = block.next()
+
+    def generate_toc(self):
+        """Generates a Table of Contents at the current cursor position."""
+        toc_lines = ["## Índice"]
+        
+        block = self.document().begin()
+        while block.isValid():
+            text = block.text().strip()
+            if text.startswith("#"):
+                match = re.match(r"^(#+)\s+(.*)", text)
+                if match:
+                    hashes = match.group(1)
+                    title = match.group(2).strip()
+                    level = len(hashes)
+                    
+                    if title.lower() == "índice": # Skip the TOC header itself
+                         block = block.next()
+                         continue
+                         
+                    # Create Link: [[#Title]]
+                    link = f"[[#{title}]]"
+                    
+                    # Indent
+                    indent = "  " * (level - 1)
+                    toc_lines.append(f"{indent}* {link}")
+                    
+            block = block.next()
+            
+        if len(toc_lines) > 1:
+            cursor = self.textCursor()
+            cursor.insertText("\n".join(toc_lines) + "\n\n")
+
 
 
 
