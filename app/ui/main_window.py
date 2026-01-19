@@ -44,24 +44,19 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
 
     def preload_initial_state(self):
         """Called by splash to pre-load content before showing window."""
-        # 1. Check for last opened note
-        settings = QSettings()
-        # We need to implement last_note saving/loading if not present.
-        # Assuming we can get it from UiStateMixin or just store it.
-        # Let's check if Sidebar stores current selection.
-        # Ideally, we should add 'last_opened_note' to settings when saving/opening.
-        
-        last_note = settings.value(f"last_note_{self.fm.root_path}", "")
+        # 1. Check for last opened note in Vault Config
+        last_note = self.config_manager.get("last_opened_note", "")
         
         if last_note and self.fm.file_exists(last_note): # Check existence
              # Connect to editor area loaded signal
              self.editor_area.note_loaded.connect(self._on_preload_finished)
              
              # Determine title (basename)
+             # Determine title (basename)
              title = os.path.basename(last_note)
              
-             # Trigger Load
-             self.editor_area.load_note(last_note, is_folder=False, title=title, preload_images=True)
+             # Trigger Load Synchronously
+             self.editor_area.load_note(last_note, is_folder=False, title=title, preload_images=True, async_load=False)
         else:
              # Nothing to load, ready immediately
              self.ready.emit()

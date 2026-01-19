@@ -80,7 +80,7 @@ class EditorArea(QWidget):
         if hasattr(self, "highlighter"):
              self.highlighter.set_theme(theme_name)
 
-    def load_note(self, note_id, is_folder=None, title=None, preload_images=False):
+    def load_note(self, note_id, is_folder=None, title=None, preload_images=False, async_load=True):
         if is_folder:
              self.current_note_id = None
              self.show_folder_placeholder(title)
@@ -89,8 +89,8 @@ class EditorArea(QWidget):
         self.current_note_id = note_id
         
         # Save Last Opened Note for Splash Screen logic
-        settings = QSettings()
-        settings.setValue(f"last_note_{self.fm.root_path}", note_id)
+        # Ideally this should be handled by ConfigManager upstream, but simple redundancy is fine or remove it.
+        # Removing QSettings usage here to avoid conflicts with ConfigManager.
         
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
@@ -105,11 +105,15 @@ class EditorArea(QWidget):
         self.text_editor.setHtml("<div style='text-align: center; margin-top: 50px; color: #888;'><h2>Cargando...</h2></div>")
         self.text_editor.set_loading_state(True)
         
-        # 2. Defer heavy loading to next event loop iteration
-        # This allows the UI to repaint the "Loading..." message properly.
-        from PySide6.QtCore import QTimer
-        # 10ms is enough to let the event loop process the paint events
-        QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title, preload_images))
+        # 2. Perform Load
+        if async_load:
+            # Defer heavy loading to next event loop iteration
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title, preload_images))
+        else:
+            # Synchronous load (blocks UI until done)
+            # Necessary for Splash Screen "preload" to be true preload
+            self._perform_load_note(note_id, title, preload_images)
 
     def _perform_load_note(self, note_id, title, preload_images=False):
         if self.current_note_id != note_id:

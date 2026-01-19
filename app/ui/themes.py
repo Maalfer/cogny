@@ -4,14 +4,8 @@ class ThemeManager:
     @staticmethod
     def get_palette(theme: str, sidebar_bg: str = None) -> QPalette:
         palette = QPalette()
-        if theme == "Dark":
+        if theme == "Dracula":
             # Dracula Theme
-            # Background: #282a36
-            # Surface: #44475a
-            # Text: #f8f8f2
-            # Accent: #bd93f9 (Purple) or #8be9fd (Cyan) - keeping Blue for now or matching?
-            # Keeping existing accent logic but updating base.
-            
             base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#282a36") 
             palette.setColor(QPalette.Window, base_bg)
             palette.setColor(QPalette.WindowText, QColor("#f8f8f2"))
@@ -26,13 +20,26 @@ class ThemeManager:
             palette.setColor(QPalette.Link, QColor("#8be9fd"))      # Cyan
             palette.setColor(QPalette.Highlight, QColor("#bd93f9")) # Purple
             palette.setColor(QPalette.HighlightedText, QColor("#282a36"))
+            
+        elif theme == "Dark":
+            # Modern Dark Theme (Zinc-950/900)
+            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#18181b") 
+            palette.setColor(QPalette.Window, base_bg)
+            palette.setColor(QPalette.WindowText, QColor("#e4e4e7"))
+            palette.setColor(QPalette.Base, QColor("#27272a")) # Zinc-800
+            palette.setColor(QPalette.AlternateBase, QColor("#3f3f46"))
+            palette.setColor(QPalette.ToolTipBase, QColor("#18181b"))
+            palette.setColor(QPalette.ToolTipText, QColor("#e4e4e7"))
+            palette.setColor(QPalette.Text, QColor("#e4e4e7"))
+            palette.setColor(QPalette.Button, QColor("#27272a"))
+            palette.setColor(QPalette.ButtonText, QColor("#e4e4e7"))
+            palette.setColor(QPalette.BrightText, QColor("#ef4444")) # Red-500
+            palette.setColor(QPalette.Link, QColor("#60a5fa"))      # Blue-400
+            palette.setColor(QPalette.Highlight, QColor("#3b82f6")) # Blue-500
+            palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+
         else:
             # Modern Light Theme
-            # Background: #ffffff (White)
-            # Surface: #f4f4f5 (Zinc-100)
-            # Text: #18181b (Zinc-900)
-            # Accent: #2563eb (Blue-600)
-
             base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#f4f4f5")
             palette.setColor(QPalette.Window, base_bg)
             palette.setColor(QPalette.WindowText, QColor("#18181b"))

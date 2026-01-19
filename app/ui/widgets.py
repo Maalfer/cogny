@@ -546,9 +546,15 @@ class ThemeSettingsDialog(ModernDialog):
         self.theme_combo.setCurrentText("Dark")
 
     def save_settings(self):
+        # Update Local Config
         self.config_manager.save_config(items={
             "theme": self.theme_combo.currentText(),
             "theme_custom_editor_bg": self.current_editor_bg,
             "theme_custom_sidebar_bg": self.current_sidebar_bg
         })
+        
+        # Update Global Settings (for startup)
+        settings = QSettings()
+        settings.setValue("theme", self.theme_combo.currentText())
+        
         self.accept()
