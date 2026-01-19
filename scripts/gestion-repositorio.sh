@@ -141,6 +141,11 @@ fi
 # Paso 3: Configurar GPG
 echo -e "\n${YELLOW}→ Configurando firmado GPG...${NC}"
 if [ -z "$GPG_KEY_ID" ]; then
+    if [ "$GITHUB_ACTIONS" = "true" ] && [ -z "$GPG_PRIVATE_KEY" ]; then
+        echo -e "${RED}Error: GPG_PRIVATE_KEY secret is missing in GitHub Actions!${NC}"
+        echo -e "Please add it in Settings > Secrets and variables > Actions."
+        exit 1
+    fi
     if [ -n "$GPG_PRIVATE_KEY" ]; then
         echo -e "${YELLOW}→ Importando clave desde ENV (CI/CD)...${NC}"
         echo "$GPG_PRIVATE_KEY" | sed 's/\\n/\n/g' | tr -d '\r' | gpg --batch --import || {
