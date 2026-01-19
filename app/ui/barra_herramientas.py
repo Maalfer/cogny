@@ -47,6 +47,22 @@ class FormatToolbar(QToolBar):
 
         self.addSeparator()
 
+        # Headers
+        for i in range(1, 4):
+            action = QAction(f"H{i}", self)
+            action.setToolTip(f"Título {i}")
+            # Use distinct font size for icon? 
+            # Or just bold text
+            font = action.font()
+            font.setBold(True)
+            action.setFont(font)
+            
+            # Capture variable i in lambda default arg
+            action.triggered.connect(lambda checked=False, level=i: self.text_editor.toggle_header(level))
+            self.addAction(action)
+
+        self.addSeparator()
+
         # Insert Table
         action_table = QAction("Tabla", self)
         action_table.setToolTip("Insertar Tabla (2x2)")

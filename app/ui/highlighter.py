@@ -77,11 +77,30 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # but replace_file_content replaces range. I'll include the whole method for safety or careful chunks.)
         
         # Re-implementing formatting loop for standard markdown to ensure context is kept
+        # Re-implementing formatting loop for standard markdown to ensure context is kept
         header_match = self.header_pattern_live.match(text)
         if header_match.hasMatch():
+            hashes = header_match.captured(1)
+            level = len(hashes)
+            
             header_format = QTextCharFormat()
             header_format.setFontWeight(QFont.Bold)
-            header_format.setForeground(QColor("#4A90E2"))
+            
+            # Dynamic Sizing & Color
+            # Base size typically ~13-14pt.
+            if level == 1:
+                header_format.setFontPointSize(26) # ~200%
+                header_format.setForeground(QColor("#3b82f6")) # Blue-500
+            elif level == 2:
+                header_format.setFontPointSize(20) # ~150%
+                header_format.setForeground(QColor("#60a5fa")) # Blue-400
+            elif level == 3:
+                header_format.setFontPointSize(16) # ~125%
+                header_format.setForeground(QColor("#93c5fd")) # Blue-300
+            else:
+                header_format.setFontPointSize(14) # Normal-ish but bold
+                header_format.setForeground(QColor("#a1a1aa")) # Zinc-400
+                
             self.setFormat(0, len(text), header_format)
             if not is_active:
                 self.setFormat(header_match.capturedStart(1), header_match.capturedLength(1), self.hidden_format)

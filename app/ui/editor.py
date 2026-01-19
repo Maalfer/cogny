@@ -57,6 +57,42 @@ class NoteEditor(QTextEdit):
     def toggle_underline(self):
         self._wrap_selection("<u>", "</u>")
 
+    def toggle_header(self, level: int):
+        """
+        Toggles header at the current cursor line.
+        If line starts with same header level, removes it.
+        If different level, changes it.
+        If none, adds it.
+        """
+        cursor = self.textCursor()
+        # Ensure we operate on the block (line)
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        
+        line_text = cursor.selectedText()
+        target_prefix = "#" * level + " "
+        
+        # Check existing headers
+        import re
+        match = re.match(r"^(#+)\s+(.*)", line_text)
+        
+        if match:
+            existing_hashes = match.group(1)
+            content = match.group(2)
+            
+            if len(existing_hashes) == level:
+                # Same level -> Toggle OFF (remove header)
+                new_text = content
+            else:
+                # Different level -> Change
+                new_text = f"{target_prefix}{content}"
+        else:
+            # No header -> Add
+            new_text = f"{target_prefix}{line_text}"
+            
+        cursor.insertText(new_text)
+
+
 
 
 
