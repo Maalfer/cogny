@@ -1,4 +1,4 @@
-name: Build Windows Installer
+name: Windows Installer
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Cogny_Setup
-        path: Output/Cogny_Setup.exe
+        path: installer_output/Cogny_Setup.exe
         
     - name: Upload Portable Artifact
       uses: actions/upload-artifact@v4

@@ -161,7 +161,7 @@ echo -e "${GREEN}✓ Clave pública exportada a ${APP_NAME}.gpg.key${NC}"
 echo -e "\n${YELLOW}→ Configurando estructura...${NC}"
 mkdir -p ${APT_REPO_DIR}/conf
 
-if [ -n "$GPG_PASSPHRASE" ] && [ -n "$GPG_PRIVATE_KEY" ]; then
+if [ -n "$GPG_PASSPHRASE" ]; then
     # CI/CD: Firma manual
     cat > ${APT_REPO_DIR}/conf/distributions <<EOF
 Origin: Cogny

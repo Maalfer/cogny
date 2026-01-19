@@ -1,4 +1,4 @@
-name: Build and Deploy APT Repo
+name: APT Repository
 
 on:
   push:
