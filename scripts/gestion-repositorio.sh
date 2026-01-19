@@ -167,7 +167,8 @@ if [ -z "$GPG_KEY_ID" ]; then
     fi
     if [ -n "$GPG_PRIVATE_KEY" ]; then
         echo -e "${YELLOW}→ Importando clave desde ENV (CI/CD)...${NC}"
-        echo "$GPG_PRIVATE_KEY" | sed 's/\\n/\n/g' | tr -d '\r' | gpg --batch --import || {
+        # Use printf to avoid shell interpretation issues
+        printf "%s\n" "$GPG_PRIVATE_KEY" | gpg --batch --import || {
              echo -e "${RED}Error importando clave.${NC}"; exit 1
         }
         GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
