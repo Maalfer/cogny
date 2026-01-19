@@ -36,7 +36,7 @@ class ModernDialog(QDialog):
         self.setLayout(self.layout)
         
         # Determine specific colors based on theme
-        if self.current_theme == "Dark":
+        if self.current_theme in ["Dark", "Dracula"]:
             bg_color = "#18181b"
             border_color = "#3f3f46"
             text_color = "#e4e4e7"
@@ -97,7 +97,7 @@ class ModernDialog(QDialog):
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedHeight(34)
         
-        if self.current_theme == "Dark":
+        if self.current_theme in ["Dark", "Dracula"]:
             if role == "primary":
                 # Blue-600 to Blue-700
                 style = """
@@ -241,7 +241,7 @@ class ModernInput(ModernDialog):
         
         self.input = QLineEdit(text)
         
-        if self.current_theme == "Dark":
+        if self.current_theme in ["Dark", "Dracula"]:
             input_style = """
                 QLineEdit {
                     background-color: #27272a;
@@ -298,7 +298,7 @@ class ModernSelection(ModernDialog):
         
         self.list_widget = QListWidget()
         
-        if self.current_theme == "Dark":
+        if self.current_theme in ["Dark", "Dracula"]:
             list_style = """
                 QListWidget {
                     background-color: #27272a;
@@ -382,14 +382,14 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 1: Base Theme
         row1 = QHBoxLayout()
         tk_label = QLabel("Tema Base:")
-        tk_label.setStyleSheet("color: #e4e4e7;" if self.current_theme == "Dark" else "color: #18181b;")
+        tk_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula"] else "color: #18181b;")
         
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Light", "Dark"])
+        self.theme_combo.addItems(["Light", "Dark", "Dracula"])
         current_theme = self.config_manager.get("theme", "Dark")
         self.theme_combo.setCurrentText(current_theme)
         
-        if self.current_theme == "Dark":
+        if self.current_theme in ["Dark", "Dracula"]:
             combo_style = """
                 QComboBox {
                     background-color: #27272a;
@@ -424,7 +424,7 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 2: Editor BG
         row2 = QHBoxLayout()
         editor_label = QLabel("Fondo del Editor:")
-        editor_label.setStyleSheet("color: #e4e4e7;" if self.current_theme == "Dark" else "color: #18181b;")
+        editor_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula"] else "color: #18181b;")
         
         self.editor_bg_btn = QPushButton("Elegir Color")
         self.editor_bg_btn.setCursor(Qt.PointingHandCursor)
@@ -439,7 +439,7 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 3: Sidebar BG
         row3 = QHBoxLayout()
         sidebar_label = QLabel("Fondo de la Barra Lateral:")
-        sidebar_label.setStyleSheet("color: #e4e4e7;" if self.current_theme == "Dark" else "color: #18181b;")
+        sidebar_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula"] else "color: #18181b;")
         
         self.sidebar_bg_btn = QPushButton("Elegir Color")
         self.sidebar_bg_btn.setCursor(Qt.PointingHandCursor)
@@ -455,7 +455,7 @@ class ThemeSettingsDialog(ModernDialog):
         reset_btn = QPushButton("Restaurar Valores por Defecto")
         reset_btn.setCursor(Qt.PointingHandCursor)
         
-        if self.current_theme == "Dark":
+        if self.current_theme in ["Dark", "Dracula"]:
             reset_style = """
                 QPushButton {
                     background-color: #27272a;
@@ -500,7 +500,7 @@ class ThemeSettingsDialog(ModernDialog):
             """)
             btn.setText(color_str)
         else:
-            if self.current_theme == "Dark":
+            if self.current_theme in ["Dark", "Dracula"]:
                 btn.setStyleSheet("""
                     QPushButton {
                         background-color: #27272a;
