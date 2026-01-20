@@ -604,3 +604,43 @@ class ThemeManager:
                 "default": "#18181b",       # Zinc-900
                 "inline_code": "#ea580c"    # Orange-600
             }
+
+    @staticmethod
+    def get_search_bar_style(theme: str) -> str:
+        """Returns stylesheet for the main search bar."""
+        if theme == "Dracula":
+            bg_color = "#282a36" 
+            text_color = "#f8f8f2"
+            border_color = "#6272a4"
+            focus_border = "#bd93f9" # Purple
+        elif theme == "AnuPpuccin":
+            bg_color = "#1e1e2e"
+            text_color = "#cdd6f4"
+            border_color = "#313244"
+            focus_border = "#cba6f7"
+        elif theme == "Dark":
+            bg_color = "#18181b"
+            text_color = "#e4e4e7"
+            border_color = "#3f3f46"
+            focus_border = "#3b82f6"
+        else: # Light
+            bg_color = "#ffffff"
+            text_color = "#18181b"
+            border_color = "#e4e4e7"
+            focus_border = "#2563eb"
+
+        return f"""
+            QLineEdit {{
+                border: 1px solid {border_color};
+                border-radius: 15px;
+                padding: 5px 10px;
+                background-color: {bg_color};
+                color: {text_color};
+                min-width: 200px;
+                selection-background-color: {focus_border};
+                selection-color: {bg_color};
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {focus_border};
+            }}
+        """

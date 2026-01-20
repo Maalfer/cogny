@@ -22,19 +22,13 @@ class SearchManager(QObject):
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         
         # Style
-        self.search_bar.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #3F3F3F;
-                border-radius: 15px;
-                padding: 5px 10px;
-                background-color: #1E1E1E;
-                color: #E0E0E0;
-                min-width: 200px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3b82f6;
-            }
-        """)
+        # Style initialized via update_theme called from main window
+        pass
+
+    def update_theme(self, theme_name):
+        from app.ui.themes import ThemeManager
+        style = ThemeManager.get_search_bar_style(theme_name)
+        self.search_bar.setStyleSheet(style)
 
     def get_widget(self):
         return self.search_bar
