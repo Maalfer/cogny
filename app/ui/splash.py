@@ -66,15 +66,32 @@ class SplashWindow(QMainWindow):
         self.resize(440, 320)
         
         # UI Setup
-        central_widget = QWidget()
-        central_widget.setStyleSheet("""
-            QWidget {
+        # We need a wrapper widget to handle the Opacity Effect properly
+        # while the inner content widget handles the Shadow Effect.
+        # Nested effects on the same widget can cause issues, and replacing them definitely does.
+        
+
+        # Wrapper is just the central widget now
+        self.wrapper_widget = QWidget()
+        self.wrapper_widget.setAttribute(Qt.WA_TranslucentBackground)
+        self.setCentralWidget(self.wrapper_widget)
+        
+        wrapper_layout = QVBoxLayout(self.wrapper_widget)
+        wrapper_layout.setContentsMargins(10, 10, 10, 10)
+        wrapper_layout.setAlignment(Qt.AlignCenter)
+        
+        # Content Widget
+        self.content_widget = QWidget()
+        self.content_widget.setObjectName("ContentContainer")
+        self.content_widget.setStyleSheet("""
+            QWidget#ContentContainer {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #252525, stop:1 #2f2f3a);
                 border-radius: 14px;
-                border: 1px solid rgba(255,255,255,0.04);
+                border: 2px solid #444; 
             }
             QLabel {
                 color: #FFFFFF;
+                background: transparent;
             }
             QProgressBar {
                 border: none;
@@ -87,9 +104,10 @@ class SplashWindow(QMainWindow):
                 border-radius: 4px;
             }
         """)
-        self.setCentralWidget(central_widget)
+        wrapper_layout.addWidget(self.content_widget)
         
-        layout = QVBoxLayout(central_widget)
+        # Layout inside the styled box
+        layout = QVBoxLayout(self.content_widget)
         layout.setAlignment(Qt.AlignCenter)
         
         # Logo
@@ -133,36 +151,9 @@ class SplashWindow(QMainWindow):
         self.worker.progress.connect(self.progress.setValue)
         self.worker.status.connect(self.status_label.setText)
         
-        # Visual effects: shadow and subtle animations
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setOffset(0, 10)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        central_widget.setGraphicsEffect(shadow)
-
-        # Logo fade-in
-        logo_opacity = QGraphicsOpacityEffect(self.logo_label)
-        self.logo_label.setGraphicsEffect(logo_opacity)
-        self.logo_anim = QPropertyAnimation(logo_opacity, b"opacity")
-        self.logo_anim.setDuration(700)
-        self.logo_anim.setStartValue(0.0)
-        self.logo_anim.setEndValue(1.0)
-        self.logo_anim.setEasingCurve(QEasingCurve.OutCubic)
-
-        # Fade-in for central widget (avoid setting window opacity which
-        # some platform plugins do not support)
-        central_opacity = QGraphicsOpacityEffect(central_widget)
-        central_widget.setGraphicsEffect(central_opacity)
-        central_opacity.setOpacity(0.0)
-
-        self.central_fade_anim = QPropertyAnimation(central_opacity, b"opacity")
-        self.central_fade_anim.setDuration(600)
-        self.central_fade_anim.setStartValue(0.0)
-        self.central_fade_anim.setEndValue(1.0)
-        self.central_fade_anim.setEasingCurve(QEasingCurve.OutCubic)
-
-        # Do not start the worker here to avoid races with external connections.
-        # Caller should call `start_warmup()` after connecting signals.
+        # No complex effects to avoid Painter errors
+        # self.setWindowOpacity(0.0) # Optional: Animate window opacity instead of widget opacity?
+        # Let's keep it simple first.
 
     def start_warmup(self):
         """Start the warmup worker. Call after connecting any external slots to signals."""
@@ -174,10 +165,4 @@ class SplashWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Play animations when splash is shown
-        # Start central widget fade and logo fade. Avoid animating window opacity.
-        try:
-            self.central_fade_anim.start()
-            self.logo_anim.start()
-        except Exception:
-            pass
+

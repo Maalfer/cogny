@@ -48,6 +48,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         last_note = self.config_manager.get("last_opened_note", "")
         
         if last_note and self.fm.file_exists(last_note): # Check existence
+             print(f"DEBUG: Found last note: {last_note}. Starting preload...")
              # Connect to editor area loaded signal
              self.editor_area.note_loaded.connect(self._on_preload_finished)
              
@@ -56,13 +57,49 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
              title = os.path.basename(last_note)
              
              # Trigger Load Synchronously
-             self.editor_area.load_note(last_note, is_folder=False, title=title, preload_images=True, async_load=False)
+             # We use async_load=True to allow the Event Loop to run (animations, splash screen updates)
+             # while the note loads in the background. The 'ready' signal will still only be emitted when done.
+             self.editor_area.load_note(last_note, is_folder=False, title=title, preload_images=True, async_load=True)
+             return
+
+        # Fallback: If no last note, try to find ANY note to warm up the editor
+        # This prevents the "First Note Slow" issue by ensuring the engine is initialized.
+        print(f"DEBUG: Last note '{last_note}' not found. Searching for fallback...")
+        
+        fallback_note = None
+        # Use FileManager to list files or search
+        # Simple walk to find first .md
+        for root, dirs, files in os.walk(self.fm.root_path):
+             # Skip hidden
+             dirs[:] = [d for d in dirs if not d.startswith('.')]
+             for f in files:
+                  if f.endswith('.md'):
+                       fallback_note = self.fm._get_rel_path(os.path.join(root, f))
+                       break
+             if fallback_note:
+                  break
+                  
+        if fallback_note:
+             print(f"DEBUG: Found fallback note: {fallback_note}. Preloading...")
+             self.editor_area.note_loaded.connect(self._on_preload_finished)
+             title = os.path.basename(fallback_note)
+             self.editor_area.load_note(fallback_note, is_folder=False, title=title, preload_images=True, async_load=True)
         else:
+             print("DEBUG: No notes found in vault. Ready immediately.")
              # Nothing to load, ready immediately
              self.ready.emit()
              
     def _on_preload_finished(self, success):
         self.editor_area.note_loaded.disconnect(self._on_preload_finished)
+        
+        # Sync Sidebar Selection (Silently)
+        if self.editor_area.current_note_id:
+            try:
+                self.sidebar.blockSignals(True)
+                self.sidebar.select_note(self.editor_area.current_note_id)
+            finally:
+                self.sidebar.blockSignals(False)
+        
         self.ready.emit()
 
     def load_vault(self, vault_path):

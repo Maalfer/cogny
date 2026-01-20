@@ -29,6 +29,7 @@ class UiStateMixin:
             self.restoreState(state_data)
             
         # 2. Restore Last Note (Handled by Sidebar mostly via signal, or manual call)
-        last_id = self.config_manager.get("last_note_id")
-        if last_id:
-             self.sidebar.select_note(last_id)
+        # 2. Restore Last Note -> REMOVED to avoid double-loading with Splash Preload logic.
+        # The Splash Screen now handles the "initial note load" to ensure it happens before the window is shown.
+        # See MainWindow.preload_initial_state
+        pass

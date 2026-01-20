@@ -34,6 +34,15 @@ def main():
     splash = SplashWindow()
     splash.show()
     
+    # Track Splash Start Time
+    import time
+    splash_start_time = time.time()
+    
+    # Track Splash Start Time
+    import time
+    splash_start_time = time.time()
+    
+    # Define launch_main_app BEFORE using it
     def launch_main_app():
         # This function runs after backend warm-up
         
@@ -53,10 +62,6 @@ def main():
         is_draft = False
         if show_setup:
             from app.ui.dialogs_setup import SetupDialog
-            # Ensure splash is hidden or closed if we need to show infinite dialog?
-            # Actually, we can keep splash hidden or show setup on top.
-            # But SetupDialog is modal. Splash is TopMost.
-            # We should probably hide splash while setup is running.
             splash.hide()
             
             setup_dialog = SetupDialog()
@@ -81,19 +86,29 @@ def main():
         
         # Instantiate Main Window (Hidden)
         global window # Keep reference
-        # Pass splash reference to update status? Or use signal?
         
         window = MainWindow(vault_path, is_draft=is_draft)
-        # window.show() REMOVED early show
         
         def show_and_close_splash():
-            window.show()
-            # Restore quit on close
-            app.setQuitOnLastWindowClosed(True)
+            # Check elapsed time to ensure splash was visible for at least 1.5 seconds (fluid feel)
+            # The user complained about it opening "immediately".
             
-            # Delay closing splash to ensure window is fully painted and visible
-            # effectively overlapping the transition
-            QTimer.singleShot(600, splash.close)
+            elapsed = time.time() - splash_start_time
+            min_duration = 1.5 # seconds
+            remaining = max(0, min_duration - elapsed)
+            remaining_ms = int(remaining * 1000)
+            
+            def final_show():
+                window.show()
+                app.setQuitOnLastWindowClosed(True)
+                # Close splash immediately after show since we already waited
+                splash.close()
+                
+            if remaining_ms > 0:
+                print(f"DEBUG: Splash load fast. Waiting extra {remaining_ms}ms for smoothness.")
+                QTimer.singleShot(remaining_ms, final_show)
+            else:
+                final_show()
             
         # Connect ready signal
         window.ready.connect(show_and_close_splash)
@@ -102,7 +117,8 @@ def main():
         splash.status_label.setText("Abriendo última nota...")
         # Use singleShot to allow event loop to process the status update
         QTimer.singleShot(10, window.preload_initial_state)
-        
+
+    # Trigger Splash Worker
     # Connect Splash Signal and start warmup AFTER the event loop starts
     splash.worker.finished_warmup.connect(launch_main_app)
     # Schedule warmup to start on the next event loop iteration to keep GUI responsive

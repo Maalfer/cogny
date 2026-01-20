@@ -88,9 +88,15 @@ class EditorArea(QWidget):
 
         self.current_note_id = note_id
         
+        
         # Save Last Opened Note for Splash Screen logic
-        # Ideally this should be handled by ConfigManager upstream, but simple redundancy is fine or remove it.
-        # Removing QSettings usage here to avoid conflicts with ConfigManager.
+        try:
+             # We assume ConfigManager is available or can be instantiated (since it is lightweight)
+             from app.storage.config_manager import ConfigManager
+             config = ConfigManager(self.fm.root_path)
+             config.save_config("last_opened_note", note_id)
+        except Exception as e:
+             print(f"Error saving last opened note: {e}")
         
         self.title_edit.setReadOnly(False)
         self.text_editor.setReadOnly(False)
@@ -106,16 +112,17 @@ class EditorArea(QWidget):
         self.text_editor.set_loading_state(True)
         
         # 2. Perform Load
+        print(f"DEBUG: load_note called for {note_id}. Async={async_load}")
         if async_load:
             # Defer heavy loading to next event loop iteration
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title, preload_images))
+            QTimer.singleShot(10, lambda: self._perform_load_note(note_id, title, preload_images, async_load=True))
         else:
             # Synchronous load (blocks UI until done)
             # Necessary for Splash Screen "preload" to be true preload
-            self._perform_load_note(note_id, title, preload_images)
+            self._perform_load_note(note_id, title, preload_images, async_load=False)
 
-    def _perform_load_note(self, note_id, title, preload_images=False):
+    def _perform_load_note(self, note_id, title, preload_images=False, async_load=True):
         if self.current_note_id != note_id:
             return
 
@@ -147,9 +154,8 @@ class EditorArea(QWidget):
             # Simple Regex Extraction to find image paths
             import re
             # Match standard and wikilink images
-            # This is a 'best effort' to find top images quickly
-            # We scan the first 20k chars (usually header/intro images)
-            scan_text = markdown_content[:20000] 
+            # Scan entire content to ensure we catch all images for the splash screen
+            scan_text = markdown_content 
             
             # Standard: ![...](path)
             std_matches = re.findall(r"!\[.*?\]\((.*?)\)", scan_text)
@@ -168,16 +174,19 @@ class EditorArea(QWidget):
                 # We block the flow here until images are loaded
                 # Define callback to resume
                 def resume_loading():
+                    print("DEBUG: Images preloaded. Resuming rendering...")
                     from PySide6.QtCore import QThread
-                    self._start_rendering(markdown_content)
-                    
+                    self._start_rendering(markdown_content, async_load=async_load)
+                
+                print(f"DEBUG: Preloading images: {len(all_paths)}")
                 self.text_editor.preload_images(all_paths, resume_loading)
                 return
 
         # If no preload needed or no images, proceed directly
-        self._start_rendering(markdown_content)
+        print("DEBUG: No images to preload or list empty. Starting rendering directly.")
+        self._start_rendering(markdown_content, async_load=async_load)
 
-    def _start_rendering(self, markdown_content):
+    def _start_rendering(self, markdown_content, async_load=True):
         # --- PROGRESSIVE LOADING STRATEGY ---
         CHUNK_SIZE = 10000 # Characters per frame (approx 2-3 pages)
         
@@ -209,8 +218,21 @@ class EditorArea(QWidget):
         
         # 4. Schedule rest of the content (if any)
         if self._pending_chunks:
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, self._load_next_chunk)
+            if async_load:
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, self._load_next_chunk)
+            else:
+                 # Flush synchronously
+                 from PySide6.QtWidgets import QApplication
+                 while self._pending_chunks:
+                     chunk = self._pending_chunks.pop(0)
+                     try:
+                         self.text_editor.append_chunk(chunk)
+                         # Process events to allow layout updates and splash animations
+                         QApplication.processEvents()
+                     except Exception:
+                         pass
+                 self._finish_loading()
         else:
             self._finish_loading()
 
@@ -251,6 +273,7 @@ class EditorArea(QWidget):
         QTimer.singleShot(100, self.text_editor.update_extra_selections)
         
         self.status_message.emit("Nota cargada (completa).", 2000)
+        print("DEBUG: Loading finished. Emitting note_loaded(True)")
         self.note_loaded.emit(True)
 
     def show_folder_placeholder(self, title):
