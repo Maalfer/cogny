@@ -370,7 +370,19 @@ class UiActionsMixin:
             ModernAlert.show(self, "Error", str(e))
 
     def show_about(self):
-        ModernInfo.show(self, "Acerca de", "Cogny\n\nUna aplicación jerárquica para tomar notas.\nConstruida con PySide6 y Archivos Markdown.")
+        text = (
+            "<h3>Cogny</h3>"
+            "<p>Una aplicación jerárquica para tomar notas.<br>"
+            "Construida con PySide6 y Archivos Markdown.</p>"
+            "<p><b>Creador:</b> Mario Álvarez Fernández</p>"
+            "<p>"
+            "<a href='https://www.linkedin.com/in/maalfer1/'>LinkedIn</a> | "
+            "<a href='https://github.com/Maalfer'>GitHub</a>"
+            "</p>"
+        )
+        # ModernInfo uses QMessageBox which supports rich text by default if configured
+        # Checking ModernInfo implementation might be good, but standard QMessageBox detects HTML.
+        ModernInfo.show(self, "Acerca de", text)
 
     def show_backup_dialog(self):
         from app.ui.dialogs.dialogs_backup import BackupDialog
