@@ -63,6 +63,14 @@ sudo apt install cogny
 sudo apt update && sudo apt upgrade cogny
 ```
 
+### 🪟 Instalación en Windows
+
+Puedes descargar el instalador ejecutable (`.exe`) directamente desde la sección de Releases:
+
+1. Ve a [Releases](https://github.com/Maalfer/cogny/releases).
+2. Descarga el archivo `Cogny_Setup.exe` de la última versión.
+3. Ejecuta el instalador y sigue las instrucciones.
+
 ### 📥 Instalación Manual (.deb)
 
 También puedes descargar e instalar el paquete `.deb` directamente:
