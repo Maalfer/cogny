@@ -16,6 +16,25 @@ class FormatToolbar(QToolBar):
         if not self.text_editor:
             return
 
+
+        # Undo
+        action_undo = QAction("↶", self)
+        action_undo.setToolTip("Deshacer")
+        action_undo.triggered.connect(self.text_editor.undo)
+        font = action_undo.font()
+        font.setBold(True)
+        action_undo.setFont(font)
+        self.addAction(action_undo)
+
+        # Redo
+        action_redo = QAction("↷", self)
+        action_redo.setToolTip("Rehacer")
+        action_redo.triggered.connect(self.text_editor.redo)
+        action_redo.setFont(font)
+        self.addAction(action_redo)
+
+        self.addSeparator()
+
         # Bold
         action_bold = QAction("N", self) # N for Negrita (Spanish)
         action_bold.setToolTip("Negrita (Bold)")
