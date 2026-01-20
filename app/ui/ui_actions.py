@@ -1,4 +1,4 @@
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QIcon
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QFileDialog, QToolBar
 from app.ui.widgets import ModernInfo, ModernAlert
@@ -6,14 +6,13 @@ import os
 
 class UiActionsMixin:
     def create_actions(self):
+        print("DEBUG: Initializing actions in ui_actions.py")
         # File Actions
         self.act_new_vault = QAction("Nueva Bóveda...", self) 
         self.act_new_vault.triggered.connect(self.new_vault)
         
         self.act_open_vault = QAction("Abrir Bóveda...", self)
         self.act_open_vault.triggered.connect(self.open_vault)
-        
-
         
 
         self.act_new_root = QAction("Nueva Nota Raíz", self)
@@ -28,8 +27,13 @@ class UiActionsMixin:
         self.act_new_folder_child = QAction("Nueva Carpeta Hija", self)
         self.act_new_folder_child.triggered.connect(self.sidebar.add_child_folder)
 
+        self.act_mode_toggle = QAction(self)
+        self.act_mode_toggle.triggered.connect(self.toggle_read_mode)
+        self.update_mode_action_icon() # Set initial icon
+
         self.act_export_pdf = QAction("Exportar PDF", self)
         self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
+        print("DEBUG: Export PDF action created")
 
         self.act_attach = QAction("Adjuntar Archivo...", self)
         self.act_attach.triggered.connect(self.editor_area.attach_file)
@@ -310,4 +314,43 @@ class UiActionsMixin:
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y Archivos Markdown.")
 
-    # Read Later feature removed
+    def toggle_read_mode(self):
+        editor = self.editor_area.text_editor
+        # Toggle State
+        new_state = not editor.isReadOnly()
+        editor.setReadOnly(new_state)
+        
+        # Update Icon
+        self.update_mode_action_icon()
+        
+        # Optional: Show status
+        mode = "Lectura" if new_state else "Edición"
+        self.statusBar().showMessage(f"Modo cambiado a: {mode}", 2000)
+
+    def update_mode_action_icon(self):
+        # We need to access editor safely. During init, editor_area might exist but text_editor?
+        if not hasattr(self, 'editor_area') or not hasattr(self.editor_area, 'text_editor'):
+            # Default to Edit Mode (so button shows Read icon)
+            is_readonly = False
+        else:
+            is_readonly = self.editor_area.text_editor.isReadOnly()
+
+        if is_readonly:
+            # In Read Mode -> Button should allow switching to EDIT (Pencil)
+            icon = QIcon.fromTheme("document-edit") 
+            if icon.isNull(): icon = QIcon.fromTheme("accessor-text-editor")
+            text = "✏️" # Pencil
+            tooltip = "Cambiar a Modo Edición"
+        else:
+            # In Edit Mode -> Button should allow switching to READ (Book)
+            icon = QIcon.fromTheme("help-browser") 
+            if icon.isNull(): icon = QIcon.fromTheme("system-help")
+            text = "📖" # Book
+            tooltip = "Cambiar a Modo Lectura"
+
+        if not icon.isNull():
+            self.act_mode_toggle.setIcon(icon)
+        else:
+            self.act_mode_toggle.setText(text)
+            
+        self.act_mode_toggle.setToolTip(tooltip)

@@ -21,6 +21,7 @@ DisableProgramGroupPage=yes
 OutputDir=installer_output
 OutputBaseFilename=Cogny_Setup
 SetupIconFile=assets\logo.ico
+LicenseFile=LICENSE.txt
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

@@ -32,11 +32,11 @@ class UiSetupMixin:
         self.create_toolbar()
         
         # Restore State
-        self.restore_state()
+        # self.restore_state() # Disabled temporarily to force UI update
 
     def create_toolbar(self):
         toolbar = QToolBar("Barra Principal")
-        toolbar.setObjectName("MainToolbar")
+        toolbar.setObjectName("MainToolbarV3")
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
         
@@ -47,7 +47,7 @@ class UiSetupMixin:
         toolbar.addWidget(self.search_manager.get_widget())
         
         toolbar.addSeparator()
-        toolbar.addAction(self.act_export_pdf)
+        toolbar.addAction(self.act_mode_toggle)
         
         self.addToolBarBreak() 
         

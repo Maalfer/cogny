@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
   build:
@@ -29,6 +31,7 @@ jobs:
         # Generate the executable using cli args directly to be safe
         pyinstaller --noconfirm --onedir --windowed --clean \
           --name "cogny" \
+          --icon "assets/logo.ico" \
           --add-data "assets;assets" \
           --hidden-import "PySide6" \
           main.py
@@ -52,3 +55,9 @@ jobs:
       with:
         name: Cogny_Portable
         path: dist/cogny/
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: installer_output/Cogny_Setup.exe
