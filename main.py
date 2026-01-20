@@ -1,5 +1,6 @@
 import sys
 from PySide6.QtWidgets import QApplication, QStyleFactory
+from PySide6.QtCore import QTimer
 from app.ui.main_window import MainWindow
 from app.ui.themes import ThemeManager
 
@@ -102,8 +103,10 @@ def main():
         # Use singleShot to allow event loop to process the status update
         QTimer.singleShot(10, window.preload_initial_state)
         
-    # Connect Splash Signal
+    # Connect Splash Signal and start warmup AFTER the event loop starts
     splash.worker.finished_warmup.connect(launch_main_app)
+    # Schedule warmup to start on the next event loop iteration to keep GUI responsive
+    QTimer.singleShot(50, splash.start_warmup)
     
     sys.exit(app.exec())
 

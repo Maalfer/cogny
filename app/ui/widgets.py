@@ -51,11 +51,12 @@ class ModernDialog(QDialog):
 
         # Main Container (Rounded, Shadow)
         self.container = QFrame()
+        # keep colors but increase radius for softer shapes
         self.container.setStyleSheet(f"""
             QFrame {{
                 background-color: {bg_color};
                 border: 1px solid {border_color};
-                border-radius: 12px;
+                border-radius: 14px;
             }}
         """)
         
@@ -96,94 +97,8 @@ class ModernDialog(QDialog):
         btn = QPushButton(text)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedHeight(34)
-        
-        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
-            if role == "primary":
-                # Blue-600 to Blue-700
-                style = """
-                    QPushButton {
-                        background-color: #3b82f6; 
-                        color: white; 
-                        border-radius: 6px;
-                        padding: 0 16px;
-                        font-weight: 600;
-                        border: none;
-                    }
-                    QPushButton:hover { background-color: #2563eb; }
-                    QPushButton:pressed { background-color: #1d4ed8; }
-                """
-            elif role == "danger":
-                # Red-500 to Red-600
-                style = """
-                    QPushButton {
-                        background-color: #ef4444; 
-                        color: white; 
-                        border-radius: 6px;
-                        padding: 0 16px;
-                        font-weight: 600;
-                        border: none;
-                    }
-                    QPushButton:hover { background-color: #dc2626; }
-                    QPushButton:pressed { background-color: #b91c1c; }
-                """
-            else:
-                # Zinc-800 to Zinc-700
-                style = """
-                    QPushButton {
-                        background-color: #27272a; 
-                        color: #e4e4e7; 
-                        border: 1px solid #3f3f46;
-                        border-radius: 6px;
-                        padding: 0 16px;
-                        font-weight: 500;
-                    }
-                    QPushButton:hover { background-color: #3f3f46; }
-                    QPushButton:pressed { background-color: #52525b; }
-                """
-        else: # Light
-            if role == "primary":
-                # Blue-600 to Blue-700
-                style = """
-                    QPushButton {
-                        background-color: #2563eb; 
-                        color: white; 
-                        border-radius: 6px;
-                        padding: 0 16px;
-                        font-weight: 600;
-                        border: none;
-                    }
-                    QPushButton:hover { background-color: #1d4ed8; }
-                    QPushButton:pressed { background-color: #1e40af; }
-                """
-            elif role == "danger":
-                # Red-600 to Red-700
-                style = """
-                    QPushButton {
-                        background-color: #dc2626; 
-                        color: white; 
-                        border-radius: 6px;
-                        padding: 0 16px;
-                        font-weight: 600;
-                        border: none;
-                    }
-                    QPushButton:hover { background-color: #b91c1c; }
-                    QPushButton:pressed { background-color: #991b1b; }
-                """
-            else:
-                # White/Gray border
-                style = """
-                    QPushButton {
-                        background-color: #ffffff; 
-                        color: #18181b; 
-                        border: 1px solid #e4e4e7;
-                        border-radius: 6px;
-                        padding: 0 16px;
-                        font-weight: 500;
-                    }
-                    QPushButton:hover { background-color: #f4f4f5; }
-                    QPushButton:pressed { background-color: #e4e4e7; border-color: #d4d4d8; }
-                """
-
+        from app.ui.style import button_style
+        style = button_style(self.current_theme, role)
         btn.setStyleSheet(style)
             
         if callback:
@@ -241,38 +156,9 @@ class ModernInput(ModernDialog):
         
         self.input = QLineEdit(text)
         
-        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
-            input_style = """
-                QLineEdit {
-                    background-color: #27272a;
-                    color: #e4e4e7;
-                    border: 1px solid #3f3f46;
-                    border-radius: 6px;
-                    padding: 8px;
-                    font-size: 14px;
-                }
-                QLineEdit:focus {
-                    border: 1px solid #3b82f6;
-                    background-color: #18181b;
-                }
-            """
-        else:
-            input_style = """
-                QLineEdit {
-                    background-color: #ffffff;
-                    color: #18181b;
-                    border: 1px solid #e4e4e7;
-                    border-radius: 6px;
-                    padding: 8px;
-                    font-size: 14px;
-                }
-                QLineEdit:focus {
-                    border: 1px solid #2563eb;
-                    background-color: #fcfcfc;
-                }
-            """
-
-        self.input.setStyleSheet(input_style)
+        from app.ui.style import input_style
+        # Keep existing color behavior, but unify shape via helper
+        self.input.setStyleSheet(input_style(self.current_theme))
         # Insert input before buttons
         self.content_layout.insertWidget(2, self.input)
         
@@ -298,54 +184,8 @@ class ModernSelection(ModernDialog):
         
         self.list_widget = QListWidget()
         
-        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
-            list_style = """
-                QListWidget {
-                    background-color: #27272a;
-                    color: #e4e4e7;
-                    border: 1px solid #3f3f46;
-                    border-radius: 6px;
-                    padding: 4px;
-                    font-size: 14px;
-                    outline: none;
-                }
-                QListWidget::item {
-                    padding: 8px;
-                    border-radius: 4px;
-                }
-                QListWidget::item:selected {
-                    background-color: #3b82f6;
-                    color: white;
-                }
-                QListWidget::item:hover:!selected {
-                    background-color: #3f3f46;
-                }
-            """
-        else:
-            list_style = """
-                QListWidget {
-                    background-color: #ffffff;
-                    color: #18181b;
-                    border: 1px solid #e4e4e7;
-                    border-radius: 6px;
-                    padding: 4px;
-                    font-size: 14px;
-                    outline: none;
-                }
-                QListWidget::item {
-                    padding: 8px;
-                    border-radius: 4px;
-                }
-                QListWidget::item:selected {
-                    background-color: #2563eb;
-                    color: white;
-                }
-                QListWidget::item:hover:!selected {
-                    background-color: #f4f4f5;
-                }
-            """
-            
-        self.list_widget.setStyleSheet(list_style)
+        from app.ui.style import list_style
+        self.list_widget.setStyleSheet(list_style(self.current_theme))
         
         for item_text in items:
             self.list_widget.addItem(item_text)

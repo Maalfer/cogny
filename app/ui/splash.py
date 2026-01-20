@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget, QProgressBar
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget, QProgressBar, QGraphicsDropShadowEffect, QGraphicsOpacityEffect
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QPixmap, QFont, QColor
 import os
 import sys
@@ -25,11 +25,9 @@ class WarmupWorker(QThread):
             self.progress.emit(30)
             self.status.emit("Iniciando motor de renderizado...")
             
-            # Step 2: Theme Manager Cache (40%)
-            from app.ui.themes import ThemeManager
-            # Force cache load
-            _ = ThemeManager.get_palette("Dark")
-            _ = ThemeManager.get_palette("Light")
+            # Step 2: Light non-GUI warmups (40%)
+            # Avoid creating GUI-related objects (QPalette/QColor) from a worker thread.
+            # We'll let the main thread initialize theme/palette when ready.
             self.progress.emit(50)
             
             # Step 3: Regex Compilation (70%)
@@ -63,30 +61,30 @@ class SplashWindow(QMainWindow):
         super().__init__()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        
+
         # Center on screen
-        self.resize(400, 300)
+        self.resize(440, 320)
         
         # UI Setup
         central_widget = QWidget()
         central_widget.setStyleSheet("""
             QWidget {
-                background-color: #2D2D2D;
-                border-radius: 12px;
-                border: 1px solid #444;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #252525, stop:1 #2f2f3a);
+                border-radius: 14px;
+                border: 1px solid rgba(255,255,255,0.04);
             }
             QLabel {
                 color: #FFFFFF;
             }
             QProgressBar {
                 border: none;
-                background-color: #444;
-                border-radius: 2px;
-                height: 4px;
+                background-color: rgba(255,255,255,0.06);
+                border-radius: 4px;
+                height: 8px;
             }
             QProgressBar::chunk {
-                background-color: #3498db;
-                border-radius: 2px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6dd5fa, stop:1 #2980b9);
+                border-radius: 4px;
             }
         """)
         self.setCentralWidget(central_widget)
@@ -99,11 +97,11 @@ class SplashWindow(QMainWindow):
         logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets", "logo.png")
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
-            self.logo_label.setPixmap(pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo_label.setPixmap(pixmap.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             self.logo_label.setText("COGNY")
-            self.logo_label.setFont(QFont("Arial", 24, QFont.Bold))
-        
+            self.logo_label.setFont(QFont("Segoe UI", 26, QFont.Bold))
+
         self.logo_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logo_label)
         
@@ -135,6 +133,51 @@ class SplashWindow(QMainWindow):
         self.worker.progress.connect(self.progress.setValue)
         self.worker.status.connect(self.status_label.setText)
         
-        # We don't start worker immediately here, caller handles it? 
-        # Or we start it automatically? Let's start it automatically for simplicity.
+        # Visual effects: shadow and subtle animations
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 10)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        central_widget.setGraphicsEffect(shadow)
+
+        # Logo fade-in
+        logo_opacity = QGraphicsOpacityEffect(self.logo_label)
+        self.logo_label.setGraphicsEffect(logo_opacity)
+        self.logo_anim = QPropertyAnimation(logo_opacity, b"opacity")
+        self.logo_anim.setDuration(700)
+        self.logo_anim.setStartValue(0.0)
+        self.logo_anim.setEndValue(1.0)
+        self.logo_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+        # Fade-in for central widget (avoid setting window opacity which
+        # some platform plugins do not support)
+        central_opacity = QGraphicsOpacityEffect(central_widget)
+        central_widget.setGraphicsEffect(central_opacity)
+        central_opacity.setOpacity(0.0)
+
+        self.central_fade_anim = QPropertyAnimation(central_opacity, b"opacity")
+        self.central_fade_anim.setDuration(600)
+        self.central_fade_anim.setStartValue(0.0)
+        self.central_fade_anim.setEndValue(1.0)
+        self.central_fade_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+        # Do not start the worker here to avoid races with external connections.
+        # Caller should call `start_warmup()` after connecting signals.
+
+    def start_warmup(self):
+        """Start the warmup worker. Call after connecting any external slots to signals."""
+        if not getattr(self, 'worker', None):
+            self.worker = WarmupWorker()
+            self.worker.progress.connect(self.progress.setValue)
+            self.worker.status.connect(self.status_label.setText)
         self.worker.start()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Play animations when splash is shown
+        # Start central widget fade and logo fade. Avoid animating window opacity.
+        try:
+            self.central_fade_anim.start()
+            self.logo_anim.start()
+        except Exception:
+            pass
