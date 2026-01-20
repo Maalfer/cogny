@@ -30,6 +30,7 @@ class UiStateMixin:
             
         # 2. Restore Last Note (Handled by Sidebar mostly via signal, or manual call)
         # 2. Restore Last Note -> REMOVED to avoid double-loading with Splash Preload logic.
+        # [CRITICAL] DO NOT UNCOMMENT OR RE-IMPLEMENT note RESTORATION HERE.
         # The Splash Screen now handles the "initial note load" to ensure it happens before the window is shown.
         # See MainWindow.preload_initial_state
         pass

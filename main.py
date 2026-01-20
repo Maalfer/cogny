@@ -90,9 +90,10 @@ def main():
         window = MainWindow(vault_path, is_draft=is_draft)
         
         def show_and_close_splash():
-            # Check elapsed time to ensure splash was visible for at least 1.5 seconds (fluid feel)
-            # The user complained about it opening "immediately".
-            
+            # [CRITICAL] SPLASH SCREEN TIMING LOGIC - DO NOT MODIFY WITHOUT FULL REGRESSION TESTING
+            # The splash screen MUST remain visible for a minimum duration to ensure a fluid user experience.
+            # Removing this delay will cause the "flash" effect or "broken" feel reported by users.
+            # This logic also ensures the Main Window is NOT shown until the note is fully preloaded.
             elapsed = time.time() - splash_start_time
             min_duration = 1.5 # seconds
             remaining = max(0, min_duration - elapsed)

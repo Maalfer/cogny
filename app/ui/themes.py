@@ -222,29 +222,6 @@ class ThemeManager:
             QToolButton:pressed {{
                 background-color: {border_color};
             }}
-            
-            /* Minimal Scrollbar */
-            QScrollBar:vertical {{
-                border: none;
-                background-color: transparent;
-                width: 10px;
-                margin: 0px;
-            }}
-            QScrollBar::handle:vertical {{
-                background-color: #d4d4d8;
-                min-height: 30px;
-                border-radius: 5px;
-                margin: 2px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background-color: #a1a1aa;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: none;
-            }}
             """
 
     @staticmethod
@@ -490,6 +467,74 @@ class ThemeManager:
                 image: none;
             }}
             """
+
+    @staticmethod
+    def get_scrollbar_style(theme: str) -> str:
+        """Returns a global QScrollBar stylesheet."""
+        if theme == "Dracula":
+            handle = "#6272a4"
+            handle_hover = "#bd93f9"
+            bg = "#282a36" 
+        elif theme == "AnuPpuccin":
+            handle = "#585b70" # Surface2
+            handle_hover = "#89b4fa" # Blue
+            bg = "#1e1e2e"
+        elif theme == "Dark":
+            handle = "#3f3f46" # Zinc-700
+            handle_hover = "#71717a" # Zinc-500
+            bg = "#18181b"
+        else: # Light
+            handle = "#cbd5e1" # Slate-300
+            handle_hover = "#94a3b8" # Slate-400
+            bg = "#f4f4f5"
+
+        return f"""
+        QScrollBar:vertical {{
+            border: none;
+            background-color: transparent;
+            width: 12px;
+            margin: 0px 0px 0px 0px;
+        }}
+        QScrollBar::handle:vertical {{
+            background-color: {handle};
+            min-height: 30px;
+            border-radius: 6px;
+            margin: 2px 2px 2px 2px;
+        }}
+        QScrollBar::handle:vertical:hover {{
+            background-color: {handle_hover};
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            height: 0px;
+            background: none;
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+            background: none;
+        }}
+
+        QScrollBar:horizontal {{
+            border: none;
+            background-color: transparent;
+            height: 12px;
+            margin: 0px 0px 0px 0px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background-color: {handle};
+            min-width: 30px;
+            border-radius: 6px;
+            margin: 2px 2px 2px 2px;
+        }}
+        QScrollBar::handle:horizontal:hover {{
+            background-color: {handle_hover};
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            width: 0px;
+            background: none;
+        }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+            background: none;
+        }}
+        """
 
     @staticmethod
     def get_code_bg_color(theme: str) -> QColor:

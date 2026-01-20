@@ -44,6 +44,10 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
 
     def preload_initial_state(self):
         """Called by splash to pre-load content before showing window."""
+        # [CRITICAL] PRELOAD LOGIC - DO NOT MODIFY
+        # This function is the ONLY place where the initial note should be loaded.
+        # It MUST use async_load=True to keep the Splash Screen animations running.
+        # It MUST handle the Fallback scenario (finding any note) if the last note is missing.
         # 1. Check for last opened note in Vault Config
         last_note = self.config_manager.get("last_opened_note", "")
         
@@ -92,7 +96,9 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
     def _on_preload_finished(self, success):
         self.editor_area.note_loaded.disconnect(self._on_preload_finished)
         
-        # Sync Sidebar Selection (Silently)
+        # [CRITICAL] SIDEBAR SYNC
+        # We MUST block signals to prevent the Sidebar from triggering a "selection changed" event,
+        # which would cause a circular note reload and double-loading.
         if self.editor_area.current_note_id:
             try:
                 self.sidebar.blockSignals(True)
