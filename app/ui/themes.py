@@ -303,10 +303,13 @@ class ThemeManager:
             }}
             QTreeView::item {{
                 padding: 6px;
-                border-radius: 6px;
-                margin-left: 4px;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                margin-left: 0px; 
                 margin-right: 4px;
-                margin-bottom: 2px;
+                margin-bottom: 0px; /* Removed gap to match branch height */
             }}
             QTreeView::item:hover {{
                 background-color: {hover_bg};
@@ -323,10 +326,14 @@ class ThemeManager:
                 background-color: {selected_bg};
             }}
             
-            /* Fix Branch/Arrow Background */
-            QTreeView::branch {{
-                background: transparent;
+            /* Uniform Hover/Selection for Branch */
+            QTreeView::branch:hover {{
+                background-color: {hover_bg};
             }}
+            QTreeView::branch:selected {{
+                background-color: {selected_bg};
+            }}
+
             QTreeView::branch:has-children:!has-siblings:closed,
             QTreeView::branch:closed:has-children:has-siblings {{
                 border-image: none;
@@ -351,10 +358,13 @@ class ThemeManager:
             }}
             QTreeView::item {{
                 padding: 6px;
-                border-radius: 6px;
-                margin-left: 4px;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                margin-left: 0px;
                 margin-right: 4px;
-                margin-bottom: 2px;
+                margin-bottom: 0px;
             }}
             QTreeView::item:hover {{
                 background-color: {hover_bg};
@@ -370,9 +380,14 @@ class ThemeManager:
             QTreeView::item:selected:!active {{
                 background-color: {selected_bg};
             }}
-            QTreeView::branch {{
-                background: transparent;
+            
+            QTreeView::branch:hover {{
+                background-color: {hover_bg};
             }}
+            QTreeView::branch:selected {{
+                background-color: {selected_bg};
+            }}
+
             QTreeView::branch:has-children:!has-siblings:closed,
             QTreeView::branch:closed:has-children:has-siblings {{
                 border-image: none;
@@ -397,10 +412,13 @@ class ThemeManager:
             }}
             QTreeView::item {{
                 padding: 6px;
-                border-radius: 6px;
-                margin-left: 4px;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                margin-left: 0px;
                 margin-right: 4px;
-                margin-bottom: 2px;
+                margin-bottom: 0px;
             }}
             QTreeView::item:hover {{
                 background-color: {hover_bg};
@@ -416,9 +434,14 @@ class ThemeManager:
             QTreeView::item:selected:!active {{
                 background-color: {selected_bg};
             }}
-            QTreeView::branch {{
-                background: transparent;
+            
+            QTreeView::branch:hover {{
+                background-color: {hover_bg};
             }}
+            QTreeView::branch:selected {{
+                background-color: {selected_bg};
+            }}
+
             QTreeView::branch:has-children:!has-siblings:closed,
             QTreeView::branch:closed:has-children:has-siblings {{
                 border-image: none;
@@ -442,10 +465,13 @@ class ThemeManager:
             }}
             QTreeView::item {{
                 padding: 6px;
-                border-radius: 6px;
-                margin-left: 4px;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                margin-left: 0px;
                 margin-right: 4px;
-                margin-bottom: 2px;
+                margin-bottom: 0px;
             }}
             QTreeView::item:hover {{
                 background-color: {hover_bg};
@@ -461,9 +487,14 @@ class ThemeManager:
             QTreeView::item:selected:!active {{
                 background-color: {selected_bg};
             }}
-            QTreeView::branch {{
-                background: transparent;
+
+            QTreeView::branch:hover {{
+                background-color: {hover_bg};
             }}
+            QTreeView::branch:selected {{
+                background-color: {selected_bg};
+            }}
+
             QTreeView::branch:has-children:!has-siblings:closed,
             QTreeView::branch:closed:has-children:has-siblings {{
                 border-image: none;
