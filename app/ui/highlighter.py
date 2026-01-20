@@ -214,6 +214,30 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.capturedStart(3), match.capturedLength(3), tick_fmt)
 
 
+        # Highlight (==text==)
+        highlight_pattern = QRegularExpression(r"(==)(.*?)(==)")
+        it = highlight_pattern.globalMatch(text)
+        while it.hasNext():
+            match = it.next()
+            
+            # Format Content
+            fmt = QTextCharFormat()
+            fmt.setBackground(self.get_color("highlight_bg"))
+            fmt.setForeground(self.get_color("highlight_text"))
+            fmt.setFontWeight(QFont.Bold)
+            
+            self.setFormat(match.capturedStart(2), match.capturedLength(2), fmt)
+            
+            # Hide markers if not active
+            if not is_active:
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), self.hidden_format)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), self.hidden_format)
+            else:
+                marker_fmt = QTextCharFormat()
+                marker_fmt.setForeground(QColor("gray"))
+                self.setFormat(match.capturedStart(1), match.capturedLength(1), marker_fmt)
+                self.setFormat(match.capturedStart(3), match.capturedLength(3), marker_fmt)
+
         # Code Block Logic
         self.setCurrentBlockState(0)
 

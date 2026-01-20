@@ -59,6 +59,9 @@ class NoteEditor(QTextEdit):
     def toggle_underline(self):
         self._wrap_selection("<u>", "</u>")
 
+    def toggle_highlight(self):
+        self._wrap_selection("==", "==")
+
     def toggle_header(self, level: int):
         """
         Toggles header at the current cursor line.

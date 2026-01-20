@@ -608,11 +608,11 @@ class ThemeManager:
     @staticmethod
     def get_code_bg_color(theme: str) -> QColor:
         if theme == "Dracula":
-            return QColor("#44475a")
+            return QColor("#373A47")
         elif theme == "AnuPpuccin":
              return QColor("#181825") # Mantle
         elif theme == "Dark":
-            return QColor("#52525b") # Zinc-600
+            return QColor("#373E47") # Zinc-600
         else:
             return QColor("#f4f4f5") # Zinc-100
 
@@ -629,7 +629,9 @@ class ThemeManager:
                 "number": "#bd93f9",        # Purple
                 "decorator": "#50fa7b",     # Green
                 "default": "#f8f8f2",       # White
-                "inline_code": "#ffb86c"    # Orange
+                "inline_code": "#ffb86c",    # Orange
+                "highlight_bg": "#f1fa8c",  # Yellow (Dracula)
+                "highlight_text": "#282a36" # Background color for text
             }
         elif theme == "AnuPpuccin":
              # Catppuccin Mocha Syntax
@@ -643,7 +645,9 @@ class ThemeManager:
                 "number": "#fab387",        # Peach
                 "decorator": "#f5e0dc",     # Rosewater
                 "default": "#cdd6f4",       # Text
-                "inline_code": "#f38ba8"    # Red
+                "inline_code": "#f38ba8",    # Red
+                "highlight_bg": "#fab387",  # Peach
+                "highlight_text": "#1e1e2e"
              }
         elif theme == "Dark":
              # Zinc High Contrast
@@ -657,7 +661,9 @@ class ThemeManager:
                 "number": "#e879f9",        # Fuchsia-400
                 "decorator": "#9333ea",     # Purple-600
                 "default": "#e4e4e7",       # Zinc-200
-                "inline_code": "#fb923c"    # Orange-400
+                "inline_code": "#fb923c",   # Orange-400
+                "highlight_bg": "#facc15",  # Yellow-400
+                "highlight_text": "#000000"
              }
         else:
             # Modern Light
@@ -671,7 +677,9 @@ class ThemeManager:
                 "number": "#a21caf",        # Fuchsia-700
                 "decorator": "#9333ea",     # Purple-600
                 "default": "#18181b",       # Zinc-900
-                "inline_code": "#ea580c"    # Orange-600
+                "inline_code": "#ea580c",   # Orange-600
+                "highlight_bg": "#fef08a",  # Yellow-200
+                "highlight_text": "#000000"
             }
 
     @staticmethod

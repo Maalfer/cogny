@@ -1,6 +1,6 @@
 
 from PySide6.QtWidgets import QToolBar
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtCore import Qt
 
 class FormatToolbar(QToolBar):
@@ -64,6 +64,19 @@ class FormatToolbar(QToolBar):
         action_underline.setText("S")
         action_underline.setFont(font)
         self.addAction(action_underline)
+
+        # Highlight
+        # Use system icon if available, else Unicode marker
+        icon = QIcon.fromTheme("format-text-highlight")
+        if icon.isNull():
+             # Fallback to yellow highlighter unicode if system icon missing
+             action_highlight = QAction("🖍", self)
+        else:
+             action_highlight = QAction(icon, "Resaltar", self)
+             
+        action_highlight.setToolTip("Resaltar (Highlight)")
+        action_highlight.triggered.connect(self.text_editor.toggle_highlight)
+        self.addAction(action_highlight)
 
         self.addSeparator()
 
