@@ -196,16 +196,19 @@ class ThemeManager:
             }}
             
             QPlainTextEdit#TitleEdit {{
-                font-size: 36px;
+                font-size: 32px;
                 font-weight: 700;
                 border: none;
+                border-bottom: 2px solid {border_color};
                 background-color: {bg_color};
                 color: {text_color};
                 padding-left: 80px;
                 padding-right: 80px;
                 padding-top: 30px;
                 padding-bottom: 10px;
-                margin-bottom: 10px;
+                margin-left: 20px;
+                margin-right: 20px;
+                margin-bottom: 20px;
             }}
             QToolButton {{
                 background-color: transparent;
