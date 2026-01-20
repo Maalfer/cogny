@@ -22,7 +22,8 @@ class UiThemeMixin:
         
         # Apply Global Scrollbar Style
         scrollbar_style = ThemeManager.get_scrollbar_style(theme_name)
-        QApplication.instance().setStyleSheet(scrollbar_style)
+        toolbar_style = ThemeManager.get_toolbar_style(theme_name)
+        QApplication.instance().setStyleSheet(scrollbar_style + toolbar_style)
         
         # Apply Sidebar Styles explicitly
         sidebar_style = ThemeManager.get_sidebar_style(theme_name)

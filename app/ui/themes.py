@@ -503,6 +503,41 @@ class ThemeManager:
             """
 
     @staticmethod
+    def get_toolbar_style(theme: str) -> str:
+        """Returns a global QToolBar stylesheet."""
+        if theme == "Dracula":
+            bg = "#282a36" 
+            border = "#6272a4"
+        elif theme == "AnuPpuccin":
+            bg = "#1e1e2e"
+            border = "#313244"
+        elif theme == "Dark":
+            bg = "#18181b"
+            border = "#3f3f46"
+        else: # Light
+            bg = "#f4f4f5"
+            border = "#e4e4e7"
+            
+        return f"""
+        QToolBar {{
+            background: {bg};
+            border-bottom: 1px solid {border};
+            spacing: 5px;
+            padding: 5px;
+            border: none;
+        }}
+        QToolBar::handle {{
+            image: none;
+            width: 0px;
+        }}
+        QToolBar::separator {{
+            background-color: {border};
+            width: 1px;
+            margin: 5px;
+        }}
+        """
+
+    @staticmethod
     def get_scrollbar_style(theme: str) -> str:
         """Returns a global QScrollBar stylesheet."""
         if theme == "Dracula":

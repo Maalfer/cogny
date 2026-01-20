@@ -37,6 +37,7 @@ class UiSetupMixin:
     def create_toolbar(self):
         toolbar = QToolBar("Barra Principal")
         toolbar.setObjectName("MainToolbar")
+        toolbar.setMovable(False)
         self.addToolBar(toolbar)
         
         # Search Bar

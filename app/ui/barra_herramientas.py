@@ -7,6 +7,7 @@ class FormatToolbar(QToolBar):
     def __init__(self, parent=None, text_editor=None):
         super().__init__("Barra de Formato", parent)
         self.setObjectName("FormatToolbarV2")
+        self.setMovable(False)
         self.text_editor = text_editor
         self.setVisible(True) # Visible by default
         self._setup_actions()
