@@ -167,10 +167,19 @@ if [ -z "$GPG_KEY_ID" ]; then
     fi
     if [ -n "$GPG_PRIVATE_KEY" ]; then
         echo -e "${YELLOW}→ Importando clave desde ENV (CI/CD)...${NC}"
-        # Use printf to avoid shell interpretation issues
-        printf "%s\n" "$GPG_PRIVATE_KEY" | gpg --batch --import || {
-             echo -e "${RED}Error importando clave.${NC}"; exit 1
-        }
+        # Try to detect if it is Base64 (doesn't start with standard header)
+        if [[ "$GPG_PRIVATE_KEY" != *"-----BEGIN PGP PRIVATE KEY BLOCK-----"* ]]; then
+             echo "Info: La clave no tiene cabecera estándar. Intentando decodificar Base64..."
+             echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import || {
+                 echo -e "${RED}Error importando clave (Base64). Asegúrate de que el secreto sea correcto.${NC}"; exit 1
+             }
+        else
+             printf "%s\n" "$GPG_PRIVATE_KEY" | gpg --batch --import || {
+                 echo -e "${RED}Error importando clave (ASCII). Intentando modo raw...${NC}"
+                 # Fallback for some weird newline handling
+                 echo "$GPG_PRIVATE_KEY" | gpg --batch --import || exit 1
+             }
+        fi
         GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
     else
         detect_gpg_key || exit 1
