@@ -72,3 +72,24 @@ __TEMP__/
 repro_*.py
 debug_*.py
 test_debug.*
+
+# Python Testing & Quality
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.tox/
+.nox/
+.dmypy.json
+
+# Environment
+.env
+.env.*
+
+# OS / Editors
+desktop.ini
+*.tmp
+*.bak
+
+# Exceptions (Keep important binaries)
+!docs/releases/*.exe
