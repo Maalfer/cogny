@@ -290,8 +290,38 @@ class ThemeSettingsDialog(ModernDialog):
         row3.addWidget(sidebar_label)
         row3.addWidget(self.sidebar_bg_btn)
         self.content_layout.addLayout(row3)
+
+        # Row 4: Text Color
+        row4 = QHBoxLayout()
+        text_label = QLabel("Color de Texto:")
+        text_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"] else "color: #18181b;")
         
-        # Row 4: Reset Button
+        self.text_color_btn = QPushButton("Elegir Color")
+        self.text_color_btn.setCursor(Qt.PointingHandCursor)
+        self.current_text_color = self.config_manager.get("theme_custom_text_color", "")
+        self.update_btn_style(self.text_color_btn, self.current_text_color)
+        self.text_color_btn.clicked.connect(self.pick_text_color)
+        
+        row4.addWidget(text_label)
+        row4.addWidget(self.text_color_btn)
+        self.content_layout.addLayout(row4)
+
+        # Row 5: Global BG
+        row5 = QHBoxLayout()
+        global_label = QLabel("Color Global (Ventana):")
+        global_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"] else "color: #18181b;")
+        
+        self.global_bg_btn = QPushButton("Elegir Color")
+        self.global_bg_btn.setCursor(Qt.PointingHandCursor)
+        self.current_global_bg = self.config_manager.get("theme_custom_global_bg", "")
+        self.update_btn_style(self.global_bg_btn, self.current_global_bg)
+        self.global_bg_btn.clicked.connect(self.pick_global_bg)
+        
+        row5.addWidget(global_label)
+        row5.addWidget(self.global_bg_btn)
+        self.content_layout.addLayout(row5)
+        
+        # Row 6: Reset Button
         reset_btn = QPushButton("Restaurar Valores por Defecto")
         reset_btn.setCursor(Qt.PointingHandCursor)
         
@@ -378,11 +408,27 @@ class ThemeSettingsDialog(ModernDialog):
             self.current_sidebar_bg = c.name()
             self.update_btn_style(self.sidebar_bg_btn, self.current_sidebar_bg)
 
+    def pick_text_color(self):
+        c = QColorDialog.getColor(QColor(self.current_text_color) if self.current_text_color else Qt.black, self, "Seleccionar Color de Texto")
+        if c.isValid():
+            self.current_text_color = c.name()
+            self.update_btn_style(self.text_color_btn, self.current_text_color)
+
+    def pick_global_bg(self):
+        c = QColorDialog.getColor(QColor(self.current_global_bg) if self.current_global_bg else Qt.white, self, "Seleccionar Color Global")
+        if c.isValid():
+            self.current_global_bg = c.name()
+            self.update_btn_style(self.global_bg_btn, self.current_global_bg)
+
     def reset_defaults(self):
         self.current_editor_bg = ""
         self.current_sidebar_bg = ""
+        self.current_text_color = ""
+        self.current_global_bg = ""
         self.update_btn_style(self.editor_bg_btn, "")
         self.update_btn_style(self.sidebar_bg_btn, "")
+        self.update_btn_style(self.text_color_btn, "")
+        self.update_btn_style(self.global_bg_btn, "")
         self.theme_combo.setCurrentText("Dark")
 
     def save_settings(self):
@@ -390,7 +436,9 @@ class ThemeSettingsDialog(ModernDialog):
         self.config_manager.save_config(items={
             "theme": self.theme_combo.currentText(),
             "theme_custom_editor_bg": self.current_editor_bg,
-            "theme_custom_sidebar_bg": self.current_sidebar_bg
+            "theme_custom_sidebar_bg": self.current_sidebar_bg,
+            "theme_custom_text_color": self.current_text_color,
+            "theme_custom_global_bg": self.current_global_bg
         })
         
         # Update Global Settings (for startup)
@@ -398,5 +446,7 @@ class ThemeSettingsDialog(ModernDialog):
         settings.setValue("theme", self.theme_combo.currentText())
         settings.setValue("theme_custom_editor_bg", self.current_editor_bg)
         settings.setValue("theme_custom_sidebar_bg", self.current_sidebar_bg)
+        settings.setValue("theme_custom_text_color", self.current_text_color)
+        settings.setValue("theme_custom_global_bg", self.current_global_bg)
         
         self.accept()

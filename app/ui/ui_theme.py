@@ -13,20 +13,22 @@ class UiThemeMixin:
     def switch_theme(self, theme_name):
         settings = QSettings()
         sidebar_bg = settings.value("theme_custom_sidebar_bg", "")
+        global_bg = settings.value("theme_custom_global_bg", "")
+        text_color = settings.value("theme_custom_text_color", "")
         
         # App Palette
-        QApplication.instance().setPalette(ThemeManager.get_palette(theme_name, sidebar_bg))
+        QApplication.instance().setPalette(ThemeManager.get_palette(theme_name, global_bg, text_color))
         
         # Update components
-        self.editor_area.switch_theme(theme_name)
+        self.editor_area.switch_theme(theme_name, text_color, global_bg)
         
         # Apply Global Scrollbar Style
-        scrollbar_style = ThemeManager.get_scrollbar_style(theme_name)
-        toolbar_style = ThemeManager.get_toolbar_style(theme_name)
+        scrollbar_style = ThemeManager.get_scrollbar_style(theme_name) # scrollbar separate? maybe keep default
+        toolbar_style = ThemeManager.get_toolbar_style(theme_name, global_bg)
         QApplication.instance().setStyleSheet(scrollbar_style + toolbar_style)
         
         # Apply Sidebar Styles explicitly
-        sidebar_style = ThemeManager.get_sidebar_style(theme_name, sidebar_bg)
+        sidebar_style = ThemeManager.get_sidebar_style(theme_name, sidebar_bg, text_color)
         self.sidebar.tree_view.setStyleSheet(sidebar_style)
         
         # Update Search Bar Style

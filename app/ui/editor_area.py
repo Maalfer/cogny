@@ -73,10 +73,10 @@ class EditorArea(QWidget):
         current_theme = settings.value("theme", "Dark")
         self.switch_theme(current_theme)
 
-    def switch_theme(self, theme_name):
+    def switch_theme(self, theme_name, text_color=None, global_bg=None):
         settings = QSettings()
         editor_bg = settings.value("theme_custom_editor_bg", "")
-        self.text_editor.apply_theme(theme_name, editor_bg)
+        self.text_editor.apply_theme(theme_name, editor_bg, text_color, global_bg)
         if hasattr(self, "highlighter"):
              self.highlighter.set_theme(theme_name)
 

@@ -101,13 +101,13 @@ class NoteEditor(QTextEdit):
 
 
 
-    def apply_theme(self, theme_name: str, editor_bg: str = None):
+    def apply_theme(self, theme_name: str, editor_bg: str = None, text_color: str = None, global_bg: str = None):
         self.current_theme = theme_name
         
         if editor_bg is not None:
              self.current_editor_bg = editor_bg
         
-        style = ThemeManager.get_editor_style(theme_name, self.current_editor_bg)
+        style = ThemeManager.get_editor_style(theme_name, self.current_editor_bg, text_color, global_bg)
         font_size = getattr(self, "current_font_size", 14)
         
         self.setStyleSheet(style)

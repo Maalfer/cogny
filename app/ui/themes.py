@@ -2,20 +2,23 @@ from PySide6.QtGui import QPalette, QColor
 
 class ThemeManager:
     @staticmethod
-    def get_palette(theme: str, sidebar_bg: str = None) -> QPalette:
+    @staticmethod
+    def get_palette(theme: str, global_bg: str = None, text_color: str = None) -> QPalette:
         palette = QPalette()
+
         if theme == "Dracula":
             # Dracula Theme
-            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#282a36") 
+            base_bg = QColor(global_bg) if global_bg else QColor("#282a36") 
+            base_text = QColor(text_color) if text_color else QColor("#f8f8f2")
             palette.setColor(QPalette.Window, base_bg)
-            palette.setColor(QPalette.WindowText, QColor("#f8f8f2"))
+            palette.setColor(QPalette.WindowText, base_text)
             palette.setColor(QPalette.Base, QColor("#44475a")) # Surface
             palette.setColor(QPalette.AlternateBase, QColor("#6272a4"))
             palette.setColor(QPalette.ToolTipBase, QColor("#282a36"))
-            palette.setColor(QPalette.ToolTipText, QColor("#f8f8f2"))
-            palette.setColor(QPalette.Text, QColor("#f8f8f2"))
+            palette.setColor(QPalette.ToolTipText, base_text)
+            palette.setColor(QPalette.Text, base_text)
             palette.setColor(QPalette.Button, QColor("#44475a"))
-            palette.setColor(QPalette.ButtonText, QColor("#f8f8f2"))
+            palette.setColor(QPalette.ButtonText, base_text)
             palette.setColor(QPalette.BrightText, QColor("#ff5555")) 
             palette.setColor(QPalette.Link, QColor("#8be9fd"))      # Cyan
             palette.setColor(QPalette.Highlight, QColor("#bd93f9")) # Purple
@@ -27,16 +30,17 @@ class ThemeManager:
             # Base/Sidebar: #11111b (Crust)
             # Text: #cdd6f4
             # Accent: #cba6f7 (Mauve)
-            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#11111b") 
+            base_bg = QColor(global_bg) if global_bg else QColor("#11111b") 
+            base_text = QColor(text_color) if text_color else QColor("#cdd6f4")
             palette.setColor(QPalette.Window, base_bg)
-            palette.setColor(QPalette.WindowText, QColor("#cdd6f4"))
+            palette.setColor(QPalette.WindowText, base_text)
             palette.setColor(QPalette.Base, QColor("#1e1e2e")) 
             palette.setColor(QPalette.AlternateBase, QColor("#313244")) # Surface0
             palette.setColor(QPalette.ToolTipBase, QColor("#181825"))   # Mantle
-            palette.setColor(QPalette.ToolTipText, QColor("#cdd6f4"))
-            palette.setColor(QPalette.Text, QColor("#cdd6f4"))
+            palette.setColor(QPalette.ToolTipText, base_text)
+            palette.setColor(QPalette.Text, base_text)
             palette.setColor(QPalette.Button, QColor("#1e1e2e"))
-            palette.setColor(QPalette.ButtonText, QColor("#cdd6f4"))
+            palette.setColor(QPalette.ButtonText, base_text)
             palette.setColor(QPalette.BrightText, QColor("#f38ba8")) # Red
             palette.setColor(QPalette.Link, QColor("#89b4fa"))      # Blue
             palette.setColor(QPalette.Highlight, QColor("#cba6f7")) # Mauve
@@ -44,16 +48,17 @@ class ThemeManager:
 
         elif theme == "Dark":
             # Modern Dark Theme (Zinc-950/900)
-            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#18181b") 
+            base_bg = QColor(global_bg) if global_bg else QColor("#18181b") 
+            base_text = QColor(text_color) if text_color else QColor("#e4e4e7")
             palette.setColor(QPalette.Window, base_bg)
-            palette.setColor(QPalette.WindowText, QColor("#e4e4e7"))
+            palette.setColor(QPalette.WindowText, base_text)
             palette.setColor(QPalette.Base, QColor("#27272a")) # Zinc-800
             palette.setColor(QPalette.AlternateBase, QColor("#3f3f46"))
             palette.setColor(QPalette.ToolTipBase, QColor("#18181b"))
-            palette.setColor(QPalette.ToolTipText, QColor("#e4e4e7"))
-            palette.setColor(QPalette.Text, QColor("#e4e4e7"))
+            palette.setColor(QPalette.ToolTipText, base_text)
+            palette.setColor(QPalette.Text, base_text)
             palette.setColor(QPalette.Button, QColor("#27272a"))
-            palette.setColor(QPalette.ButtonText, QColor("#e4e4e7"))
+            palette.setColor(QPalette.ButtonText, base_text)
             palette.setColor(QPalette.BrightText, QColor("#ef4444")) # Red-500
             palette.setColor(QPalette.Link, QColor("#60a5fa"))      # Blue-400
             palette.setColor(QPalette.Highlight, QColor("#3b82f6")) # Blue-500
@@ -61,16 +66,17 @@ class ThemeManager:
 
         else:
             # Modern Light Theme
-            base_bg = QColor(sidebar_bg) if sidebar_bg else QColor("#f4f4f5")
+            base_bg = QColor(global_bg) if global_bg else QColor("#f4f4f5")
+            base_text = QColor(text_color) if text_color else QColor("#18181b")
             palette.setColor(QPalette.Window, base_bg)
-            palette.setColor(QPalette.WindowText, QColor("#18181b"))
+            palette.setColor(QPalette.WindowText, base_text)
             palette.setColor(QPalette.Base, QColor("#ffffff"))
             palette.setColor(QPalette.AlternateBase, QColor("#f4f4f5"))
             palette.setColor(QPalette.ToolTipBase, QColor("#ffffff"))
-            palette.setColor(QPalette.ToolTipText, QColor("#18181b"))
-            palette.setColor(QPalette.Text, QColor("#18181b"))
+            palette.setColor(QPalette.ToolTipText, base_text)
+            palette.setColor(QPalette.Text, base_text)
             palette.setColor(QPalette.Button, QColor("#e4e4e7"))
-            palette.setColor(QPalette.ButtonText, QColor("#18181b"))
+            palette.setColor(QPalette.ButtonText, base_text)
             palette.setColor(QPalette.BrightText, QColor("#dc2626")) # Red-600
             palette.setColor(QPalette.Link, QColor("#2563eb"))      # Blue-600
             palette.setColor(QPalette.Highlight, QColor("#2563eb")) # Blue-600
@@ -78,10 +84,12 @@ class ThemeManager:
         return palette
 
     @staticmethod
-    def get_editor_style(theme: str, editor_bg: str = None) -> str:
+    def get_editor_style(theme: str, editor_bg: str = None, text_color: str = None, global_bg: str = None) -> str:
         if theme == "Dracula":
-            bg_color = editor_bg if editor_bg else "#282a36"
-            text_color = "#f8f8f2"
+            # Default to global_bg if provided, else theme default
+            default_bg = global_bg if global_bg else "#282a36"
+            bg_color = editor_bg if editor_bg else default_bg
+            text_color = text_color if text_color else "#f8f8f2"
             accent_color = "#8be9fd" # Cyan
             code_bg = "#44475a" # Dracula Surface
             border_color = "#6272a4" # Dracula Comment
@@ -89,8 +97,9 @@ class ThemeManager:
             sel_text = "#282a36"
 
         elif theme == "AnuPpuccin":
-            bg_color = editor_bg if editor_bg else "#1e1e2e"
-            text_color = "#cdd6f4"
+            default_bg = global_bg if global_bg else "#1e1e2e"
+            bg_color = editor_bg if editor_bg else default_bg
+            text_color = text_color if text_color else "#cdd6f4"
             accent_color = "#cba6f7" # Mauve
             code_bg = "#181825" # Mantle
             border_color = "#313244" # Surface0
@@ -98,8 +107,9 @@ class ThemeManager:
             sel_text = "#cdd6f4"
 
         elif theme == "Dark":
-            bg_color = editor_bg if editor_bg else "#18181b"
-            text_color = "#e4e4e7"
+            default_bg = global_bg if global_bg else "#18181b"
+            bg_color = editor_bg if editor_bg else default_bg
+            text_color = text_color if text_color else "#e4e4e7"
             accent_color = "#60a5fa" # Blue-400
             code_bg = "#52525b" # Zinc-600
             border_color = "#a1a1aa" # Zinc-400
@@ -107,8 +117,9 @@ class ThemeManager:
             sel_text = "#ffffff"
 
         else: # Light
-            bg_color = editor_bg if editor_bg else "#ffffff"
-            text_color = "#18181b"
+            default_bg = global_bg if global_bg else "#ffffff"
+            bg_color = editor_bg if editor_bg else default_bg
+            text_color = text_color if text_color else "#18181b"
             accent_color = "#2563eb" # Blue-600
             code_bg = "#f4f4f5"
             border_color = "#e4e4e7"
@@ -283,7 +294,7 @@ class ThemeManager:
             }
 
     @staticmethod
-    def get_sidebar_style(theme: str, sidebar_bg: str = None) -> str:
+    def get_sidebar_style(theme: str, sidebar_bg: str = None, text_color: str = None) -> str:
         """Provides CSS for the Sidebar QTreeView."""
         # Use custom bg if provided, else keep transparent to use Palette (Window) color
         tree_bg = sidebar_bg if sidebar_bg else "transparent"
@@ -292,7 +303,7 @@ class ThemeManager:
             # Dracula Sidebar
             hover_bg = "#44475a"
             selected_bg = "#44475a" 
-            text_color = "#f8f8f2"
+            text_color = text_color if text_color else "#f8f8f2"
             accent_border = "#bd93f9" # Purple
             
             return f"""
@@ -347,7 +358,7 @@ class ThemeManager:
              # Catppuccin Sidebar
             hover_bg = "#313244" # Surface0
             selected_bg = "#45475a" # Surface1
-            text_color = "#cdd6f4"
+            text_color = text_color if text_color else "#cdd6f4"
             accent_border = "#cba6f7" # Mauve
             
             return f"""
@@ -401,7 +412,7 @@ class ThemeManager:
             # Zinc-based Sidebar
             hover_bg = "#27272a"
             selected_bg = "#27272a" 
-            text_color = "#e4e4e7"
+            text_color = text_color if text_color else "#e4e4e7"
             accent_border = "#3b82f6"
             
             return f"""
@@ -454,7 +465,7 @@ class ThemeManager:
         else: # Light
             hover_bg = "#f4f4f5"
             selected_bg = "#f4f4f5"
-            text_color = "#18181b"
+            text_color = text_color if text_color else "#18181b"
             accent_border = "#2563eb"
              
             return f"""
@@ -506,19 +517,19 @@ class ThemeManager:
             """
 
     @staticmethod
-    def get_toolbar_style(theme: str) -> str:
+    def get_toolbar_style(theme: str, global_bg: str = None) -> str:
         """Returns a global QToolBar stylesheet."""
         if theme == "Dracula":
-            bg = "#282a36" 
+            bg = global_bg if global_bg else "#282a36"
             border = "#6272a4"
         elif theme == "AnuPpuccin":
-            bg = "#1e1e2e"
+            bg = global_bg if global_bg else "#1e1e2e"
             border = "#313244"
         elif theme == "Dark":
-            bg = "#18181b"
+            bg = global_bg if global_bg else "#18181b"
             border = "#3f3f46"
         else: # Light
-            bg = "#f4f4f5"
+            bg = global_bg if global_bg else "#f4f4f5"
             border = "#e4e4e7"
             
         return f"""
