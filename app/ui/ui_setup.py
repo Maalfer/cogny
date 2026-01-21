@@ -8,62 +8,91 @@ from app.ui.editor_area import EditorArea
 
 class UiSetupMixin:
     def setup_ui(self):
-        # Central Widget
+        # 1. Main Container & Layout
+        from app.ui.custom_title_bar import CustomTitleBar
+        from PySide6.QtWidgets import QWidget, QVBoxLayout, QMenuBar
+        
+        container = QWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        container.setLayout(main_layout)
+        
+        # 2. Custom Title Bar (Top)
+        self.title_bar = CustomTitleBar(self)
+        self.title_bar.minimize_clicked.connect(self.showMinimized)
+        self.title_bar.maximize_clicked.connect(self.toggle_maximize_restore)
+        self.title_bar.close_clicked.connect(self.close)
+        main_layout.addWidget(self.title_bar)
+        
+        # 3. Instantiate Components (Needed for Actions)
         self.splitter = QSplitter(Qt.Horizontal)
-        self.setCentralWidget(self.splitter)
-
-        # 1. Sidebar Blueprint
-        # print(f"DEBUG: Initializing Sidebar. self.fm type: {type(self.fm)}, self type: {type(self)}")
+        
         self.sidebar = Sidebar(file_manager=self.fm, parent=self)
         self.sidebar.note_selected.connect(self.on_sidebar_note_selected)
         self.sidebar.action_requested.connect(self.on_sidebar_action)
-        self.splitter.addWidget(self.sidebar)
-
-        # 2. Editor Blueprint
+        
         self.editor_area = EditorArea(file_manager=self.fm, parent=self)
         self.editor_area.status_message.connect(self.on_editor_status)
-        self.editor_area.note_renamed.connect(self.sidebar.on_external_rename)
-        self.splitter.addWidget(self.editor_area)
         
-        self.splitter.setSizes([300, 700])
-
-        # Create Actions and Menus
+        # 4. Create Actions (Now dependencies exist)
         self.create_actions()
-        self.create_menus()
-        self.create_toolbar()
+        
+        # 5. Menu Bar (Below Title Bar)
+        self.create_menus(main_layout)
+        
+        # 6. Toolbars (Below Menu Bar)
+        self.create_toolbar(main_layout)
+        
+        # 7. Assemble Content
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(self.editor_area)
+        self.splitter.setSizes([300, 700])
+        
+        main_layout.addWidget(self.splitter)
+        
+        # Set Container as Central Widget
+        self.setCentralWidget(container)
         
         # Restore State
-        # self.restore_state() # Disabled temporarily to force UI update
+        self.restore_state()
 
-    def create_toolbar(self):
+    def create_toolbar(self, layout):
+        # Main Toolbar
+        from PySide6.QtWidgets import QSizePolicy
         toolbar = QToolBar("Barra Principal")
-        toolbar.setObjectName("MainToolbarV3")
+        toolbar.setObjectName("MainToolbarV2")
         toolbar.setMovable(False)
-        self.addToolBar(toolbar)
+        toolbar.setFloatable(False)
+        toolbar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        layout.addWidget(toolbar)
         
         # Search Bar
-        # We need to link SearchManager to Sidebar's tree and model
-        # SearchManager logic will need update to use FM or removed if it relied purely on DB FTS
         self.search_manager = SearchManager(self.fm, self.sidebar.tree_view, self.sidebar.proxy_model, self.sidebar.on_selection_changed)
         toolbar.addWidget(self.search_manager.get_widget())
         
         toolbar.addSeparator()
-        toolbar.addAction(self.act_mode_toggle)
+        toolbar.addAction(self.act_export_pdf)
+        toolbar.addAction(self.act_mode_toggle) # Ensure toggle is here
         
-        self.addToolBarBreak() 
-        
+        # Editor Format Toolbar (Below Main Toolbar)
         self.editor_toolbar = FormatToolbar(self, self.editor_area.text_editor)
-        self.addToolBar(self.editor_toolbar)
+        self.editor_toolbar.setMovable(False)
+        self.editor_toolbar.setFloatable(False)
+        self.editor_toolbar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        layout.addWidget(self.editor_toolbar)
 
-    def create_menus(self):
-        menubar = self.menuBar()
+    def create_menus(self, layout):
+        # Manual Menu Bar
+        from PySide6.QtWidgets import QMenuBar, QSizePolicy
+        menubar = QMenuBar() # No parent initially
+        menubar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        layout.addWidget(menubar)
 
         # File Menu
         file_menu = menubar.addMenu("&Archivo")
         file_menu.addAction(self.act_new_vault) 
         file_menu.addAction(self.act_open_vault)
-        
-
         
         file_menu.addAction(self.act_new_root)
         file_menu.addAction(self.act_new_folder_root)
@@ -71,7 +100,13 @@ class UiSetupMixin:
         file_menu.addAction(self.act_new_child)
         file_menu.addAction(self.act_new_folder_child)
         file_menu.addSeparator()
-        file_menu.addAction(self.act_export_pdf)
+        # Export / Import Submenu
+        export_menu = file_menu.addMenu("Exportar / Importar")
+        export_menu.addAction(self.act_export_pdf)
+        export_menu.addAction(self.act_export_doc)
+        export_menu.addSeparator()
+        export_menu.addAction(self.act_backup)
+
         file_menu.addSeparator()
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()

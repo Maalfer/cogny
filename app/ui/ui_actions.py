@@ -3,10 +3,10 @@ from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QFileDialog, QToolBar
 from app.ui.widgets import ModernInfo, ModernAlert
 import os
+from datetime import datetime
 
 class UiActionsMixin:
     def create_actions(self):
-        print("DEBUG: Initializing actions in ui_actions.py")
         # File Actions
         self.act_new_vault = QAction("Nueva Bóveda...", self) 
         self.act_new_vault.triggered.connect(self.new_vault)
@@ -33,7 +33,13 @@ class UiActionsMixin:
 
         self.act_export_pdf = QAction("Exportar PDF", self)
         self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
-        print("DEBUG: Export PDF action created")
+
+        self.act_export_doc = QAction("Exportar Documento...", self)
+        self.act_export_doc.triggered.connect(lambda: self.export_note_doc(self.editor_area.current_note_id))
+
+        # Backup Action
+        self.act_backup = QAction("Crear Respaldo...", self)
+        self.act_backup.triggered.connect(self.show_backup_dialog)
 
         self.act_attach = QAction("Adjuntar Archivo...", self)
         self.act_attach.triggered.connect(self.editor_area.attach_file)
@@ -310,6 +316,83 @@ class UiActionsMixin:
                  
         except Exception as e:
             ModernAlert.show(self, "Error de Exportación Múltiple", str(e))
+
+    def export_note_doc(self, note_id):
+        if not note_id:
+            return
+
+        # 1. Ask for Format
+        from app.ui.widgets import ModernSelection, ModernInfo, ModernAlert
+        format_choice, ok = ModernSelection.get_item(self, "Exportar Documento", "Selecciona el formato:", ["ODT (OpenDocument)", "DOCX (Word)"])
+        
+        if not ok or not format_choice:
+            return
+            
+        is_docx = "DOCX" in format_choice
+        ext = ".docx" if is_docx else ".odt"
+        filter_str = "Microsoft Word (*.docx)" if is_docx else "OpenDocument Text (*.odt)"
+        
+        # 2. Get Content & Path
+        try:
+            from app.ui.markdown_renderer import MarkdownRenderer
+            raw_text = self.editor_area.text_editor.toPlainText() 
+            content = MarkdownRenderer.process_markdown_content(raw_text) # Render MD for ODT
+            
+            title = os.path.splitext(os.path.basename(note_id))[0]
+            default_name = f"{title}{ext}"
+             
+            path, _ = QFileDialog.getSaveFileName(self, f"Guardar {ext.upper()}", 
+                                                os.path.join(os.path.expanduser("~"), default_name), 
+                                                filter_str)
+            
+            if not path: return
+            if not path.endswith(ext): path += ext
+            
+            # 3. Export
+            from app.exporters.document_exporter import DocumentExporter
+            exporter = DocumentExporter(self.fm)
+            
+            success = False
+            if is_docx:
+                success = exporter.export_docx(raw_text, path)
+            else:
+                success = exporter.export_odt(content, path, base_url=self.fm.root_path)
+                
+            if success:
+                ModernInfo.show(self, "Éxito", f"Documento exportado correctamente a:\\n{path}")
+            else:
+                ModernAlert.show(self, "Error", "Ocurrió un error al exportar el documento.")
+                
+        except Exception as e:
+            ModernAlert.show(self, "Error", str(e))
+
+    def show_backup_dialog(self):
+        from app.ui.dialogs.dialogs_backup import BackupDialog
+        from app.storage.backup_manager import BackupManager
+
+        dlg = BackupDialog(self)
+        if dlg.exec():
+            fmt, password = dlg.get_data() # fmt: 'zip' or 'tar'
+            
+            # Suggest Filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ext = ".zip" if fmt == "zip" else ".tar.gz"
+            default_name = f"Backup_Cogny_{timestamp}{ext}"
+            
+            path, _ = QFileDialog.getSaveFileName(self, "Guardar Respaldo", 
+                                                os.path.join(os.path.expanduser("~"), default_name), 
+                                                f"Archivo {fmt.upper()} (*{ext})")
+            
+            if path:
+                if not path.endswith(ext): path += ext
+                
+                manager = BackupManager(self.fm.root_path)
+                success, msg = manager.create_backup(path, fmt, password)
+                
+                if success:
+                    ModernInfo.show(self, "Backup Completado", msg)
+                else:
+                    ModernAlert.show(self, "Error de Backup", msg)
 
     def show_about(self):
         ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y Archivos Markdown.")

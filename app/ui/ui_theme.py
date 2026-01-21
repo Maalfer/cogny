@@ -37,8 +37,12 @@ class UiThemeMixin:
         self.sidebar.tree_view.setStyleSheet(sidebar_style)
         
         # Update Search Bar Style
-        # Update Search Bar Style
         if hasattr(self, 'search_manager'):
             self.search_manager.update_theme(theme_name, global_bg, text_color)
+        
+        # Update Title Bar Style
+        if hasattr(self, 'title_bar'):
+            title_bar_style = ThemeManager.get_title_bar_style(theme_name, global_bg, text_color)
+            self.title_bar.setStyleSheet(title_bar_style)
         
         self.statusBar().showMessage(f"Tema cambiado a {theme_name}", 2000)

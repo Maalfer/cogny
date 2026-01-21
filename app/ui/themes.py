@@ -776,3 +776,67 @@ class ThemeManager:
                 border: 1px solid {focus_border};
             }}
         """
+
+    @staticmethod
+    def get_title_bar_style(theme: str, global_bg: str = None, text_color: str = None) -> str:
+        """Returns stylesheet for CustomTitleBar."""
+        
+        if theme == "Dracula":
+            bg_color = global_bg if global_bg else "#282a36"
+            text_color = text_color if text_color else "#f8f8f2"
+            border_color = "#6272a4"
+            btn_hover = "rgba(255, 255, 255, 0.1)"
+            btn_pressed = "rgba(255, 255, 255, 0.15)"
+        elif theme == "AnuPpuccin":
+            bg_color = global_bg if global_bg else "#1e1e2e"
+            text_color = text_color if text_color else "#cdd6f4"
+            border_color = "#313244"
+            btn_hover = "rgba(255, 255, 255, 0.1)"
+            btn_pressed = "rgba(255, 255, 255, 0.15)"
+        elif theme == "Dark":
+            bg_color = global_bg if global_bg else "#18181b"
+            text_color = text_color if text_color else "#e4e4e7"
+            border_color = "#3f3f46"
+            btn_hover = "rgba(255, 255, 255, 0.1)"
+            btn_pressed = "rgba(255, 255, 255, 0.15)"
+        else:  # Light
+            bg_color = global_bg if global_bg else "#f4f4f5"
+            text_color = text_color if text_color else "#18181b"
+            border_color = "#e4e4e7"
+            btn_hover = "rgba(0, 0, 0, 0.05)"
+            btn_pressed = "rgba(0, 0, 0, 0.1)"
+        
+        return f"""
+            CustomTitleBar {{
+                background-color: {bg_color};
+                border-bottom: 1px solid {border_color};
+            }}
+            
+            #TitleLabel {{
+                color: {text_color};
+            }}
+            
+            /* Minimize/Maximize buttons for dark themes */
+            #minimizeButton, #maximizeButton {{
+                color: {text_color};
+            }}
+            #minimizeButton:hover, #maximizeButton:hover {{
+                background: {btn_hover};
+            }}
+            #minimizeButton:pressed, #maximizeButton:pressed {{
+                background: {btn_pressed};
+            }}
+            
+            /* Close button - red hover for all themes */
+            #closeButton {{
+                color: {text_color};
+            }}
+            #closeButton:hover {{
+                background: #c42b1c;
+                color: white;
+            }}
+            #closeButton:pressed {{
+                background: #a52313;
+                color: white;
+            }}
+        """

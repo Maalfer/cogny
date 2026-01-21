@@ -6,12 +6,25 @@ import os
 from app.storage.file_manager import FileManager
 from app.ui.ui_state import UiStateMixin
 from app.ui.ui_theme import UiThemeMixin
-from app.ui.botones_dropdown.botones_dropdown import UiActionsMixin, UiSetupMixin
+from app.ui.ui_actions import UiActionsMixin
+from app.ui.ui_setup import UiSetupMixin
 
 class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMainWindow):
     ready = Signal()
     def __init__(self, vault_path=None, is_draft=False):
         super().__init__()
+        
+        # Frameless Window for Custom Title Bar
+        from PySide6.QtCore import Qt
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        
+        # Window state tracking
+        self._is_maximized = False
+        self._normal_geometry = None
+        self._is_resizing = False
+        self._resize_direction = None
+        self._resize_margin = 5  # pixels for resize detection
+        
         self.is_draft = is_draft
         self.vault_path = vault_path
         
@@ -41,6 +54,12 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         # settings = QSettings() -> Removed global settings for theme
         current_theme = self.config_manager.get("theme", "Dark")
         self.switch_theme(current_theme)
+    
+    def setWindowTitle(self, title):
+        """Override to also update custom title bar."""
+        super().setWindowTitle(title)
+        if hasattr(self, 'title_bar'):
+            self.title_bar.set_title(title)
 
     def preload_initial_state(self):
         """Called by splash to pre-load content before showing window."""
@@ -167,4 +186,105 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
             
         # Update Title
         self.setWindowTitle(f"Cogny - {os.path.basename(new_path)}")
-
+    
+    def toggle_maximize_restore(self):
+        """Toggle between maximized and normal window state."""
+        if self.isMaximized():
+            self.showNormal()
+            self._is_maximized = False
+        else:
+            self._normal_geometry = self.geometry()
+            self.showMaximized()
+            self._is_maximized = True
+        
+        # Update title bar icon
+        if hasattr(self, 'title_bar'):
+            self.title_bar.update_maximize_icon(self._is_maximized)
+    
+    def _get_resize_direction(self, pos):
+        """Determine resize direction based on mouse position."""
+        margin = self._resize_margin
+        rect = self.rect()
+        
+        on_left = pos.x() <= margin
+        on_right = pos.x() >= rect.width() - margin
+        on_top = pos.y() <= margin
+        on_bottom = pos.y() >= rect.height() - margin
+        
+        if on_top and on_left:
+            return 'top-left'
+        elif on_top and on_right:
+            return 'top-right'
+        elif on_bottom and on_left:
+            return 'bottom-left'
+        elif on_bottom and on_right:
+            return 'bottom-right'
+        elif on_left:
+            return 'left'
+        elif on_right:
+            return 'right'
+        elif on_top:
+            return 'top'
+        elif on_bottom:
+            return 'bottom'
+        return None
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press for window resizing."""
+        from PySide6.QtCore import Qt
+        if event.button() == Qt.LeftButton and not self.isMaximized():
+            self._resize_direction = self._get_resize_direction(event.pos())
+            if self._resize_direction:
+                self._is_resizing = True
+                self._resize_start_geometry = self.geometry()
+                self._resize_start_pos = event.globalPosition().toPoint()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for window resizing and cursor changes."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QCursor
+        
+        if self._is_resizing and self._resize_direction:
+            delta = event.globalPosition().toPoint() - self._resize_start_pos
+            geo = self._resize_start_geometry
+            new_geo = geo
+            
+            # Calculate new geometry based on resize direction
+            if 'left' in self._resize_direction:
+                new_geo.setLeft(geo.left() + delta.x())
+            if 'right' in self._resize_direction:
+                new_geo.setRight(geo.right() + delta.x())
+            if 'top' in self._resize_direction:
+                new_geo.setTop(geo.top() + delta.y())
+            if 'bottom' in self._resize_direction:
+                new_geo.setBottom(geo.bottom() + delta.y())
+            
+            # Set minimum size
+            if new_geo.width() >= self.minimumWidth() and new_geo.height() >= self.minimumHeight():
+                self.setGeometry(new_geo)
+            event.accept()
+        elif not self.isMaximized():
+            # Change cursor based on position
+            direction = self._get_resize_direction(event.pos())
+            if direction:
+                if direction in ['top', 'bottom']:
+                    self.setCursor(QCursor(Qt.SizeVerCursor))
+                elif direction in ['left', 'right']:
+                    self.setCursor(QCursor(Qt.SizeHorCursor))
+                elif direction in ['top-left', 'bottom-right']:
+                    self.setCursor(QCursor(Qt.SizeFDiagCursor))
+                elif direction in ['top-right', 'bottom-left']:
+                    self.setCursor(QCursor(Qt.SizeBDiagCursor))
+            else:
+                self.setCursor(QCursor(Qt.ArrowCursor))
+        
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release to stop resizing."""
+        self._is_resizing = False
+        self._resize_direction = None
+        super().mouseReleaseEvent(event)
