@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QPlainTextEdit, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QFrame, QGraphicsDropShadowEffect, QWidget, QListWidget, QListWidgetItem, QColorDialog, QComboBox
+from PySide6.QtWidgets import QPlainTextEdit, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QFrame, QGraphicsDropShadowEffect, QWidget, QListWidget, QListWidgetItem, QColorDialog, QComboBox, QFileDialog
+import json
 from PySide6.QtCore import Qt, Signal, QSize, QSettings
 from PySide6.QtGui import QColor
 
@@ -327,6 +328,36 @@ class ThemeSettingsDialog(ModernDialog):
         row5.addWidget(self.global_bg_btn)
         self.content_layout.addLayout(row5)
         
+        # Row 6: Actions (Import/Export)
+        row6 = QHBoxLayout()
+        self.btn_import = QPushButton("Importar Tema")
+        self.btn_import.setCursor(Qt.PointingHandCursor)
+        self.btn_import.clicked.connect(self.import_theme)
+        
+        self.btn_export = QPushButton("Exportar Tema")
+        self.btn_export.setCursor(Qt.PointingHandCursor)
+        self.btn_export.clicked.connect(self.export_theme)
+        
+        # Style for action buttons
+        action_style = """
+            QPushButton {
+                background-color: #52525b;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #71717a;
+            }
+        """
+        self.btn_import.setStyleSheet(action_style)
+        self.btn_export.setStyleSheet(action_style)
+        
+        row6.addWidget(self.btn_import)
+        row6.addWidget(self.btn_export)
+        self.content_layout.addLayout(row6)
+        
         # Row 6: Reset Button
         reset_btn = QPushButton("Restaurar Valores por Defecto")
         reset_btn.setCursor(Qt.PointingHandCursor)
@@ -456,3 +487,95 @@ class ThemeSettingsDialog(ModernDialog):
         settings.setValue("theme_custom_global_bg", self.current_global_bg)
         
         self.accept()
+
+    def export_theme(self):
+        filename, _ = QFileDialog.getSaveFileName(self, "Exportar Tema", "", "JSON Files (*.json)")
+        if not filename:
+            return
+            
+        data = {
+            "theme": self.theme_combo.currentText(),
+            "theme_custom_editor_bg": self.current_editor_bg,
+            "theme_custom_sidebar_bg": self.current_sidebar_bg,
+            "theme_custom_text_color": self.current_text_color,
+            "theme_custom_global_bg": self.current_global_bg
+        }
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            print(f"Error exporting theme: {e}")
+
+    def import_theme(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Importar Tema", "", "JSON Files (*.json)")
+        if not filename:
+            return
+            
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # validations could be added here
+            self.theme_combo.setCurrentText(data.get("theme", "Dark"))
+            
+            self.current_editor_bg = data.get("theme_custom_editor_bg", "")
+            self.update_btn_style(self.editor_bg_btn, self.current_editor_bg)
+            
+            self.current_sidebar_bg = data.get("theme_custom_sidebar_bg", "")
+            self.update_btn_style(self.sidebar_bg_btn, self.current_sidebar_bg)
+            
+            self.current_text_color = data.get("theme_custom_text_color", "")
+            self.update_btn_style(self.text_color_btn, self.current_text_color)
+            
+            self.current_global_bg = data.get("theme_custom_global_bg", "")
+            self.update_btn_style(self.global_bg_btn, self.current_global_bg)
+            
+        except Exception as e:
+            print(f"Error importing theme: {e}")
+
+    def export_theme(self):
+        filename, _ = QFileDialog.getSaveFileName(self, "Exportar Tema", "", "JSON Files (*.json)")
+        if not filename:
+            return
+            
+        data = {
+            "theme": self.theme_combo.currentText(),
+            "theme_custom_editor_bg": self.current_editor_bg,
+            "theme_custom_sidebar_bg": self.current_sidebar_bg,
+            "theme_custom_text_color": self.current_text_color,
+            "theme_custom_global_bg": self.current_global_bg
+        }
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            print(f"Error exporting theme: {e}")
+
+    def import_theme(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Importar Tema", "", "JSON Files (*.json)")
+        if not filename:
+            return
+            
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # validations could be added here
+            self.theme_combo.setCurrentText(data.get("theme", "Dark"))
+            
+            self.current_editor_bg = data.get("theme_custom_editor_bg", "")
+            self.update_btn_style(self.editor_bg_btn, self.current_editor_bg)
+            
+            self.current_sidebar_bg = data.get("theme_custom_sidebar_bg", "")
+            self.update_btn_style(self.sidebar_bg_btn, self.current_sidebar_bg)
+            
+            self.current_text_color = data.get("theme_custom_text_color", "")
+            self.update_btn_style(self.text_color_btn, self.current_text_color)
+            
+            self.current_global_bg = data.get("theme_custom_global_bg", "")
+            self.update_btn_style(self.global_bg_btn, self.current_global_bg)
+            
+        except Exception as e:
+            print(f"Error importing theme: {e}")
