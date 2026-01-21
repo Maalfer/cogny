@@ -62,7 +62,7 @@ jobs:
         mkdir -p docs/releases
         cp installer_output/Cogny_Setup.exe docs/releases/cogny_setup_windows.exe
         
-        git add docs/releases/cogny_setup_windows.exe
+        git add -f docs/releases/cogny_setup_windows.exe
         git commit -m "deploy: update windows release [skip ci]" || echo "No changes to commit"
         git push origin main
 
