@@ -396,5 +396,7 @@ class ThemeSettingsDialog(ModernDialog):
         # Update Global Settings (for startup)
         settings = QSettings()
         settings.setValue("theme", self.theme_combo.currentText())
+        settings.setValue("theme_custom_editor_bg", self.current_editor_bg)
+        settings.setValue("theme_custom_sidebar_bg", self.current_sidebar_bg)
         
         self.accept()

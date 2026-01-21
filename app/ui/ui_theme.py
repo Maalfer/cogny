@@ -26,7 +26,7 @@ class UiThemeMixin:
         QApplication.instance().setStyleSheet(scrollbar_style + toolbar_style)
         
         # Apply Sidebar Styles explicitly
-        sidebar_style = ThemeManager.get_sidebar_style(theme_name)
+        sidebar_style = ThemeManager.get_sidebar_style(theme_name, sidebar_bg)
         self.sidebar.tree_view.setStyleSheet(sidebar_style)
         
         # Update Search Bar Style

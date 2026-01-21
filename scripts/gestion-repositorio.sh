@@ -30,22 +30,60 @@ NC='\033[0m' # No Color
 # Función: Detectar Clave GPG
 # ============================================
 detect_gpg_key() {
-    if [ -n "$GPG_KEY_ID" ]; then return 0; fi
-
-    echo -e "${YELLOW}→ Buscando clave GPG disponible en el sistema...${NC}"
-    # Intentar obtener ID de clave
-    GPG_KEY_ID=$(gpg --list-secret-keys --with-colons | grep '^sec' | head -n1 | cut -d':' -f5)
-    
-    if [ -z "$GPG_KEY_ID" ]; then
-        GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+    # 0. Si ya tenemos un ID explícito (por ENV), verificar que exista
+    if [ -n "$GPG_KEY_ID" ]; then
+        echo -e "${YELLOW}→ Verificando clave GPG explícita: $GPG_KEY_ID ...${NC}"
+        if gpg --list-secret-keys "$GPG_KEY_ID" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ Clave $GPG_KEY_ID encontrada.${NC}"
+            return 0
+        else
+            echo -e "${RED}Error: La clave GPG_KEY_ID ($GPG_KEY_ID) no se encuentra en el anillo de llaves.${NC}"
+            # En CI, esto es fatal. En local, podríamos buscar otra, pero mejor ser estrictos.
+            return 1
+        fi
     fi
 
-    if [ -z "$GPG_KEY_ID" ]; then
+    echo -e "${YELLOW}→ Buscando clave GPG disponible en el sistema...${NC}"
+    
+    # Obtener todas las claves disponibles
+    # Formato: sec:u:2048:1:B28B237F1296A089:1643653120:::u:::scESC:
+    # Usamos mapfile para leer en array de forma segura
+    mapfile -t KEYS < <(gpg --list-secret-keys --with-colons | grep '^sec' | cut -d':' -f5)
+    
+    NUM_KEYS=${#KEYS[@]}
+
+    if [ "$NUM_KEYS" -eq 0 ]; then
         echo -e "${RED}Error: No se encontró ninguna clave GPG privada.${NC}"
         echo -e "${YELLOW}Genera una con: gpg --full-generate-key${NC}"
         return 1
+    elif [ "$NUM_KEYS" -eq 1 ]; then
+        GPG_KEY_ID="${KEYS[0]}"
+        echo -e "${GREEN}✓ Única clave detectada: $GPG_KEY_ID${NC}"
+    else
+        echo -e "${YELLOW}¡Múltiples claves encontradas!${NC}"
+        # Si NO es interactivo (ej building script automático), tomamos la primera pero avisamos
+        if [ "$GITHUB_ACTIONS" = "true" ] || [ -z "$TERM" ]; then
+             GPG_KEY_ID="${KEYS[0]}"
+             echo -e "${YELLOW}Advertencia: Seleccionando automáticamente la primera: $GPG_KEY_ID${NC}"
+        else
+            # Selección interactiva
+            echo "Selecciona una clave:"
+            for i in "${!KEYS[@]}"; do
+                USER_ID="${KEYS[$i]}"
+                # Obtener nombre/email para mostrar (opcional, simple por ahora)
+                echo " [$i] $USER_ID" 
+            done
+            read -p "Índice [0]: " KEY_IDX
+            KEY_IDX=${KEY_IDX:-0}
+            if [ -n "${KEYS[$KEY_IDX]}" ]; then
+                GPG_KEY_ID="${KEYS[$KEY_IDX]}"
+                echo -e "${GREEN}✓ Seleccionada: $GPG_KEY_ID${NC}"
+            else
+                echo -e "${RED}Índice inválido.${NC}"
+                return 1
+            fi
+        fi
     fi
-    echo -e "${GREEN}✓ Clave detectada: $GPG_KEY_ID${NC}"
 }
 
 # ============================================
@@ -86,6 +124,11 @@ setup_ci_secrets() {
 
     echo "$GPG_DATA" | gh secret set GPG_PRIVATE_KEY --body -
     echo -e "${GREEN}✓ Secreto GPG_PRIVATE_KEY actualizado.${NC}"
+
+    # 3.5 Guardar GPG_KEY_ID también
+    echo -e "\n${YELLOW}→ Guardando GPG_KEY_ID ($GPG_KEY_ID) en GitHub Secrets...${NC}"
+    echo "$GPG_KEY_ID" | gh secret set GPG_KEY_ID --body -
+    echo -e "${GREEN}✓ Secreto GPG_KEY_ID actualizado.${NC}"
 
     # 4. Configurar GPG_PASSPHRASE
     echo -e "\n${YELLOW}→ Configurando GPG_PASSPHRASE...${NC}"
@@ -165,6 +208,7 @@ if [ -z "$GPG_KEY_ID" ]; then
         echo -e "Please add it in Settings > Secrets and variables > Actions."
         exit 1
     fi
+    # En CI, si tenemos GPG_KEY_ID, lo usamos para verificar tras importar
     if [ -n "$GPG_PRIVATE_KEY" ]; then
         echo -e "${YELLOW}→ Importando clave desde ENV (CI/CD)...${NC}"
         # Try to detect if it is Base64 (doesn't start with standard header)
@@ -180,7 +224,22 @@ if [ -z "$GPG_KEY_ID" ]; then
                  echo "$GPG_PRIVATE_KEY" | gpg --batch --import || exit 1
              }
         fi
-        GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -n1 | awk '{print $2}' | cut -d'/' -f2)
+        
+        # Después de importar, determinamos el ID
+        # Si nos han pasado un ID explícito (desde Secreto)
+        if [ -n "$GPG_KEY_ID" ]; then
+            echo "Verificando clave importada ID: $GPG_KEY_ID"
+            # Verificar que realmente existe tras el import
+            detect_gpg_key || {
+                echo -e "${RED}CRITICO: Se proporcionó GPG_KEY_ID=$GPG_KEY_ID pero no se encuentra tras importar la clave privada.${NC}"
+                echo "Claves disponibles:"
+                gpg --list-secret-keys
+                exit 1
+            }
+        else
+            # Si no hay ID explícito, recurrimos a la detección automática (pero ahora detect_gpg_key es más robusta)
+            detect_gpg_key || exit 1
+        fi
     else
         detect_gpg_key || exit 1
     fi

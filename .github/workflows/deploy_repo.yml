@@ -31,6 +31,7 @@ jobs:
       - name: Build and Update Repo
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           chmod +x scripts/compilar-deb.sh scripts/gestion-repositorio.sh

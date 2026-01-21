@@ -283,8 +283,11 @@ class ThemeManager:
             }
 
     @staticmethod
-    def get_sidebar_style(theme: str) -> str:
+    def get_sidebar_style(theme: str, sidebar_bg: str = None) -> str:
         """Provides CSS for the Sidebar QTreeView."""
+        # Use custom bg if provided, else keep transparent to use Palette (Window) color
+        tree_bg = sidebar_bg if sidebar_bg else "transparent"
+
         if theme == "Dracula":
             # Dracula Sidebar
             hover_bg = "#44475a"
@@ -294,7 +297,7 @@ class ThemeManager:
             
             return f"""
             QTreeView {{
-                background-color: transparent;
+                background-color: {tree_bg};
                 border: none;
                 color: {text_color};
                 outline: 0;
@@ -349,7 +352,7 @@ class ThemeManager:
             
             return f"""
             QTreeView {{
-                background-color: transparent;
+                background-color: {tree_bg};
                 border: none;
                 color: {text_color};
                 outline: 0;
@@ -403,7 +406,7 @@ class ThemeManager:
             
             return f"""
             QTreeView {{
-                background-color: transparent;
+                background-color: {tree_bg};
                 border: none;
                 color: {text_color};
                 outline: 0;
@@ -456,7 +459,7 @@ class ThemeManager:
              
             return f"""
             QTreeView {{
-                background-color: transparent;
+                background-color: {tree_bg};
                 border: none;
                 color: {text_color};
                 outline: 0;
