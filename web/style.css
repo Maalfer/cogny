@@ -94,6 +94,26 @@ nav {
     min-width: 300px;
 }
 
+.hero-logo {
+    width: 120px;
+    height: auto;
+    margin-bottom: 2rem;
+    filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.4));
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
 .hero h1 {
     font-size: 4rem;
     line-height: 1.1;
@@ -143,17 +163,24 @@ nav {
     margin-top: 2rem;
 }
 
-.mockup {
+
+.screenshot-window {
     background: #1e1e1e;
     border-radius: 12px;
     width: 100%;
-    max-width: 450px;
+    max-width: 500px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
     border: 1px solid #333;
+    transition: transform 0.3s, box-shadow 0.3s;
 }
 
-.mockup-header {
+.screenshot-window:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 25px 60px rgba(139, 92, 246, 0.3);
+}
+
+.window-header {
     background: #252526;
     padding: 10px 15px;
     display: flex;
@@ -178,10 +205,10 @@ nav {
     background: #27c93f;
 }
 
-.mockup-body {
-    padding: 20px;
-    color: #d4d4d4;
-    font-family: monospace;
+.hero-screenshot {
+    width: 100%;
+    height: auto;
+    display: block;
 }
 
 /* Features */
@@ -230,6 +257,158 @@ nav {
 
 .card p {
     color: var(--text-muted);
+}
+
+/* Screenshots Section */
+.screenshots {
+    padding: 5rem 5%;
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.screenshots h2 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.section-subtitle {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    margin-bottom: 4rem;
+}
+
+.screenshot-carousel {
+    position: relative;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.carousel-container {
+    overflow: hidden;
+    border-radius: 16px;
+}
+
+.carousel-track {
+    position: relative;
+}
+
+.screenshot-card {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.screenshot-card.active {
+    display: block;
+    opacity: 1;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.screenshot-wrapper {
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    transition: all 0.3s;
+}
+
+.screenshot-wrapper:hover {
+    box-shadow: 0 30px 70px rgba(139, 92, 246, 0.4);
+    border-color: var(--primary);
+}
+
+.screenshot-wrapper img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.screenshot-label {
+    margin-top: 2rem;
+    padding: 0 1rem;
+}
+
+.screenshot-label h3 {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(to right, var(--primary), var(--secondary));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.screenshot-label p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+}
+
+.carousel-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    margin-top: 3rem;
+}
+
+.carousel-btn {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.carousel-btn:hover {
+    background: var(--primary);
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 5px 20px rgba(139, 92, 246, 0.4);
+}
+
+.carousel-dots {
+    display: flex;
+    gap: 0.8rem;
+}
+
+.dot-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.3);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.dot-indicator.active {
+    background: var(--primary);
+    width: 32px;
+    border-radius: 6px;
+}
+
+.dot-indicator:hover {
+    background: var(--secondary);
+    transform: scale(1.2);
 }
 
 /* Download */
@@ -325,6 +504,46 @@ nav {
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* GitHub Corner */
+.github-corner {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+}
+
+.github-corner:hover .octo-arm {
+    animation: octocat-wave 560ms ease-in-out;
+}
+
+@keyframes octocat-wave {
+
+    0%,
+    100% {
+        transform: rotate(0);
+    }
+
+    20%,
+    60% {
+        transform: rotate(-25deg);
+    }
+
+    40%,
+    80% {
+        transform: rotate(10deg);
+    }
+}
+
+@media (max-width: 500px) {
+    .github-corner:hover .octo-arm {
+        animation: none;
+    }
+
+    .github-corner .octo-arm {
+        animation: octocat-wave 560ms ease-in-out;
+    }
+}
+
 footer {
     text-align: center;
     padding: 2rem;
@@ -333,14 +552,33 @@ footer {
     margin-top: 5rem;
 }
 
+footer a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.3s;
+    border-bottom: 1px solid transparent;
+}
+
+footer a:hover {
+    color: var(--secondary);
+    border-bottom-color: var(--secondary);
+}
+
 @media (max-width: 768px) {
+
     /* Global Section Spacing */
-    .hero, .features, .download, nav {
+    .hero,
+    .features,
+    .download,
+    nav {
         padding-left: 1.5rem;
         padding-right: 1.5rem;
     }
 
-    .hero, .features, .download {
+    .hero,
+    .features,
+    .download {
         padding-top: 3rem;
         padding-bottom: 3rem;
     }
@@ -379,7 +617,8 @@ footer {
     .hero {
         flex-direction: column;
         text-align: center;
-        padding-top: 2rem; /* Reduce top padding specifically for hero on mobile */
+        padding-top: 2rem;
+        /* Reduce top padding specifically for hero on mobile */
     }
 
     .hero h1 {
@@ -397,13 +636,18 @@ footer {
         width: 100%;
     }
 
+    .hero-logo {
+        width: 80px;
+    }
+
     .hero-buttons {
         flex-direction: column;
         gap: 1rem;
         width: 100%;
     }
 
-    .btn-secondary, .btn-primary {
+    .btn-secondary,
+    .btn-primary {
         width: 100%;
         text-align: center;
         justify-content: center;
@@ -411,8 +655,9 @@ footer {
         align-items: center;
     }
 
-    /* Mockup */
-    .mockup {
+
+    /* Screenshot Window */
+    .screenshot-window {
         margin-top: 1rem;
     }
 
@@ -423,8 +668,43 @@ footer {
     }
 
     .grid {
-        grid-template-columns: 1fr; /* Force single column on mobile */
+        grid-template-columns: 1fr;
+        /* Force single column on mobile */
         gap: 1.5rem;
+    }
+
+    /* Screenshots Section */
+    .screenshots {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+    }
+
+    .screenshots h2 {
+        font-size: 2rem;
+    }
+
+    .section-subtitle {
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .screenshot-label h3 {
+        font-size: 1.5rem;
+    }
+
+    .screenshot-label p {
+        font-size: 1rem;
+    }
+
+    .carousel-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .carousel-controls {
+        gap: 1rem;
+        margin-top: 2rem;
     }
 
     /* Download Section */
@@ -451,13 +731,15 @@ footer {
     .copy-btn {
         top: 10px;
         right: 10px;
-        position: relative; /* Move it into flow if needed, or keep absolute with adjustments */
+        position: relative;
+        /* Move it into flow if needed, or keep absolute with adjustments */
         float: right;
-        margin-top: -35px; /* Hacky fix, let's just keep it absolute but ensure container has space */
+        margin-top: -35px;
+        /* Hacky fix, let's just keep it absolute but ensure container has space */
         z-index: 10;
         background: rgba(255, 255, 255, 0.15);
     }
-    
+
     footer {
         margin-top: 3rem;
         padding: 1.5rem;
@@ -468,8 +750,12 @@ footer {
     .hero h1 {
         font-size: 2rem;
     }
-    
+
     .logo {
         font-size: 1.3rem;
+    }
+
+    .logo-img {
+        height: 32px;
     }
 }
