@@ -38,12 +38,14 @@ class CustomTitleBar(QWidget):
             self.logo_label.setPixmap(pixmap)
         self.logo_label.setFixedSize(24, 24)
         self.logo_label.setStyleSheet("margin-right: 8px;")
+        self.logo_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Allow clicks to pass through
         layout.addWidget(self.logo_label)
         
         # Title
         self.title_label = QLabel("Cogny")
         self.title_label.setObjectName("TitleLabel")
         self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Allow clicks to pass through
         layout.addWidget(self.title_label)
         
         # Spacer
@@ -145,9 +147,17 @@ class CustomTitleBar(QWidget):
     def mousePressEvent(self, event):
         """Handle mouse press for window dragging."""
         if event.button() == Qt.LeftButton:
-            self._dragging = True
-            self._drag_position = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
-            event.accept()
+            if self.parent_window:
+                # Try system move first (Native Wayland/X11 support)
+                window_handle = self.parent_window.windowHandle()
+                if window_handle and window_handle.startSystemMove():
+                    event.accept()
+                    return
+
+                # Fallback to manual move
+                self._dragging = True
+                self._drag_position = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
+                event.accept()
     
     def mouseMoveEvent(self, event):
         """Handle mouse move for window dragging."""
