@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cogny - Toma de Notas Inteligente</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="glass-background"></div>
+
+    <nav>
+        <div class="logo">Cogny</div>
+        <div class="links">
+            <a href="#features">Características</a>
+            <a href="#download" class="btn-primary">Descargar</a>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Tus notas,<br> <span class="gradient-text">reimaginadas.</span></h1>
+            <p>Una aplicación de notas markdown rápida, bonita y potente para Linux. Organiza tu conocimiento con
+                estilo.</p>
+            <div class="hero-buttons">
+                <a href="#download" class="btn-primary">Empezar Ahora <i class="fas fa-arrow-right"></i></a>
+                <a href="https://github.com/Maalfer/cogny" class="btn-secondary"><i class="fab fa-github"></i>
+                    GitHub</a>
+            </div>
+        </div>
+        <div class="hero-image">
+            <!-- Placeholder for App Screenshot -->
+            <div class="mockup">
+                <div class="mockup-header">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                </div>
+                <div class="mockup-body">
+                    <pre><code class="language-markdown"># Bienvenido a Cogny
+
+Tu nueva forma de tomar notas.
+
+- **Markdown** nativo
+- Temas personalizables
+- Rápido y ligero</code></pre>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section id="features" class="features">
+        <h2>¿Por qué Cogny?</h2>
+        <div class="grid">
+            <div class="card">
+                <i class="fas fa-bolt icon"></i>
+                <h3>Ultrarrápido</h3>
+                <p>Diseñado para ser ligero y responder al instante. Olvídate de los tiempos de carga.</p>
+            </div>
+            <div class="card">
+                <i class="fas fa-paint-brush icon"></i>
+                <h3>Personalizable</h3>
+                <p>Temas Drácula, Dark y Light integrados. Cambia los colores a tu gusto.</p>
+            </div>
+            <div class="card">
+                <i class="fas fa-lock icon"></i>
+                <h3>Privado</h3>
+                <p>Tus notas son archivos locales. Sin nube obligatoria, sin rastreadores.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="download">
+        <div class="download-container">
+            <h2>Descarga Cogny</h2>
+            <p>Elige tu plataforma y empieza a escribir.</p>
+
+            <div class="download-buttons">
+                <a href="releases/cogny_setup_windows.exe" class="btn-download windows">
+                    <i class="fab fa-windows"></i> Descargar para Windows (.exe)
+                </a>
+                <a href="releases/cogny_linux_amd64.deb" class="btn-download linux">
+                    <i class="fab fa-linux"></i> Descargar para Linux (.deb)
+                </a>
+            </div>
+
+            <p class="subtext">O instálalo vía repositorio (Debian/Ubuntu):</p>
+
+            <div class="code-block">
+                <div class="code-header">Terminal</div>
+                <pre><code>curl -fsSL https://Maalfer.github.io/cogny/cogny.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/cogny-archive-keyring.gpg
+
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cogny-archive-keyring.gpg] https://Maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/cogny.list > /dev/null
+
+sudo apt update
+sudo apt install cogny</code></pre>
+                <button class="copy-btn" onclick="copyCode()">Copiar</button>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 Cogny Project. Creado con ❤️ para la comunidad Open Source.</p>
+    </footer>
+
+    <script>
+        function copyCode() {
+            const code = document.querySelector('code').innerText;
+            navigator.clipboard.writeText(code);
+            alert('¡Comandos copiados al portapapeles!');
+        }
+    </script>
+</body>
+
+</html>
