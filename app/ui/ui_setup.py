@@ -22,6 +22,7 @@ class UiSetupMixin:
         # 2. Editor Blueprint
         self.editor_area = EditorArea(file_manager=self.fm, parent=self)
         self.editor_area.status_message.connect(self.on_editor_status)
+        self.editor_area.note_renamed.connect(self.sidebar.on_external_rename)
         self.splitter.addWidget(self.editor_area)
         
         self.splitter.setSizes([300, 700])

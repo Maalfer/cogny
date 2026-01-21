@@ -22,6 +22,11 @@ class UiThemeMixin:
         # Update components
         self.editor_area.switch_theme(theme_name, text_color, global_bg)
         
+        # Update Title Edit Style explicitly
+        if hasattr(self.editor_area, "title_edit"):
+             title_style = ThemeManager.get_title_style(theme_name, global_bg, text_color)
+             self.editor_area.title_edit.setStyleSheet(title_style)
+        
         # Apply Global Scrollbar Style
         scrollbar_style = ThemeManager.get_scrollbar_style(theme_name) # scrollbar separate? maybe keep default
         toolbar_style = ThemeManager.get_toolbar_style(theme_name, global_bg)
@@ -32,7 +37,8 @@ class UiThemeMixin:
         self.sidebar.tree_view.setStyleSheet(sidebar_style)
         
         # Update Search Bar Style
+        # Update Search Bar Style
         if hasattr(self, 'search_manager'):
-            self.search_manager.update_theme(theme_name)
+            self.search_manager.update_theme(theme_name, global_bg, text_color)
         
         self.statusBar().showMessage(f"Tema cambiado a {theme_name}", 2000)

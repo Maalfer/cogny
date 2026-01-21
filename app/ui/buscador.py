@@ -18,16 +18,16 @@ class SearchManager(QObject):
         self.search_timer.timeout.connect(self.execute_pending_search)
         
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Buscar notas (Google-like)...")
+        self.search_bar.setPlaceholderText("Buscar notas...")
         self.search_bar.textChanged.connect(self.on_search_text_changed)
         
         # Style
         # Style initialized via update_theme called from main window
         pass
 
-    def update_theme(self, theme_name):
+    def update_theme(self, theme_name, global_bg=None, text_color=None):
         from app.ui.themes import ThemeManager
-        style = ThemeManager.get_search_bar_style(theme_name)
+        style = ThemeManager.get_search_bar_style(theme_name, global_bg, text_color)
         self.search_bar.setStyleSheet(style)
 
     def get_widget(self):

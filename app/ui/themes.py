@@ -238,6 +238,45 @@ class ThemeManager:
             }}
             """
 
+
+    @staticmethod
+    def get_title_style(theme: str, global_bg: str = None, text_color: str = None) -> str:
+        """Returns stylesheet for the TitleEditor."""
+        if theme == "Dracula":
+            bg_color = global_bg if global_bg else "#282a36"
+            text_color = text_color if text_color else "#f8f8f2"
+            border_color = "#6272a4"
+        elif theme == "AnuPpuccin":
+            bg_color = global_bg if global_bg else "#1e1e2e"
+            text_color = text_color if text_color else "#cdd6f4"
+            border_color = "#313244"
+        elif theme == "Dark":
+            bg_color = global_bg if global_bg else "#18181b"
+            text_color = text_color if text_color else "#e4e4e7"
+            border_color = "#a1a1aa"
+        else: # Light
+            bg_color = global_bg if global_bg else "#ffffff"
+            text_color = text_color if text_color else "#18181b"
+            border_color = "#e4e4e7"
+
+        return f"""
+            QPlainTextEdit#TitleEdit {{
+                font-size: 32px;
+                font-weight: 700;
+                border: none;
+                border-bottom: 2px solid {border_color};
+                background-color: {bg_color};
+                color: {text_color};
+                padding-left: 80px;
+                padding-right: 80px;
+                padding-top: 10px;
+                padding-bottom: 0px;
+                margin-left: 20px;
+                margin-right: 20px;
+                margin-bottom: 10px;
+            }}
+        """
+
     @staticmethod
     def get_code_bg_color(theme: str) -> QColor:
         if theme == "Dracula":
@@ -301,8 +340,8 @@ class ThemeManager:
 
         if theme == "Dracula":
             # Dracula Sidebar
-            hover_bg = "#44475a"
-            selected_bg = "#44475a" 
+            hover_bg = "rgba(255, 255, 255, 0.05)"
+            selected_bg = "rgba(0, 0, 0, 0.2)" 
             text_color = text_color if text_color else "#f8f8f2"
             accent_border = "#bd93f9" # Purple
             
@@ -356,8 +395,8 @@ class ThemeManager:
             """
         elif theme == "AnuPpuccin":
              # Catppuccin Sidebar
-            hover_bg = "#313244" # Surface0
-            selected_bg = "#45475a" # Surface1
+            hover_bg = "rgba(255, 255, 255, 0.05)"
+            selected_bg = "rgba(0, 0, 0, 0.2)"
             text_color = text_color if text_color else "#cdd6f4"
             accent_border = "#cba6f7" # Mauve
             
@@ -410,8 +449,8 @@ class ThemeManager:
             """
         elif theme == "Dark":
             # Zinc-based Sidebar
-            hover_bg = "#27272a"
-            selected_bg = "#27272a" 
+            hover_bg = "rgba(255, 255, 255, 0.05)"
+            selected_bg = "rgba(0, 0, 0, 0.2)"
             text_color = text_color if text_color else "#e4e4e7"
             accent_border = "#3b82f6"
             
@@ -463,8 +502,8 @@ class ThemeManager:
             }}
             """
         else: # Light
-            hover_bg = "#f4f4f5"
-            selected_bg = "#f4f4f5"
+            hover_bg = "rgba(0, 0, 0, 0.05)"
+            selected_bg = "rgba(0, 0, 0, 0.1)"
             text_color = text_color if text_color else "#18181b"
             accent_border = "#2563eb"
              
@@ -697,27 +736,29 @@ class ThemeManager:
             }
 
     @staticmethod
-    def get_search_bar_style(theme: str) -> str:
+    def get_search_bar_style(theme: str, global_bg: str = None, text_color: str = None) -> str:
         """Returns stylesheet for the main search bar."""
+        
+        # Use semi-transparent backgrounds to blend with global color
         if theme == "Dracula":
-            bg_color = "#282a36" 
-            text_color = "#f8f8f2"
-            border_color = "#6272a4"
+            bg_color = "rgba(0, 0, 0, 0.2)" 
+            text_color = text_color if text_color else "#f8f8f2"
+            border_color = "rgba(255, 255, 255, 0.1)"
             focus_border = "#bd93f9" # Purple
         elif theme == "AnuPpuccin":
-            bg_color = "#1e1e2e"
-            text_color = "#cdd6f4"
-            border_color = "#313244"
+            bg_color = "rgba(0, 0, 0, 0.2)"
+            text_color = text_color if text_color else "#cdd6f4"
+            border_color = "rgba(255, 255, 255, 0.1)"
             focus_border = "#cba6f7"
         elif theme == "Dark":
-            bg_color = "#18181b"
-            text_color = "#e4e4e7"
-            border_color = "#3f3f46"
+            bg_color = "rgba(0, 0, 0, 0.2)"
+            text_color = text_color if text_color else "#e4e4e7"
+            border_color = "rgba(255, 255, 255, 0.1)"
             focus_border = "#3b82f6"
         else: # Light
-            bg_color = "#ffffff"
-            text_color = "#18181b"
-            border_color = "#e4e4e7"
+            bg_color = "rgba(255, 255, 255, 0.5)"
+            text_color = text_color if text_color else "#18181b"
+            border_color = "rgba(0, 0, 0, 0.1)"
             focus_border = "#2563eb"
 
         return f"""

@@ -4,6 +4,7 @@ from PySide6.QtGui import QColor
 
 class TitleEditor(QPlainTextEdit):
     return_pressed = Signal()
+    editing_finished = Signal(str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -17,8 +18,13 @@ class TitleEditor(QPlainTextEdit):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             if not (event.modifiers() & Qt.ShiftModifier):
                self.return_pressed.emit()
+               # self.editing_finished.emit(self.toPlainText()) # Triggered by focusOut via return_pressed
                return
         super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        self.editing_finished.emit(self.toPlainText())
+        super().focusOutEvent(event)
 
 # --- MODERN DIALOGS ---
 

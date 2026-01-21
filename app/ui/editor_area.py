@@ -11,6 +11,7 @@ from app.ui.markdown_renderer import MarkdownRenderer
 class EditorArea(QWidget):
     status_message = Signal(str, int) # message, timeout
     note_loaded = Signal(bool) # success
+    note_renamed = Signal(str, str) # old_id, new_id
 
     def __init__(self, file_manager, parent=None):
         super().__init__(parent)
@@ -46,8 +47,10 @@ class EditorArea(QWidget):
         title_font.setPointSize(24)
         title_font.setBold(True)
         self.title_edit.setFont(title_font)
+        self.title_edit.setMaximumHeight(80)
         
         self.title_edit.return_pressed.connect(lambda: self.text_editor.setFocus())
+        self.title_edit.setReadOnly(True)
         
         # Content
         self.text_editor = NoteEditor(self.fm)
@@ -64,7 +67,7 @@ class EditorArea(QWidget):
         # self.db.cleanup_attachments(self.current_note_id, att_ids)
         self.splitter.addWidget(self.title_edit)
         self.splitter.addWidget(self.text_editor)
-        self.splitter.setSizes([80, 700])
+        self.splitter.setSizes([60, 700])
         
         layout.addWidget(self.splitter)
 
@@ -98,12 +101,15 @@ class EditorArea(QWidget):
         except Exception as e:
              print(f"Error saving last opened note: {e}")
         
-        self.title_edit.setReadOnly(False)
-        self.text_editor.setReadOnly(False)
         
-        # 1. Immediate UI Feedback
-        self.status_message.emit(f"Cargando nota: {title}...", 0)
-        self.title_edit.setPlainText(title)
+        # Display Title (Strip .md extension)
+        display_title = title
+        if display_title and display_title.endswith('.md'):
+             display_title = display_title[:-3]
+             
+        self.title_edit.setPlainText(display_title)
+        self.title_edit.setReadOnly(True) # Ensure Read-Only
+        self.text_editor.setReadOnly(False)
         
         # Show specific loading state in editor
         # We use a simple HTML placeholder to indicate activity
@@ -317,6 +323,44 @@ class EditorArea(QWidget):
              self.status_message.emit("Error al guardar.", 2000)
         
         return title
+
+    def rename_current_note(self, new_title):
+        if not self.current_note_id or not new_title.strip():
+            return
+            
+        import os
+        # Get current title from ID (filename)
+        # Note: self.current_note_id is relative path e.g. "folder/note.md"
+        old_basename = os.path.basename(self.current_note_id)
+        old_title = os.path.splitext(old_basename)[0]
+        
+        if new_title.strip() == old_title:
+            return
+            
+        print(f"DEBUG: Renaming '{self.current_note_id}' ({old_title}) to '{new_title.strip()}'")
+        
+        # Verify source file exists
+        if not self.fm.file_exists(self.current_note_id):
+            print(f"ERROR: Source file not found: {self.current_note_id}")
+            self.status_message.emit("Error: Archivo no encontrado. ¿Se ha movido?", 3000)
+            return
+
+        try:
+            new_rel_path = self.fm.rename_item(self.current_note_id, new_title.strip())
+            
+            if new_rel_path:
+                print(f"DEBUG: Rename successful. New ID: {new_rel_path}")
+                old_id = self.current_note_id
+                self.current_note_id = new_rel_path
+                self.note_renamed.emit(old_id, new_rel_path)
+                self.status_message.emit(f"Renombrado a {new_title}", 2000)
+            else:
+                 print("DEBUG: Rename returned None?")
+        except Exception as e:
+            print(f"ERROR doing rename: {e}")
+            self.status_message.emit(f"Error al renombrar: {e}", 3000)
+            # Revert title edit if failed?
+            # self.title_edit.setPlainText(old_title)
 
     def clear(self):
         self.current_note_id = None

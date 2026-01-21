@@ -308,7 +308,30 @@ class Sidebar(QWidget):
             
             if proxy_index.isValid():
                 self.tree_view.setCurrentIndex(proxy_index)
+                self.tree_view.setCurrentIndex(proxy_index)
                 self.tree_view.scrollTo(proxy_index)
+
+    def on_external_rename(self, old_id, new_id):
+        import os
+        # Update model manually to match FS change triggered by Editor
+        if old_id in self.model.note_items:
+             item = self.model.note_items[old_id]
+             
+             # Calculate new title
+             new_basename = os.path.basename(new_id)
+             new_title = os.path.splitext(new_basename)[0]
+             
+             print(f"DEBUG: Sidebar handling external rename: {old_id} -> {new_id} ({new_title})")
+             
+             item.setText(new_title)
+             item.note_id = new_id
+             
+             # Update Map
+             del self.model.note_items[old_id]
+             self.model.note_items[new_id] = item
+             
+             # Ensure selected
+             self.select_note(new_id)
 
 
     def get_selected_notes(self):
