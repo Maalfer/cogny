@@ -38,6 +38,11 @@ jobs:
           # Run the management script
           ./scripts/gestion-repositorio.sh
 
+      - name: Sync Web Assets
+        run: |
+          echo "Copying web assets to docs/..."
+          cp -r web/* docs/
+
       - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

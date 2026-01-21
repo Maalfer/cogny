@@ -279,6 +279,11 @@ EOF
     DO_MANUAL_SIGN=false
 fi
 
+# COPY TO RELEASES FOR DIRECT DOWNLOAD
+mkdir -p ${APT_REPO_DIR}/releases
+cp ${DEB_FILE} ${APT_REPO_DIR}/releases/cogny_linux_amd64.deb
+echo -e "${GREEN}✓ Copiado .deb a releases/cogny_linux_amd64.deb${NC}"
+
 # Paso 5: Actualizar Paquete
 echo -e "\n${YELLOW}→ Actualizando repositorio...${NC}"
 reprepro -b ${APT_REPO_DIR} remove stable ${APP_NAME} 2>/dev/null || true
