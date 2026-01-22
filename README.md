@@ -47,15 +47,14 @@ Mantén protegida tu información sensible.
 Para distribuciones basadas en Debian (Ubuntu, Linux Mint, Debian, etc.), puedes instalar Cogny desde nuestro repositorio oficial:
 
 ```bash
-# 1. Añadir la clave GPG del repositorio
-curl -fsSL https://maalfer.github.io/cogny/cogny.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/cogny-archive-keyring.gpg
+# 1. Descarga la clave y sobreescribe si ya existe sin preguntar
+curl -fsSL https://maalfer.github.io/cogny/cogny.gpg.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/cogny-archive-keyring.gpg
 
-# 2. Añadir el repositorio a tus fuentes
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cogny-archive-keyring.gpg] https://maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/cogny.list
+# 2. Añade el repositorio (esto es instantáneo)
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cogny-archive-keyring.gpg] https://maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/cogny.list > /dev/null
 
-# 3. Actualizar e instalar
-sudo apt update
-sudo apt install cogny
+# 3. Actualiza e instala automáticamente con -y
+sudo apt update && sudo apt install cogny -y
 ```
 
 **Actualizar a nuevas versiones:**

@@ -54,6 +54,9 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         # settings = QSettings() -> Removed global settings for theme
         current_theme = self.config_manager.get("theme", "Dark")
         self.switch_theme(current_theme)
+        
+        # Initialize System Tray
+        self.setup_tray_icon()
     
     def setWindowTitle(self, title):
         """Override to also update custom title bar."""
@@ -288,3 +291,73 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         self._is_resizing = False
         self._resize_direction = None
         super().mouseReleaseEvent(event)
+
+    def setup_tray_icon(self):
+        """Initialize System Tray Icon with Context Menu."""
+        from PySide6.QtWidgets import QSystemTrayIcon, QMenu
+        from PySide6.QtGui import QAction
+
+        # Check if System Tray is available
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            print("WARNING: System Tray not available on this system.")
+            return
+
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.windowIcon())
+        
+        # Create Context Menu
+        tray_menu = QMenu()
+        
+        open_action = QAction("Abrir Cogny", self)
+        open_action.triggered.connect(self.show_normal_and_raise)
+        tray_menu.addAction(open_action)
+        
+        tray_menu.addSeparator()
+        
+        quit_action = QAction("Salir", self)
+        quit_action.triggered.connect(self.force_quit)
+        tray_menu.addAction(quit_action)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        self.tray_icon.show()
+        
+        # Flag to distinguish between minimize-to-tray and actual quit
+        self._force_quit = False
+
+    def on_tray_icon_activated(self, reason):
+        """Handle tray icon clicks."""
+        from PySide6.QtWidgets import QSystemTrayIcon
+        
+        if reason == QSystemTrayIcon.Trigger:
+            if self.isVisible():
+                if self.isMinimized():
+                    self.show_normal_and_raise()
+                else:
+                    self.hide()
+            else:
+                self.show_normal_and_raise()
+
+    def show_normal_and_raise(self):
+        """Restore window and bring to front."""
+        self.show()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def force_quit(self):
+        """Fully quit the application."""
+        self._force_quit = True
+        self.close()
+
+    def closeEvent(self, event):
+        """Override close event to minimize to tray unless force quitting."""
+        if getattr(self, '_force_quit', False):
+             event.accept()
+        elif hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
+             event.ignore()
+             self.hide()
+             # Optional: Show a balloon message on first minimize?
+        else:
+             # If tray icon failed to init, just close normally
+             event.accept()
