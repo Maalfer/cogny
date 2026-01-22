@@ -59,104 +59,103 @@ class WarmupWorker(QThread):
 class SplashWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # Center on screen
-        self.resize(440, 320)
+        # Compact & Minimalist Size
+        self.resize(380, 260)
         
-        # UI Setup
-        # We need a wrapper widget to handle the Opacity Effect properly
-        # while the inner content widget handles the Shadow Effect.
-        # Nested effects on the same widget can cause issues, and replacing them definitely does.
+        # Central Container with Shadow
+        # We use a container widget inside the main window to hold the layout and apply effects
+        self.container = QWidget()
+        self.container.setObjectName("SplashContainer")
+        self.setCentralWidget(self.container)
         
+        # Shadow Effect
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(30)
+        shadow.setXOffset(0)
+        shadow.setYOffset(10)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        self.container.setGraphicsEffect(shadow)
 
-        # Wrapper is just the central widget now
-        self.wrapper_widget = QWidget()
-        self.wrapper_widget.setAttribute(Qt.WA_TranslucentBackground)
-        self.setCentralWidget(self.wrapper_widget)
-        
-        wrapper_layout = QVBoxLayout(self.wrapper_widget)
-        wrapper_layout.setContentsMargins(10, 10, 10, 10)
-        wrapper_layout.setAlignment(Qt.AlignCenter)
-        
-        # Content Widget
-        self.content_widget = QWidget()
-        self.content_widget.setObjectName("ContentContainer")
-        self.content_widget.setStyleSheet("""
-            QWidget#ContentContainer {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #252525, stop:1 #2f2f3a);
-                border-radius: 14px;
-                border: 2px solid #444; 
+        # Layout
+        main_layout = QVBoxLayout(self.container)
+        main_layout.setContentsMargins(30, 40, 30, 40)
+        main_layout.setSpacing(15)
+        main_layout.setAlignment(Qt.AlignCenter)
+
+        # Stylesheet (Modern Dark Minimalist)
+        self.setStyleSheet("""
+            QWidget#SplashContainer {
+                background-color: #1e1e2e; /* Catppuccin Base / Modern Dark */
+                border-radius: 16px;
+                border: 1px solid #313244; /* Subtle Border */
             }
             QLabel {
-                color: #FFFFFF;
+                color: #cdd6f4; /* Text Base */
                 background: transparent;
             }
             QProgressBar {
                 border: none;
-                background-color: rgba(255,255,255,0.06);
-                border-radius: 4px;
-                height: 8px;
+                background-color: #313244; /* Darker track */
+                border-radius: 2px;
+                height: 4px; /* Ultra thin minimalist bar */
             }
             QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6dd5fa, stop:1 #2980b9);
-                border-radius: 4px;
+                background-color: #cba6f7; /* Accent Color (Mauve/Purple) */
+                border-radius: 2px;
             }
         """)
-        wrapper_layout.addWidget(self.content_widget)
-        
-        # Layout inside the styled box
-        layout = QVBoxLayout(self.content_widget)
-        layout.setAlignment(Qt.AlignCenter)
-        
+
         # Logo
         self.logo_label = QLabel()
-        logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets", "logo.png")
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        logo_path = os.path.join(base_dir, "assets", "logo.png")
+        
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
-            self.logo_label.setPixmap(pixmap.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            # Smaller, crisper logo
+            self.logo_label.setPixmap(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-            self.logo_label.setText("COGNY")
-            self.logo_label.setFont(QFont("Segoe UI", 26, QFont.Bold))
-
+            # Fallback Text Logo
+            self.logo_label.setText("C")
+            self.logo_label.setFont(QFont("Segoe UI", 48, QFont.Bold))
+            self.logo_label.setStyleSheet("color: #cba6f7;")
+            
         self.logo_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.logo_label)
-        
-        layout.addSpacing(20)
-        
-        # App Name
+        main_layout.addWidget(self.logo_label)
+
+        # App Title (Minimalist)
         title = QLabel("Cogny")
-        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title.setFont(QFont("Segoe UI", 20, QFont.Bold)) # Clean San-Serif
         title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-        
-        # Status
+        title.setStyleSheet("margin-top: 5px;")
+        main_layout.addWidget(title)
+
+        # Spacer (Push content slightly)
+        main_layout.addStretch()
+
+        # Status Label (Subtle)
         self.status_label = QLabel("Iniciando...")
-        self.status_label.setFont(QFont("Segoe UI", 10))
-        self.status_label.setStyleSheet("color: #AAA;")
+        self.status_label.setFont(QFont("Segoe UI", 9))
+        self.status_label.setStyleSheet("color: #a6adc8;") # Muted text
         self.status_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.status_label)
+        main_layout.addWidget(self.status_label)
         
-        layout.addSpacing(20)
-        
-        # Progress Bar
+        # Progress Bar (Thin)
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
-        self.progress.setFixedWidth(200)
-        layout.addWidget(self.progress)
+        self.progress.setFixedWidth(240) # Compact width
+        main_layout.addWidget(self.progress, 0, Qt.AlignCenter)
         
         # Start Worker
         self.worker = WarmupWorker()
         self.worker.progress.connect(self.progress.setValue)
         self.worker.status.connect(self.status_label.setText)
-        
-        # No complex effects to avoid Painter errors
-        # self.setWindowOpacity(0.0) # Optional: Animate window opacity instead of widget opacity?
-        # Let's keep it simple first.
 
     def start_warmup(self):
-        """Start the warmup worker. Call after connecting any external slots to signals."""
+        """Start the warmup worker."""
         if not getattr(self, 'worker', None):
             self.worker = WarmupWorker()
             self.worker.progress.connect(self.progress.setValue)
@@ -165,4 +164,11 @@ class SplashWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+
+    def set_status(self, text):
+         self.status_label.setText(text)
+
+    def show_loading_note(self, note_name):
+         self.status_label.setText(f"Cargando nota: {note_name}...")
+
 

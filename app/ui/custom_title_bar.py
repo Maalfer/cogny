@@ -23,7 +23,8 @@ class CustomTitleBar(QWidget):
         
         # Main Layout
         layout = QHBoxLayout()
-        layout.setContentsMargins(10, 0, 0, 0)
+        # Increased left margin to 24 to fix persistent icon clipping on rounded corners
+        layout.setContentsMargins(24, 0, 0, 0) 
         layout.setSpacing(0)
         self.setLayout(layout)
         
@@ -41,14 +42,18 @@ class CustomTitleBar(QWidget):
         self.logo_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Allow clicks to pass through
         layout.addWidget(self.logo_label)
         
+        # Spacer Left
+        layout.addStretch()
+        
         # Title
         self.title_label = QLabel("Cogny")
         self.title_label.setObjectName("TitleLabel")
         self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.title_label.setAlignment(Qt.AlignCenter) # Center text in label
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Allow clicks to pass through
         layout.addWidget(self.title_label)
         
-        # Spacer
+        # Spacer Right
         layout.addStretch()
         
         # Window Control Buttons

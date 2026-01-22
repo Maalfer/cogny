@@ -116,7 +116,15 @@ def main():
         window.ready.connect(show_and_close_splash)
         
         # Trigger Preload
-        splash.status_label.setText("Abriendo última nota...")
+        # Try to peek at the last note to show a better status message
+        last_note_id = settings.value(f"last_note_{vault_path}", "")
+        if not last_note_id:
+             # Try legacy/fallback key
+             last_note_id = settings.value("last_opened_note", "")
+
+        note_name = os.path.basename(last_note_id) if last_note_id else "contenido"
+        splash.show_loading_note(note_name)
+        
         # Use singleShot to allow event loop to process the status update
         QTimer.singleShot(10, window.preload_initial_state)
 
