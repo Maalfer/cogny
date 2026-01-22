@@ -30,6 +30,7 @@ class UiSetupMixin:
         
         # 3. Instantiate Components (Needed for Actions)
         self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setOpaqueResize(False)
         
         self.sidebar = Sidebar(file_manager=self.fm, parent=self)
         self.sidebar.note_selected.connect(self.on_sidebar_note_selected)
