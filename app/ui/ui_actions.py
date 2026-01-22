@@ -61,17 +61,17 @@ class UiActionsMixin:
         self.update_mode_action_icon() # Set initial icon
 
         self.act_export_pdf = QAction("Exportar PDF", self)
-        self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.editor_area.current_note_id))
+        self.act_export_pdf.triggered.connect(lambda: self.export_note_pdf(self.tabbed_editor.current_note_id))
 
         self.act_export_doc = QAction("Exportar Documento...", self)
-        self.act_export_doc.triggered.connect(lambda: self.export_note_doc(self.editor_area.current_note_id))
+        self.act_export_doc.triggered.connect(lambda: self.export_note_doc(self.tabbed_editor.current_note_id))
 
         # Backup Action
         self.act_backup = QAction("Crear Respaldo...", self)
         self.act_backup.triggered.connect(self.show_backup_dialog)
 
         self.act_attach = QAction("Adjuntar Archivo...", self)
-        self.act_attach.triggered.connect(self.editor_area.attach_file)
+        self.act_attach.triggered.connect(self.tabbed_editor.attach_file)
 
         self.act_save = QAction("Guardar Nota", self)
         self.act_save.setShortcut(QKeySequence.Save)
@@ -84,23 +84,23 @@ class UiActionsMixin:
         # Edit Actions (Delegated to text_editor)
         self.act_undo = QAction("Deshacer", self)
         self.act_undo.setShortcut(QKeySequence.Undo)
-        self.act_undo.triggered.connect(self.editor_area.text_editor.undo)
+        self.act_undo.triggered.connect(self.tabbed_editor.text_editor.undo)
 
         self.act_redo = QAction("Rehacer", self)
         self.act_redo.setShortcut(QKeySequence.Redo)
-        self.act_redo.triggered.connect(self.editor_area.text_editor.redo)
+        self.act_redo.triggered.connect(self.tabbed_editor.text_editor.redo)
 
         self.act_cut = QAction("Cortar", self)
         self.act_cut.setShortcut(QKeySequence.Cut)
-        self.act_cut.triggered.connect(self.editor_area.text_editor.cut)
+        self.act_cut.triggered.connect(self.tabbed_editor.text_editor.cut)
 
         self.act_copy = QAction("Copiar", self)
         self.act_copy.setShortcut(QKeySequence.Copy)
-        self.act_copy.triggered.connect(self.editor_area.text_editor.copy)
+        self.act_copy.triggered.connect(self.tabbed_editor.text_editor.copy)
 
         self.act_paste = QAction("Pegar", self)
         self.act_paste.setShortcut(QKeySequence.Paste)
-        self.act_paste.triggered.connect(self.editor_area.text_editor.paste)
+        self.act_paste.triggered.connect(self.tabbed_editor.text_editor.paste)
 
         self.act_delete = QAction("Eliminar Nota", self)
         self.act_delete.setShortcut(QKeySequence.Delete)
@@ -109,19 +109,19 @@ class UiActionsMixin:
         # View Actions
         self.act_zoom_in = QAction("Zoom Texto (+)", self)
         self.act_zoom_in.setShortcut(QKeySequence.ZoomIn)
-        self.act_zoom_in.triggered.connect(lambda _: self.editor_area.text_editor.textZoomIn())
+        self.act_zoom_in.triggered.connect(lambda _: self.tabbed_editor.text_editor.textZoomIn())
         
         self.act_zoom_out = QAction("Zoom Texto (-)", self)
         self.act_zoom_out.setShortcut(QKeySequence.ZoomOut)
-        self.act_zoom_out.triggered.connect(lambda _: self.editor_area.text_editor.textZoomOut())
+        self.act_zoom_out.triggered.connect(lambda _: self.tabbed_editor.text_editor.textZoomOut())
         
         self.act_page_zoom_in = QAction("Zoom Imagen (+)", self)
         self.act_page_zoom_in.setShortcut(QKeySequence("Ctrl+Shift++"))
-        self.act_page_zoom_in.triggered.connect(lambda _: self.editor_area.text_editor.imageZoomIn())
+        self.act_page_zoom_in.triggered.connect(lambda _: self.tabbed_editor.text_editor.imageZoomIn())
         
         self.act_page_zoom_out = QAction("Zoom Imagen (-)", self)
         self.act_page_zoom_out.setShortcut(QKeySequence("Ctrl+Shift+-"))
-        self.act_page_zoom_out.triggered.connect(lambda _: self.editor_area.text_editor.imageZoomOut())
+        self.act_page_zoom_out.triggered.connect(lambda _: self.tabbed_editor.text_editor.imageZoomOut())
 
         # Tools Actions
         self.act_theme = QAction("Tema", self)
@@ -202,25 +202,25 @@ class UiActionsMixin:
 
     def on_sidebar_note_selected(self, note_id, is_folder):
         # Auto-save previous note
-        self.editor_area.save_current_note()
+        self.tabbed_editor.save_current_note()
 
         name = os.path.basename(note_id)
-        self.editor_area.load_note(note_id, is_folder, title=name)
+        self.tabbed_editor.load_note(note_id, is_folder, title=name)
         
         # Save State
         if not is_folder:
             settings = QSettings()
             settings.setValue(f"last_note_{self.vault_path}", note_id)
         # Load new note with metadata from sidebar (avoids DB query)
-        self.editor_area.load_note(note_id, is_folder=is_folder, title=name)
+        self.tabbed_editor.load_note(note_id, is_folder=is_folder, title=name)
 
     def on_sidebar_action(self, action, arg):
         if action == "export_pdf":
             self.export_note_pdf(arg)
         elif action == "note_deleted":
             # Check if current note was deleted
-            if self.editor_area.current_note_id == arg:
-                self.editor_area.clear()
+            if self.tabbed_editor.current_note_id == arg:
+                self.tabbed_editor.clear()
 
     def on_editor_status(self, msg, timeout):
         if timeout > 0:
@@ -235,8 +235,8 @@ class UiActionsMixin:
             self.save_as_vault()
             return
 
-        title = self.editor_area.save_current_note()
-        if title and self.editor_area.current_note_id:
+        title = self.tabbed_editor.save_current_note()
+        if title and self.tabbed_editor.current_note_id:
              pass
 
     def save_as_vault(self):
@@ -372,7 +372,7 @@ class UiActionsMixin:
         # 2. Get Content & Path
         try:
             from app.ui.markdown_renderer import MarkdownRenderer
-            raw_text = self.editor_area.text_editor.toPlainText() 
+            raw_text = self.tabbed_editor.text_editor.toPlainText() 
             content = MarkdownRenderer.process_markdown_content(raw_text) # Render MD for ODT
             
             title = os.path.splitext(os.path.basename(note_id))[0]
@@ -435,7 +435,7 @@ class UiActionsMixin:
         ModernInfo.show(self, "Acerca de", "Cogny\\n\\nUna aplicación jerárquica para tomar notas.\\nConstruida con PySide6 y Archivos Markdown.")
 
     def toggle_read_mode(self):
-        editor = self.editor_area.text_editor
+        editor = self.tabbed_editor.text_editor
         # Toggle State
         new_state = not editor.isReadOnly()
         editor.setReadOnly(new_state)
@@ -449,11 +449,11 @@ class UiActionsMixin:
 
     def update_mode_action_icon(self):
         # We need to access editor safely. During init, editor_area might exist but text_editor?
-        if not hasattr(self, 'editor_area') or not hasattr(self.editor_area, 'text_editor'):
+        if not hasattr(self, 'editor_area') or not hasattr(self.tabbed_editor, 'text_editor'):
             # Default to Edit Mode (so button shows Read icon)
             is_readonly = False
         else:
-            is_readonly = self.editor_area.text_editor.isReadOnly()
+            is_readonly = self.tabbed_editor.text_editor.isReadOnly()
 
         if is_readonly:
             # In Read Mode -> Button should allow switching to EDIT (Pencil)

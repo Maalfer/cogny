@@ -76,7 +76,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         if last_note and self.fm.file_exists(last_note): # Check existence
              print(f"DEBUG: Found last note: {last_note}. Starting preload...")
              # Connect to editor area loaded signal
-             self.editor_area.note_loaded.connect(self._on_preload_finished)
+             self.tabbed_editor.note_loaded.connect(self._on_preload_finished)
              
              # Determine title (basename)
              # Determine title (basename)
@@ -85,7 +85,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
              # Trigger Load Synchronously
              # We use async_load=True to allow the Event Loop to run (animations, splash screen updates)
              # while the note loads in the background. The 'ready' signal will still only be emitted when done.
-             self.editor_area.load_note(last_note, is_folder=False, title=title, preload_images=True, async_load=True)
+             self.tabbed_editor.load_note(last_note, is_folder=False, title=title, preload_images=True, async_load=True)
              return
 
         # Fallback: If no last note, try to find ANY note to warm up the editor
@@ -107,24 +107,24 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
                   
         if fallback_note:
              print(f"DEBUG: Found fallback note: {fallback_note}. Preloading...")
-             self.editor_area.note_loaded.connect(self._on_preload_finished)
+             self.tabbed_editor.note_loaded.connect(self._on_preload_finished)
              title = os.path.basename(fallback_note)
-             self.editor_area.load_note(fallback_note, is_folder=False, title=title, preload_images=True, async_load=True)
+             self.tabbed_editor.load_note(fallback_note, is_folder=False, title=title, preload_images=True, async_load=True)
         else:
              print("DEBUG: No notes found in vault. Ready immediately.")
              # Nothing to load, ready immediately
              self.ready.emit()
              
     def _on_preload_finished(self, success):
-        self.editor_area.note_loaded.disconnect(self._on_preload_finished)
+        self.tabbed_editor.note_loaded.disconnect(self._on_preload_finished)
         
         # [CRITICAL] SIDEBAR SYNC
         # We MUST block signals to prevent the Sidebar from triggering a "selection changed" event,
         # which would cause a circular note reload and double-loading.
-        if self.editor_area.current_note_id:
+        if self.tabbed_editor.current_note_id:
             try:
                 self.sidebar.blockSignals(True)
-                self.sidebar.select_note(self.editor_area.current_note_id)
+                self.sidebar.select_note(self.tabbed_editor.current_note_id)
             finally:
                 self.sidebar.blockSignals(False)
         
@@ -144,7 +144,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
         
         # 3. Update Child Components
         self.sidebar.set_file_manager(self.fm)
-        self.editor_area.set_file_manager(self.fm)
+        self.tabbed_editor.set_file_manager(self.fm)
         
         # 4. Update Title
         self.setWindowTitle(f"Cogny - {os.path.basename(vault_path)}")

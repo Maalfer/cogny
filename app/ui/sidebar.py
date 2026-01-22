@@ -7,6 +7,7 @@ from app.models.note_model import NoteTreeModel
 class Sidebar(QWidget):
     note_selected = Signal(str, bool, str)  # note_id (path), is_folder, title
     action_requested = Signal(str, object) # action_name, args
+    open_in_new_tab = Signal(str, bool, str)  # note_id, is_folder, title
 
     def __init__(self, file_manager, parent=None):
         super().__init__(parent)
@@ -161,6 +162,13 @@ class Sidebar(QWidget):
             menu.addAction(action_delete)
             
             if not is_folder:
+                menu.addSeparator()
+                
+                # Open in New Tab option
+                action_new_tab = QAction("Abrir en nueva pestaña", self)
+                action_new_tab.triggered.connect(lambda checked=False, i=item: self.open_note_in_new_tab(i))
+                menu.addAction(action_new_tab)
+                
                 menu.addSeparator()
                 
                 action_export = QAction("Exportar a PDF", self)
@@ -358,5 +366,33 @@ class Sidebar(QWidget):
                      seen_ids.add(item.note_id)
                      
         return selected_notes
+
+    def mousePressEvent(self, event):
+        """Handle middle-click to open in new tab."""
+        from PySide6.QtCore import Qt
+        if event.button() == Qt.MiddleButton:
+            index = self.tree_view.indexAt(event.pos())
+            if index.isValid():
+                current_model = self.tree_view.model()
+                if current_model == self.proxy_model:
+                    source_index = self.proxy_model.mapToSource(index)
+                    item = self.model.itemFromIndex(source_index)
+                else:
+                    item = current_model.itemFromIndex(index)
+                
+                if item and not getattr(item, 'is_folder', False):
+                    self.open_in_new_tab.emit(item.note_id, False, item.text())
+                    event.accept()
+                    return
+        
+        super().mousePressEvent(event)
+    
+    def open_note_in_new_tab(self, item):
+        """Emits signal to open note in new tab."""
+        print(f"DEBUG Sidebar: open_note_in_new_tab called for item={item.text() if item else 'None'}")
+        if item:
+            is_folder = getattr(item, 'is_folder', False)
+            print(f"DEBUG Sidebar: Emitting signal - note_id={item.note_id}, title={item.text()}")
+            self.open_in_new_tab.emit(item.note_id, is_folder, item.text())
 
 

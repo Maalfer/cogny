@@ -8,8 +8,8 @@ class UiStateMixin:
             self.config_manager.set_window_state(self.saveGeometry(), self.saveState())
             
             # 2. Last Note
-            if hasattr(self, 'editor_area') and self.editor_area.current_note_id:
-                 self.config_manager.save_config("last_note_id", self.editor_area.current_note_id)
+            if hasattr(self, 'tabbed_editor') and self.tabbed_editor.current_note_id:
+                 self.config_manager.save_config("last_note_id", self.tabbed_editor.current_note_id)
             else:
                  self.config_manager.save_config("last_note_id", None)
                  
@@ -34,3 +34,17 @@ class UiStateMixin:
         # The Splash Screen now handles the "initial note load" to ensure it happens before the window is shown.
         # See MainWindow.preload_initial_state
         pass
+
+    def on_open_in_new_tab(self, note_id, is_folder, title):
+        """Opens a note in a new tab."""
+        print(f"DEBUG MainWindow: on_open_in_new_tab received - note_id={note_id}, title={title}")
+        if hasattr(self, 'tabbed_editor'):
+            self.tabbed_editor.open_note_in_new_tab(note_id, is_folder, title)
+    
+    def on_tab_switched(self, index):
+        """Updates the format toolbar when switching tabs."""
+        if index >= 0 and hasattr(self, 'tabbed_editor'):
+            current_editor = self.tabbed_editor.get_current_editor()
+            if current_editor and hasattr(self, 'editor_toolbar'):
+                # Update toolbar to point to new editor's text_editor
+                self.editor_toolbar.text_editor = current_editor.text_editor

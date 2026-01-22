@@ -4,7 +4,7 @@ from PySide6.QtGui import QAction
 from app.ui.buscador import SearchManager
 from app.ui.barra_herramientas import FormatToolbar
 from app.ui.sidebar import Sidebar
-from app.ui.editor_area import EditorArea
+from app.ui.tabbed_editor_area import TabbedEditorArea
 
 class UiSetupMixin:
     def setup_ui(self):
@@ -31,9 +31,10 @@ class UiSetupMixin:
         self.sidebar = Sidebar(file_manager=self.fm, parent=self)
         self.sidebar.note_selected.connect(self.on_sidebar_note_selected)
         self.sidebar.action_requested.connect(self.on_sidebar_action)
+        self.sidebar.open_in_new_tab.connect(self.on_open_in_new_tab)
         
-        self.editor_area = EditorArea(file_manager=self.fm, parent=self)
-        self.editor_area.status_message.connect(self.on_editor_status)
+        self.tabbed_editor = TabbedEditorArea(file_manager=self.fm, parent=self)
+        self.tabbed_editor.status_message.connect(self.on_editor_status)
         
         # 4. Create Actions (Now dependencies exist)
         self.create_actions()
@@ -46,7 +47,7 @@ class UiSetupMixin:
         
         # 7. Assemble Content
         self.splitter.addWidget(self.sidebar)
-        self.splitter.addWidget(self.editor_area)
+        self.splitter.addWidget(self.tabbed_editor)
         self.splitter.setSizes([300, 700])
         
         main_layout.addWidget(self.splitter)
@@ -76,11 +77,17 @@ class UiSetupMixin:
         toolbar.addAction(self.act_mode_toggle) # Ensure toggle is here
         
         # Editor Format Toolbar (Below Main Toolbar)
-        self.editor_toolbar = FormatToolbar(self, self.editor_area.text_editor)
+        # Get current editor's text_editor
+        current_editor = self.tabbed_editor.get_current_editor()
+        text_editor = current_editor.text_editor if current_editor else None
+        self.editor_toolbar = FormatToolbar(self, text_editor)
         self.editor_toolbar.setMovable(False)
         self.editor_toolbar.setFloatable(False)
         self.editor_toolbar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         layout.addWidget(self.editor_toolbar)
+        
+        # Connect tab change to update toolbar
+        self.tabbed_editor.tab_widget.currentChanged.connect(self.on_tab_switched)
 
     def create_menus(self, layout):
         # Manual Menu Bar

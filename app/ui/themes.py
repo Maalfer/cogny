@@ -861,3 +861,84 @@ class ThemeManager:
                 color: white;
             }}
         """
+
+    @staticmethod
+    def get_tab_style(theme: str, global_bg: str = None) -> str:
+        """Returns stylesheet for QTabWidget (note tabs)."""
+        if theme == "Dracula":
+            bg = global_bg if global_bg else "#282a36"
+            tab_bg = "#21222c"
+            tab_active = "#44475a"
+            tab_hover = "#313244"
+            text_color = "#f8f8f2"
+            border = "#6272a4"
+            accent = "#bd93f9"
+        elif theme == "AnuPpuccin":
+            bg = global_bg if global_bg else "#1e1e2e"
+            tab_bg = "#11111b"
+            tab_active = "#313244"
+            tab_hover = "#181825"
+            text_color = "#cdd6f4"
+            border = "#313244"
+            accent = "#cba6f7"
+        elif theme == "Dark":
+            bg = global_bg if global_bg else "#18181b"
+            tab_bg = "#09090b"
+            tab_active = "#27272a"
+            tab_hover = "#18181b"
+            text_color = "#e4e4e7"
+            border = "#3f3f46"
+            accent = "#3b82f6"
+        else:  # Light
+            bg = global_bg if global_bg else "#f4f4f5"
+            tab_bg = "#ffffff"
+            tab_active = "#e4e4e7"
+            tab_hover = "#f4f4f5"
+            text_color = "#18181b"
+            border = "#e4e4e7"
+            accent = "#2563eb"
+        
+        return f"""
+        QTabWidget::pane {{
+            border: none;
+            background: {bg};
+        }}
+        
+        QTabBar {{
+            background: {bg};
+        }}
+        
+        QTabBar::tab {{
+            background: {tab_bg};
+            color: {text_color};
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 8px 16px;
+            margin-right: 2px;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            min-width: 100px;
+        }}
+        
+        QTabBar::tab:hover {{
+            background: {tab_hover};
+        }}
+        
+        QTabBar::tab:selected {{
+            background: {tab_active};
+            border-bottom: 2px solid {accent};
+            color: {text_color};
+        }}
+        
+        QTabBar::close-button {{
+            image: none;
+            subcontrol-position: right;
+            margin-right: 4px;
+        }}
+        
+        QTabBar::close-button:hover {{
+            background: rgba(239, 68, 68, 0.2);
+            border-radius: 3px;
+        }}
+        """
+
