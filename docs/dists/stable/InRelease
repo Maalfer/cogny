@@ -4,35 +4,35 @@ Hash: SHA512
 Origin: Cogny
 Label: Cogny App
 Codename: stable
-Date: Thu, 22 Jan 2026 19:46:36 UTC
+Date: Thu, 22 Jan 2026 21:46:19 UTC
 Architectures: amd64
 Components: main
 Description: Repositorio Oficial de Cogny
 MD5Sum:
- 8138ede00caeddd0da3d92794c641ddf 534 main/binary-amd64/Packages
- b1f7273203aa8285315605b59b04b15d 398 main/binary-amd64/Packages.gz
+ d38a09e5b09cddf2ddd754438bee095c 534 main/binary-amd64/Packages
+ a08d58268d0b8dbc64824be78634d63c 395 main/binary-amd64/Packages.gz
  72129a904a0961be22caf8e326e5dba9 109 main/binary-amd64/Release
 SHA1:
- a5af86ba2180c5041272c3b36abe1b9d0e1d586c 534 main/binary-amd64/Packages
- f29f7c89cd94a10223b7325265012a7d8be403b8 398 main/binary-amd64/Packages.gz
+ 4d8c41f1685698a6d01f76d13d526445742ed987 534 main/binary-amd64/Packages
+ 7a802f4fd56f2e956c3a6be1e1522136ddb75efd 395 main/binary-amd64/Packages.gz
  35016a46f4cb8bd54eef11fcdf920547f4dae80f 109 main/binary-amd64/Release
 SHA256:
- 0e084a49c41288819c7f2edda38f29638ac8a8072ffe450837f124a8d2ad2e32 534 main/binary-amd64/Packages
- e59074566b5e012c3cf8a4ac0ad53b24a101e7d2cd24987b16f8ec6c5db3c850 398 main/binary-amd64/Packages.gz
+ ecad68bae451d5f6e9672833c2b8784ec1fca5d63617334602382f692e26fb23 534 main/binary-amd64/Packages
+ afc253efc77f93dab3275d62d46bb2bbc30705b61c2cd869315e1db0f6f92685 395 main/binary-amd64/Packages.gz
  0fbd99cf8dc871fda679b93ed3529f4c140a4cb787b1220cbe89b50a9d74a963 109 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEErgfqc5dLcjZvqPDkAZxi/t577pgFAmlyfpwACgkQAZxi/t57
-7pjpUBAAtlacY0Y/IU66jln34Qk6KXZZi6jKcGWooq91fZdoiEW+Lutq3Tau6XxL
-xRuvN83iSFytJCW1gANlOGcWZWrn2inuKTCtb5QgbrgxSaCYvQACWbGvOKOJwyJD
-Mni5vwJbqEbIyow462uOqhlVpimOvNjN1evqmOklmLkTK/dXjPjYJWcoeRDuJNZ5
-zQTru3O9Lc3C79VajykdjDzBUaLaFPmxrJLp9cCafh+RhFR6258Bjz6m3OBCizAE
-dbrw5EkrXudYZvAja/cZxNo12p7bgmx4GLr6qQhl8eAEdJ0X43bmXPyNXvLTm19f
-esFS65LWEFb39wvh+vopkShBQAe6SlF+vrGzfDSe0oVmgbhjst3v4qb1kGzS+yqP
-alBHg8k3KnMLPGkoVpN3WE5jQJfzq8EEMaMpOO4xM3TzzZ90J677rk8Eg4rYhveB
-lMX07q9b36QdG8C8nQMetZRtTQeM6tRz8ARx+wsxvCz5kR5grlN1LjuHLrGV5rxV
-gKiieJXbtVgzwKReMFLxqTzS43QlK4i6M37dwn6YAzTy5j7EO6iXFl414+FgQTXf
-CZv+wimC4i63b6Euee727Y1KzCzdV+t/uiJ1RXv5RR0SSzZEGaRgbPj6KVefwdni
-MHYFYa5HrZBDJ7RF6BCke4ukDME+uewebgSOEBV7v/mHBzEVjrg=
-=jvmy
+iQIzBAEBCgAdFiEErgfqc5dLcjZvqPDkAZxi/t577pgFAmlymqsACgkQAZxi/t57
+7pi9hg/8CgpUbOaqA3MRFp4L92GMf0CR6TSL+E6i9p9g6Jnxljt57lntkBDuq3JA
+wBqtiieSdqHrs31t0DGjVutdjhXB6U1Q55R0/IZqcu/tQNtylFkjV8qqK23mPAzU
+Va5eXmXXHoKRhOS0NL9USXigJ6NIbip3J0J+5e9ipTotuiixpJU9X7A/ftNMM8zG
+P/gGkwpUtGyadzC9eL/4ZlbDBsnI0MLM8BnrkP8JvE9VkjD1eFTWwBE0SZRo9V2M
+e9WlE2PGaMZCY7IVmwWg9lQWzgvgS0gSUb+0LbjOA7oJQ88ekCAxzPdRt5SxXixF
+IeuveCJp5Tj6dh+JAXvy9NIMs+X/gI2izeJ7jVgtPb0teZA3NkWRq7OVude5/Vdx
+QRaeje+9PFjGSZOABzhG4upuDETUy1umq643ey4OnHt/t1m77Sl4hAAC8jxMunUw
+lNdgj+dkNCHYSZ18DbNv02IFEtYRRuc0sbPHRW0hcqPVDUiBX3wfZCIQGrvYqQC4
+9UypI6RPlUG4WCee2Fs2f9PIaQzmkcmK77O4izvlXejUne9/60vaBaZZYrndMsBY
+1Bv3AaQoJvZkvMl0M3bSeX1h3vEx6Fi9+FcNrOXkFhQXABcZpsgjE2jk5G9SoCjh
+iGrZ6jkLmScTVCfwvmS9fBMECKVYykQKA+jzvqs4nvSmxxqv1Kk=
+=8QG8
 -----END PGP SIGNATURE-----
