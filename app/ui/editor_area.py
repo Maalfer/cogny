@@ -47,7 +47,7 @@ class EditorArea(QWidget):
         title_font.setPointSize(24)
         title_font.setBold(True)
         self.title_edit.setFont(title_font)
-        self.title_edit.setMaximumHeight(80)
+        # Remove max height so long titles can wrap and be visible
         
         self.title_edit.return_pressed.connect(lambda: self.text_editor.setFocus())
         self.title_edit.setReadOnly(True)
@@ -68,6 +68,8 @@ class EditorArea(QWidget):
         self.splitter.addWidget(self.title_edit)
         self.splitter.addWidget(self.text_editor)
         self.splitter.setSizes([60, 700])
+        # Hide the splitter handle to remove visual separator
+        self.splitter.setHandleWidth(0)
         
         layout.addWidget(self.splitter)
 
@@ -209,8 +211,9 @@ class EditorArea(QWidget):
         if self._pending_chunks:
             first_chunk = self._pending_chunks.pop(0)
             self.text_editor.setPlainText(first_chunk)
-            # Render images for this chunk range
+            # Render images and tables for this chunk range
             self.text_editor.render_images(0, len(first_chunk))
+            self.text_editor.render_tables(0, len(first_chunk))
             
             # Restore visuals for first chunk
             self.highlighter.setDocument(self.text_editor.document())

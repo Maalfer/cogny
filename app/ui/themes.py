@@ -213,7 +213,6 @@ class ThemeManager:
                 font-size: 32px;
                 font-weight: 700;
                 border: none;
-                border-bottom: 2px solid {border_color};
                 background-color: {bg_color};
                 color: {text_color};
                 padding-left: 0px;
@@ -265,7 +264,6 @@ class ThemeManager:
                 font-size: 32px;
                 font-weight: 700;
                 border: none;
-                border-bottom: 2px solid {border_color};
                 background-color: {bg_color};
                 color: {text_color};
                 padding-left: 0px;
@@ -572,9 +570,9 @@ class ThemeManager:
             
         return f"""
         QSplitter::handle {{
-            background-color: {handle_color};
-            height: 1px; /* For vertical splitters if any */
-            width: 1px;  /* For horizontal splitters */
+            background-color: transparent;
+            height: 0px; /* For vertical splitters if any */
+            width: 0px;  /* For horizontal splitters */
         }}
         """
 

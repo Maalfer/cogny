@@ -1011,7 +1011,7 @@ class NoteEditor(QTextEdit):
             cursor.endEditBlock()
 
     def append_chunk(self, chunk_text):
-        """Appends text chunk and renders images only within that chunk."""
+        """Appends text chunk and renders images and tables only within that chunk."""
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.End)
         
@@ -1019,8 +1019,137 @@ class NoteEditor(QTextEdit):
         cursor.insertText(chunk_text)
         end_pos = cursor.position()
         
-        # Render images in the new chunk
+        # Render images and tables in the new chunk
         self.render_images(start_pos, end_pos)
+        self.render_tables(start_pos, end_pos)
+
+    def render_tables(self, start_pos=0, end_pos=None):
+        """
+        Scans the document for markdown table syntax and converts them to QTextTable objects.
+        Supports incremental rendering via start_pos/end_pos.
+        """
+        text = self.toPlainText()
+        if end_pos is None:
+            end_pos = len(text)
+        
+        # Find all markdown tables in the specified range
+        # A markdown table has lines that start with | and contain |
+        lines = text.split('\n')
+        
+        # Track positions for replacement
+        tables_to_render = []
+        current_table_lines = []
+        table_start_pos = 0
+        line_pos = 0
+        
+        for i, line in enumerate(lines):
+            line_start = line_pos
+            line_end = line_pos + len(line)
+            line_pos = line_end + 1  # +1 for newline
+            
+            # Check line is in our rendering range
+            if line_end < start_pos or line_start > end_pos:
+                if current_table_lines:
+                    # End of range, finalize table if any
+                    tables_to_render.append((table_start_pos, current_table_lines))
+                    current_table_lines = []
+                continue
+            
+            stripped = line.strip()
+            
+            # Check if this is a table line
+            if stripped.startswith('|') and stripped.endswith('|'):
+                if not current_table_lines:
+                    table_start_pos = line_start
+                current_table_lines.append(line)
+            else:
+                # Not a table line - finalize current table if any
+                if current_table_lines:
+                    tables_to_render.append((table_start_pos, current_table_lines))
+                    current_table_lines = []
+        
+        # Don't forget last table
+        if current_table_lines:
+            tables_to_render.append((table_start_pos, current_table_lines))
+        
+        if not tables_to_render:
+            return
+        
+        # Process tables in reverse order to avoid position drift
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        
+        try:
+            for table_start, table_lines in reversed(tables_to_render):
+                # Parse the table
+                if len(table_lines) < 2:
+                    continue  # Need at least header + separator
+                
+                # Calculate table end position
+                table_text = '\n'.join(table_lines)
+                table_end = table_start + len(table_text)
+                
+                # Parse rows
+                rows_data = []
+                header_row = None
+                
+                for idx, line in enumerate(table_lines):
+                    # Clean the line
+                    cells = [cell.strip() for cell in line.strip('|').split('|')]
+                    
+                    # Skip separator line (contains only -, :, and spaces)
+                    if idx == 1 and all(set(cell.replace('-', '').replace(':', '').replace(' ', '')) == set() for cell in cells):
+                        continue
+                    
+                    if header_row is None:
+                        header_row = cells
+                    else:
+                        rows_data.append(cells)
+                
+                if not header_row:
+                    continue
+                
+                # Create the QTextTable
+                num_cols = len(header_row)
+                num_rows = len(rows_data) + 1  # +1 for header
+                
+                # Select and remove the markdown text
+                cursor.setPosition(table_start)
+                cursor.setPosition(table_end, QTextCursor.KeepAnchor)
+                cursor.removeSelectedText()
+                
+                # Insert the table
+                from PySide6.QtGui import QTextTableFormat, QTextCharFormat
+                fmt = QTextTableFormat()
+                fmt.setCellPadding(5)
+                fmt.setCellSpacing(0)
+                fmt.setBorder(1)
+                fmt.setWidth(QTextLength(QTextLength.PercentageLength, 100))
+                
+                table = cursor.insertTable(num_rows, num_cols, fmt)
+                
+                # Fill header
+                for col, header_text in enumerate(header_row):
+                    cell = table.cellAt(0, col)
+                    cell_cursor = cell.firstCursorPosition()
+                    
+                    # Make header bold
+                    header_fmt = QTextCharFormat()
+                    header_fmt.setFontWeight(700)
+                    cell_cursor.setCharFormat(header_fmt)
+                    cell_cursor.insertText(header_text)
+                
+                # Fill data rows
+                for row_idx, row_data in enumerate(rows_data):
+                    for col, cell_text in enumerate(row_data):
+                        if col < num_cols:  # Safety check
+                            cell = table.cellAt(row_idx + 1, col)
+                            cell_cursor = cell.firstCursorPosition()
+                            cell_cursor.insertText(cell_text)
+                
+        finally:
+            cursor.endEditBlock()
+
 
     def _cache_image(self, image_id, image):
         """Add image to cache with LRU eviction. Key can be int or str."""
