@@ -272,11 +272,9 @@ class NoteEditor(QTextEdit):
         self.textZoomOut()
 
     def update_image_sizes(self):
-        """Updates all image formats to match the current scale."""
+        """Updates all image formats to match the current scale, respecting intrinsic size."""
         scale = getattr(self, "image_scale", 1.0)
-        # Use a nominal base width that matches our column target. 
-        # CSS max-width: 100% will clamp it, so we can be generous here to ensure quality.
-        base_width = 800 
+        max_width = 800 # Constraint width
         
         cursor = self.textCursor()
         cursor.beginEditBlock()
@@ -289,13 +287,38 @@ class NoteEditor(QTextEdit):
                 fmt = frag.charFormat()
                 if fmt.isImageFormat():
                     img_fmt = fmt.toImageFormat()
+                    name = img_fmt.name()
                     
-                    new_width = int(base_width * scale)
-                    img_fmt.setWidth(new_width)
+                    # Attempt to get original image size from document resources
+                    from PySide6.QtGui import QTextDocument
+                    # Try to retrieve the cached image or resource
+                    variant = self.document().resource(QTextDocument.ImageResource, name)
                     
-                    cursor.setPosition(frag.position())
-                    cursor.setPosition(frag.position() + frag.length(), QTextCursor.KeepAnchor)
-                    cursor.setCharFormat(img_fmt)
+                    if variant:
+                         # variant is QVariant containing QImage or QPixmap
+                         img = variant # PySide6 auto-unwraps usually, or we cast
+                         if img and not img.isNull():
+                              original_width = img.width()
+                              
+                              # Smart Scaling Logic:
+                              # 1. Start with original width * zoom
+                              target_width = original_width * scale
+                              
+                              # 2. If it exceeds our max column width, clamp it (downscale)
+                              #    But if it's smaller, KEEP it smaller (don't upscale/blur)
+                              limit = max_width * scale
+                              
+                              if target_width > limit:
+                                  final_width = int(limit)
+                              else:
+                                  # Don't artificialy stretch small icons/screenshots
+                                  final_width = int(target_width)
+
+                              img_fmt.setWidth(final_width)
+                              
+                              cursor.setPosition(frag.position())
+                              cursor.setPosition(frag.position() + frag.length(), QTextCursor.KeepAnchor)
+                              cursor.setCharFormat(img_fmt)
                     
                 it += 1
             block = block.next()
@@ -866,9 +889,13 @@ class NoteEditor(QTextEdit):
     @staticmethod
     def _process_image_static(image):
         # Static version used by worker thread
-        target_width = 600
-        if image.width() != target_width:
-             image = image.scaledToWidth(target_width, Qt.FastTransformation)
+        # Fix: Don't force resize to 600px which blurs small images (upscaling) and large images (fast downscale)
+        # Instead, only downscale really large images to reasonable size for performance, using SmoothTransformation
+        
+        max_width = 1200
+        if image.width() > max_width:
+             image = image.scaledToWidth(max_width, Qt.SmoothTransformation)
+        
         return image
 
     def _on_image_loaded(self, path, image):
@@ -892,6 +919,9 @@ class NoteEditor(QTextEdit):
         
         # Force Layout Update
         self.viewport().update()
+        
+        # Update image sizes to respect new image dimensions
+        self.update_image_sizes()
         
         # Force redraw
         doc.markContentsDirty(0, doc.characterCount())
@@ -974,7 +1004,7 @@ class NoteEditor(QTextEdit):
                 from PySide6.QtGui import QTextImageFormat
                 fmt = QTextImageFormat()
                 fmt.setName(target) 
-                fmt.setWidth(600) 
+                # fmt.setWidth(600) # Removed hardcoded width to allow update_image_sizes to handle it
                 
                 cursor.insertImage(fmt)
         finally:

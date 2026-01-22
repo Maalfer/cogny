@@ -87,7 +87,8 @@ class ThemeManager:
     def get_editor_style(theme: str, editor_bg: str = None, text_color: str = None, global_bg: str = None) -> str:
         if theme == "Dracula":
             # Default to global_bg if provided, else theme default
-            default_bg = global_bg if global_bg else "#282a36"
+            # User Request: Editor darker than Sidebar (#282a36)
+            default_bg = "#21222c" 
             bg_color = editor_bg if editor_bg else default_bg
             text_color = text_color if text_color else "#f8f8f2"
             accent_color = "#8be9fd" # Cyan
@@ -97,7 +98,8 @@ class ThemeManager:
             sel_text = "#282a36"
 
         elif theme == "AnuPpuccin":
-            default_bg = global_bg if global_bg else "#1e1e2e"
+            # Editor Darker (#11111b Crust) than Sidebar (#1e1e2e Base)
+            default_bg = "#11111b" 
             bg_color = editor_bg if editor_bg else default_bg
             text_color = text_color if text_color else "#cdd6f4"
             accent_color = "#cba6f7" # Mauve
@@ -107,12 +109,13 @@ class ThemeManager:
             sel_text = "#cdd6f4"
 
         elif theme == "Dark":
-            default_bg = global_bg if global_bg else "#18181b"
+             # Editor Darker (#09090b) than Sidebar (#18181b)
+            default_bg = "#09090b"
             bg_color = editor_bg if editor_bg else default_bg
             text_color = text_color if text_color else "#e4e4e7"
             accent_color = "#60a5fa" # Blue-400
-            code_bg = "#52525b" # Zinc-600
-            border_color = "#a1a1aa" # Zinc-400
+            code_bg = "#27272a" # Zinc-800
+            border_color = "#3f3f46" # Zinc-700
             sel_bg = "#3b82f6"
             sel_text = "#ffffff"
 
@@ -241,17 +244,17 @@ class ThemeManager:
     def get_title_style(theme: str, global_bg: str = None, text_color: str = None) -> str:
         """Returns stylesheet for the TitleEditor."""
         if theme == "Dracula":
-            bg_color = global_bg if global_bg else "#282a36"
+            bg_color = "#21222c"
             text_color = text_color if text_color else "#f8f8f2"
             border_color = "#6272a4"
         elif theme == "AnuPpuccin":
-            bg_color = global_bg if global_bg else "#1e1e2e"
+            bg_color = "#11111b"
             text_color = text_color if text_color else "#cdd6f4"
             border_color = "#313244"
         elif theme == "Dark":
-            bg_color = global_bg if global_bg else "#18181b"
+            bg_color = "#09090b"
             text_color = text_color if text_color else "#e4e4e7"
-            border_color = "#a1a1aa"
+            border_color = "#3f3f46"
         else: # Light
             bg_color = global_bg if global_bg else "#ffffff"
             text_color = text_color if text_color else "#18181b"

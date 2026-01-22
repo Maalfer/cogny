@@ -153,20 +153,63 @@ class CustomTitleBar(QWidget):
         """Handle mouse press for window dragging."""
         if event.button() == Qt.LeftButton:
             if self.parent_window:
-                # Try system move first (Native Wayland/X11 support)
-                window_handle = self.parent_window.windowHandle()
-                if window_handle and window_handle.startSystemMove():
-                    event.accept()
-                    return
+                # 1. Standard Drag: Only if strictly Normal state (not Maximized)
+                # Attempt native drag immediately for best performance/fluidity
+                if not self.parent_window.isMaximized():
+                    window_handle = self.parent_window.windowHandle()
+                    if window_handle and window_handle.startSystemMove():
+                        event.accept()
+                        return
 
-                # Fallback to manual move
-                self._dragging = True
+                # 2. Prepare for Potential Maximize->Restore Drag
+                # We save the local Y position to ensure the window "sticks" vertically 
+                # to the mouse at the exact same point when it snaps to normal size.
+                self._click_pos_local = event.position().toPoint()
+                
+                # Also track standard manual drag position as fallback
                 self._drag_position = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
+                self._dragging = True
                 event.accept()
     
     def mouseMoveEvent(self, event):
         """Handle mouse move for window dragging."""
-        if self._dragging and self.parent_window and not self.parent_window.isMaximized():
+        if self._dragging and self.parent_window:
+            # Smart Snap-Restore Logic
+            if self.parent_window.isMaximized():
+                 # 1. Calculate relative Horizontal ratio (cursor X / screen width)
+                 # This keeps the window horizontally centered under the cursor proportionally
+                 screen_width = self.parent_window.width()
+                 rel_x_ratio = event.position().x() / screen_width
+                 
+                 # 2. Restore window to Normal size
+                 self.parent_window.toggle_maximize_restore()
+                 
+                 # 3. Calculate new Window Position to maintain fluidity
+                 # New Top-Left X = Global Mouse X - (Window Width * Ratio)
+                 new_width = self.parent_window.width()
+                 target_x_offset = int(new_width * rel_x_ratio)
+                 
+                 # New Top-Left Y = Global Mouse Y - Original Local Y Click
+                 target_y_offset = self._click_pos_local.y()
+                 
+                 new_pos = event.globalPosition().toPoint()
+                 new_pos.setX(new_pos.x() - target_x_offset)
+                 new_pos.setY(new_pos.y() - target_y_offset)
+                 
+                 # 4. Move window instantly
+                 self.parent_window.move(new_pos)
+                 
+                 # 5. Native Handoff (The "Elegant" part)
+                 # Immediately hand control to the OS window manager for silky smooth native dragging
+                 window_handle = self.parent_window.windowHandle()
+                 if window_handle and window_handle.startSystemMove():
+                     self._dragging = False 
+                     return
+                 
+                 # Fallback: Update manual drag offset if native move failed
+                 self._drag_position = QPoint(target_x_offset, target_y_offset)
+
+            # Manual Fallback Drag (if Native failed)
             self.parent_window.move(event.globalPosition().toPoint() - self._drag_position)
             event.accept()
     
