@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QTabBar
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QTabBar, QPushButton
+from PySide6.QtCore import Signal, Qt, QSize
+from PySide6.QtGui import QIcon, QFont
 from app.ui.editor_area import EditorArea
 import os
 
@@ -20,7 +20,7 @@ class TabbedEditorArea(QWidget):
         
         # Tab Widget
         self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.setTabsClosable(False)  # We'll use custom close buttons
         self.tab_widget.setMovable(True)
         self.tab_widget.setDocumentMode(True)
         
@@ -30,8 +30,16 @@ class TabbedEditorArea(QWidget):
         
         layout.addWidget(self.tab_widget)
         
+        # Customize tab bar close buttons
+        self.setup_tab_close_buttons()
+        
         # Create first tab (empty placeholder)
         self.create_new_tab("Sin nota", None)
+    
+    def setup_tab_close_buttons(self):
+        """Setup custom close button styling."""
+        # We'll update close buttons when tabs are added
+        pass
     
     def create_new_tab(self, title, note_id):
         """Creates a new tab with an EditorArea instance."""
@@ -48,7 +56,40 @@ class TabbedEditorArea(QWidget):
         # Add to tabs
         index = self.tab_widget.addTab(editor_area, title)
         
+        # Customize close button for this tab
+        self._customize_tab_close_button(index)
+        
         return editor_area
+    
+    def _customize_tab_close_button(self, index):
+        """Add a custom styled close button to a tab."""
+        # Create custom close button
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(QSize(18, 18))
+        close_btn.setFont(QFont("Arial", 12, QFont.Bold))
+        close_btn.setFlat(True)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                border-radius: 9px;
+                background: transparent;
+                color: #888;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background: rgba(239, 68, 68, 0.2);
+                color: #ef4444;
+            }
+            QPushButton:pressed {
+                background: rgba(239, 68, 68, 0.3);
+            }
+        """)
+        
+        # Connect to close tab
+        close_btn.clicked.connect(lambda: self.tab_widget.tabCloseRequested.emit(index))
+        
+        # Set as tab button
+        self.tab_widget.tabBar().setTabButton(index, QTabBar.RightSide, close_btn)
     
     def open_note_in_new_tab(self, note_id, is_folder=False, title=None):
         """Opens a note in a new tab."""

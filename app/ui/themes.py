@@ -933,12 +933,20 @@ class ThemeManager:
         QTabBar::close-button {{
             image: none;
             subcontrol-position: right;
-            margin-right: 4px;
+            subcontrol-origin: padding;
+            margin: 0px 4px 0px 8px;
+            width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            background: transparent;
         }}
         
         QTabBar::close-button:hover {{
             background: rgba(239, 68, 68, 0.2);
-            border-radius: 3px;
+        }}
+        
+        QTabBar::close-button:pressed {{
+            background: rgba(239, 68, 68, 0.3);
         }}
         """
 

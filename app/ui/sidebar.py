@@ -12,6 +12,7 @@ class Sidebar(QWidget):
     def __init__(self, file_manager, parent=None):
         super().__init__(parent)
         self.fm = file_manager
+        self._suppress_selection_signal = False  # Flag to prevent opening on right-click
         self.setup_ui()
 
     def set_file_manager(self, file_manager):
@@ -67,6 +68,9 @@ class Sidebar(QWidget):
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.show_context_menu)
         
+        # Install event filter for middle-click
+        self.tree_view.viewport().installEventFilter(self)
+        
         layout.addWidget(self.tree_view)
 
     def on_selection_changed(self, current, previous):
@@ -95,7 +99,10 @@ class Sidebar(QWidget):
             return
 
         is_folder = getattr(item, 'is_folder', False)
-        self.note_selected.emit(item.note_id, is_folder, item.text())
+        
+        # Don't emit if suppressed (e.g., during right-click)
+        if not self._suppress_selection_signal:
+            self.note_selected.emit(item.note_id, is_folder, item.text())
 
     def on_tree_clicked(self, index):
         if self.tree_view.isExpanded(index):
@@ -115,6 +122,9 @@ class Sidebar(QWidget):
             self.tree_view.expand(proxy_dest)
 
     def show_context_menu(self, position):
+        # Set flag FIRST to prevent opening note
+        self._suppress_selection_signal = True
+        
         index = self.tree_view.indexAt(position)
         menu = QMenu()
 
@@ -184,6 +194,9 @@ class Sidebar(QWidget):
             menu.addAction(action_new_folder)
             
         menu.exec(self.tree_view.viewport().mapToGlobal(position))
+        
+        # Reset flag after menu closes
+        self._suppress_selection_signal = False
 
     def rename_note_dialog(self):
         index = self.tree_view.currentIndex()
@@ -394,5 +407,28 @@ class Sidebar(QWidget):
             is_folder = getattr(item, 'is_folder', False)
             print(f"DEBUG Sidebar: Emitting signal - note_id={item.note_id}, title={item.text()}")
             self.open_in_new_tab.emit(item.note_id, is_folder, item.text())
+
+    def eventFilter(self, obj, event):
+        """Event filter to catch middle-click on tree items."""
+        from PySide6.QtCore import QEvent
+        from PySide6.QtGui import QMouseEvent
+        
+        if obj == self.tree_view.viewport() and isinstance(event, QMouseEvent):
+            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.MiddleButton:
+                index = self.tree_view.indexAt(event.pos())
+                if index.isValid():
+                    current_model = self.tree_view.model()
+                    if current_model == self.proxy_model:
+                        source_index = self.proxy_model.mapToSource(index)
+                        item = self.model.itemFromIndex(source_index)
+                    else:
+                        item = current_model.itemFromIndex(index)
+                    
+                    if item and not getattr(item, 'is_folder', False):
+                        print(f"DEBUG Sidebar: Middle-click detected on {item.text()}")
+                        self.open_in_new_tab.emit(item.note_id, False, item.text())
+                        return True  # Event handled
+        
+        return super().eventFilter(obj, event)
 
 
