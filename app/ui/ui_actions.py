@@ -455,22 +455,18 @@ class UiActionsMixin:
         else:
             is_readonly = self.tabbed_editor.text_editor.isReadOnly()
 
+        # Resolve paths
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        
         if is_readonly:
             # In Read Mode -> Button should allow switching to EDIT (Pencil)
-            icon = QIcon.fromTheme("document-edit") 
-            if icon.isNull(): icon = QIcon.fromTheme("accessor-text-editor")
-            text = "✏️" # Pencil
+            icon_path = os.path.join(base_dir, "assets", "icons", "edit.svg")
             tooltip = "Cambiar a Modo Edición"
         else:
             # In Edit Mode -> Button should allow switching to READ (Book)
-            icon = QIcon.fromTheme("help-browser") 
-            if icon.isNull(): icon = QIcon.fromTheme("system-help")
-            text = "📖" # Book
+            icon_path = os.path.join(base_dir, "assets", "icons", "read.svg")
             tooltip = "Cambiar a Modo Lectura"
 
-        if not icon.isNull():
-            self.act_mode_toggle.setIcon(icon)
-        else:
-            self.act_mode_toggle.setText(text)
-            
+        self.act_mode_toggle.setIcon(QIcon(icon_path))
         self.act_mode_toggle.setToolTip(tooltip)
+        self.act_mode_toggle.setText("") # Clear text if any

@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QMenuBar, QToolButton
-from PySide6.QtCore import Qt, Signal, QPoint
+from PySide6.QtCore import Qt, Signal, QPoint, QSize
 from PySide6.QtGui import QIcon, QPainter, QColor
 from PySide6.QtSvgWidgets import QSvgWidget
 import os
@@ -74,7 +74,15 @@ class CustomTitleBar(QWidget):
         self.search_widget = search_widget
         if search_widget:
             # Create Toggle Button
-            self.search_btn = QPushButton("🔍")
+            self.search_btn = QPushButton()
+            
+            # Load SVG Icon
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            icon_path = os.path.join(base_dir, "assets", "icons", "search.svg")
+            
+            self.search_btn.setIcon(QIcon(icon_path))
+            self.search_btn.setIconSize(QSize(20, 20)) # Adjust size as needed
+            
             self.search_btn.setFixedSize(32, 30)
             self.search_btn.setFlat(True)
             self.search_btn.setCursor(Qt.PointingHandCursor)
@@ -83,7 +91,6 @@ class CustomTitleBar(QWidget):
                 QPushButton {
                     border: none;
                     background: transparent;
-                    font-size: 14px;
                     border-radius: 4px;
                 }
                 QPushButton:hover {

@@ -133,7 +133,7 @@ class ThemeManager:
                 padding-left: 0px;
                 padding-right: 0px;
                 padding-top: 0px;
-                padding-bottom: 40px;
+                padding-bottom: 10px;
                 background-color: {bg_color};
                 color: {text_color};
                 selection-background-color: {sel_bg};
@@ -218,7 +218,7 @@ class ThemeManager:
                 color: {text_color};
                 padding-left: 0px;
                 padding-right: 0px;
-                padding-top: 20px;
+                padding-top: 10px;
                 padding-bottom: 0px;
                 margin-bottom: 0px;
             }}
@@ -269,7 +269,7 @@ class ThemeManager:
                 color: {text_color};
                 padding-left: 0px;
                 padding-right: 0px;
-                padding-top: 20px;
+                padding-top: 10px;
                 padding-bottom: 0px;
                 margin-bottom: 0px;
             }}
