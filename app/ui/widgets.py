@@ -38,9 +38,9 @@ class TitleEditor(QPlainTextEdit):
         # QPlainTextEdit document size usually accounts for text + block margins.
         # But widget padding (from stylesheet) adds to required widget size.
         
-        # Simple heuristic: height + 20 buffer
+        # Simple heuristic: height + 40 buffer -> Reduced to 30 to match padding (20+0=20px) + safety
         total_height = int(doc_height + margins.top() + margins.bottom())
-        self.setFixedHeight(total_height + 20)
+        self.setFixedHeight(total_height + 30)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):

@@ -132,7 +132,7 @@ class ThemeManager:
             NoteEditor {{
                 padding-left: 0px;
                 padding-right: 0px;
-                padding-top: 20px;
+                padding-top: 0px;
                 padding-bottom: 40px;
                 background-color: {bg_color};
                 color: {text_color};
@@ -218,9 +218,9 @@ class ThemeManager:
                 color: {text_color};
                 padding-left: 0px;
                 padding-right: 0px;
-                padding-top: 30px;
-                padding-bottom: 10px;
-                margin-bottom: 20px;
+                padding-top: 20px;
+                padding-bottom: 0px;
+                margin-bottom: 0px;
             }}
             QToolButton {{
                 background-color: transparent;
@@ -270,8 +270,8 @@ class ThemeManager:
                 padding-left: 0px;
                 padding-right: 0px;
                 padding-top: 20px;
-                padding-bottom: 10px;
-                margin-bottom: 10px;
+                padding-bottom: 0px;
+                margin-bottom: 0px;
             }}
         """
 
