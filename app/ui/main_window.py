@@ -348,16 +348,17 @@ class MainWindow(UiStateMixin, UiThemeMixin, UiActionsMixin, UiSetupMixin, QMain
     def force_quit(self):
         """Fully quit the application."""
         self._force_quit = True
-        self.close()
+        self.tray_icon.hide() # Ensure icon disappears immediately
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().quit()
 
     def closeEvent(self, event):
         """Override close event to minimize to tray unless force quitting."""
+        # If we are effectively quitting (force_quit called or just normal close if no tray)
         if getattr(self, '_force_quit', False):
              event.accept()
         elif hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
              event.ignore()
              self.hide()
-             # Optional: Show a balloon message on first minimize?
         else:
-             # If tray icon failed to init, just close normally
              event.accept()

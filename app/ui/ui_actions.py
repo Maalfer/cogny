@@ -1,9 +1,38 @@
 from PySide6.QtGui import QAction, QKeySequence, QIcon
-from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QFileDialog, QToolBar
+from PySide6.QtCore import QSettings, QThread, Signal, Qt
+from PySide6.QtWidgets import QFileDialog, QToolBar, QProgressDialog
 from app.ui.widgets import ModernInfo, ModernAlert
 import os
 from datetime import datetime
+
+class PDFExportWorker(QThread):
+    finished = Signal(bool, str)
+
+    def __init__(self, title, content, path, theme_name, fm):
+        super().__init__()
+        self.title = title
+        self.content = content
+        self.path = path
+        self.theme_name = theme_name
+        self.fm = fm
+
+    def run(self):
+        try:
+            from app.exporters.pdf_exporter import PDFExporter
+            exporter = PDFExporter()
+            
+            # Using fm.resolve_file_path is safe here as it relies on OS I/O, not Qt GUI
+            exporter.export_to_pdf(
+                self.title, 
+                self.content, 
+                self.path, 
+                theme_name=self.theme_name, 
+                resolve_image_callback=lambda src: self.fm.resolve_file_path(src),
+                base_url=self.fm.root_path
+            )
+            self.finished.emit(True, self.path)
+        except Exception as e:
+            self.finished.emit(False, str(e))
 
 class UiActionsMixin:
     def create_actions(self):
@@ -254,7 +283,7 @@ class UiActionsMixin:
             self.export_multiple_pdf(selection)
             return
 
-        # 2. Single Note Export (Legacy Flow)
+        # 2. Single Note Export (Async Flow)
         try:
             content = self.fm.read_note(note_id)
             if content is None:
@@ -273,20 +302,28 @@ class UiActionsMixin:
             if not path: return
             if not path.endswith('.pdf'): path += '.pdf'
                 
-            from app.exporters.pdf_exporter import PDFExporter
+            # Setup Progress Dialog
+            progress = QProgressDialog("Exportando a PDF...", "Cancelar", 0, 0, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setCancelButton(None) # Disable cancel for now as WeasyPrint isn't easily interruptible
+            progress.show()
             
-            # Ensure PDFExporter works without DB
-            exporter = PDFExporter() 
-            exporter.export_to_pdf(
-                title, 
-                content, 
-                path, 
-                theme_name="Light", 
-                resolve_image_callback=lambda src: self.fm.resolve_file_path(src),
-                base_url=self.fm.root_path
-            )
+            # Setup Worker
+            self.pdf_worker = PDFExportWorker(title, content, path, "Light", self.fm)
             
-            ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\\n{path}")
+            def on_finished(success, result):
+                progress.close()
+                if success:
+                    ModernInfo.show(self, "Éxito", f"Nota exportada correctamente a:\n{result}")
+                else:
+                    ModernAlert.show(self, "Error de Exportación", result)
+                
+                # Cleanup
+                self.pdf_worker.deleteLater()
+                self.pdf_worker = None
+                
+            self.pdf_worker.finished.connect(on_finished)
+            self.pdf_worker.start()
             
         except Exception as e:
             ModernAlert.show(self, "Error de Exportación", str(e))
