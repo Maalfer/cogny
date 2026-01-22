@@ -1,6 +1,6 @@
 [Setup]
 AppName=Cogny
-AppVersion=1.0.5
+AppVersion=1.0.6
 DefaultDirName={autopf}\Cogny
 DefaultGroupName=Cogny
 OutputDir=release

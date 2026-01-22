@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QMenuBar, QToolButton
 from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtGui import QIcon, QPainter, QColor
 from PySide6.QtSvgWidgets import QSvgWidget
@@ -23,26 +23,19 @@ class CustomTitleBar(QWidget):
         
         # Main Layout
         layout = QHBoxLayout()
-        # Increased left margin to 24 to fix persistent icon clipping on rounded corners
-        layout.setContentsMargins(24, 0, 0, 0) 
-        layout.setSpacing(0)
+        layout.setContentsMargins(8, 0, 0, 0)  # Reduced left margin since no logo
+        layout.setSpacing(4)
         self.setLayout(layout)
         
-        # Logo
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        logo_path = os.path.join(base_dir, "assets", "logo.png")
+        # Search Widget (will be set later)
+        self.search_btn = None
+        self.search_widget = None
+        self.toggle_btn = None
         
-        self.logo_label = QLabel()
-        if os.path.exists(logo_path):
-            from PySide6.QtGui import QPixmap
-            pixmap = QPixmap(logo_path).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.logo_label.setPixmap(pixmap)
-        self.logo_label.setFixedSize(24, 24)
-        self.logo_label.setStyleSheet("margin-right: 8px;")
-        self.logo_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Allow clicks to pass through
-        layout.addWidget(self.logo_label)
+        # Menu Bar (will be set later)
+        self.menu_bar = None
         
-        # Spacer Left
+        # Spacer Left (will push title to center when menu is added)
         layout.addStretch()
         
         # Title
@@ -68,6 +61,136 @@ class CustomTitleBar(QWidget):
         layout.addWidget(self.minimize_btn)
         layout.addWidget(self.maximize_btn)
         layout.addWidget(self.close_btn)
+    
+    def add_search_widget(self, search_widget):
+        """Add collapsible search widget to title bar."""
+        if self.search_widget:
+            self.layout().removeWidget(self.search_widget)
+            self.search_widget.setParent(None)
+            if self.search_btn:
+                self.layout().removeWidget(self.search_btn)
+                self.search_btn.setParent(None)
+        
+        self.search_widget = search_widget
+        if search_widget:
+            # Create Toggle Button
+            self.search_btn = QPushButton("🔍")
+            self.search_btn.setFixedSize(32, 30)
+            self.search_btn.setFlat(True)
+            self.search_btn.setCursor(Qt.PointingHandCursor)
+            self.search_btn.setToolTip("Buscar (Ctrl+K)")
+            self.search_btn.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    background: transparent;
+                    font-size: 14px;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 0, 0, 0.1);
+                }
+            """)
+            
+            # Insert at beginning
+            self.layout().insertWidget(0, self.search_btn)
+            self.layout().insertWidget(1, self.search_widget)
+            
+            # Configure Search Widget
+            search_widget.setVisible(False)
+            search_widget.setFixedWidth(250)
+            search_widget.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid rgba(128, 128, 128, 0.3);
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    background: rgba(255, 255, 255, 0.1);
+                    color: inherit;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #3b82f6;
+                    background: rgba(255, 255, 255, 0.2);
+                }
+            """)
+            
+            # Connect Signals
+            self.search_btn.clicked.connect(self._toggle_search)
+            
+    def _toggle_search(self):
+        """Toggle search widget visibility."""
+        if not self.search_widget: return
+        
+        is_visible = self.search_widget.isVisible()
+        self.search_widget.setVisible(not is_visible)
+        
+        if not is_visible:
+            self.search_widget.setFocus()
+
+    def add_toggle_button(self, action):
+        """Add a toggle button (QAction proxy) to the title bar."""
+        if self.toggle_btn:
+            self.layout().removeWidget(self.toggle_btn)
+            self.toggle_btn.setParent(None)
+        
+        self.toggle_btn = QToolButton()
+        self.toggle_btn.setDefaultAction(action)
+        self.toggle_btn.setAutoRaise(True)
+        self.toggle_btn.setFixedSize(32, 30)
+        self.toggle_btn.setCursor(Qt.PointingHandCursor)
+        # Style matches search button
+        self.toggle_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background: transparent;
+                border-radius: 4px;
+            }
+            QToolButton:hover {
+                background: rgba(0, 0, 0, 0.1);
+            }
+        """)
+
+        # Calculate index: After search (if exists), before menu
+        idx = 2 if self.search_widget else 0
+        self.layout().insertWidget(idx, self.toggle_btn)
+
+            
+    def set_menu_bar(self, menu_bar):
+        """Set the menu bar to display in the title bar."""
+        if self.menu_bar:
+            # Remove old menu bar if exists
+            self.layout().removeWidget(self.menu_bar)
+            self.menu_bar.setParent(None)
+        
+        self.menu_bar = menu_bar
+        if menu_bar:
+            # Position depends on search widget and toggle button
+            # Index logic:
+            # Search (0, 1) if present
+            # Toggle (next available) if present
+            
+            idx = 0
+            if self.search_widget:
+                idx += 2
+            if self.toggle_btn:
+                idx += 1
+            
+            self.layout().insertWidget(idx, menu_bar)
+            # Make menu bar transparent for mouse events on non-menu areas
+            menu_bar.setStyleSheet("""
+                QMenuBar {
+                    background: transparent;
+                    border: none;
+                    margin: 0px;
+                    padding: 0px;
+                }
+                QMenuBar::item {
+                    background: transparent;
+                    padding: 4px 12px;
+                    margin: 0px;
+                }
+                QMenuBar::item:selected {
+                    background: rgba(255, 255, 255, 0.1);
+                }
+            """)
     
     def _create_window_button(self, button_type):
         """Create a window control button with SVG icon."""

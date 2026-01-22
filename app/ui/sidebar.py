@@ -12,7 +12,6 @@ class Sidebar(QWidget):
     def __init__(self, file_manager, parent=None):
         super().__init__(parent)
         self.fm = file_manager
-        self._suppress_selection_signal = False  # Flag to prevent opening on right-click
         self.setup_ui()
 
     def set_file_manager(self, file_manager):
@@ -99,10 +98,7 @@ class Sidebar(QWidget):
             return
 
         is_folder = getattr(item, 'is_folder', False)
-        
-        # Don't emit if suppressed (e.g., during right-click)
-        if not self._suppress_selection_signal:
-            self.note_selected.emit(item.note_id, is_folder, item.text())
+        self.note_selected.emit(item.note_id, is_folder, item.text())
 
     def on_tree_clicked(self, index):
         if self.tree_view.isExpanded(index):
@@ -122,14 +118,14 @@ class Sidebar(QWidget):
             self.tree_view.expand(proxy_dest)
 
     def show_context_menu(self, position):
-        # Set flag FIRST to prevent opening note
-        self._suppress_selection_signal = True
-        
         index = self.tree_view.indexAt(position)
         menu = QMenu()
 
         if index.isValid():
+            # Block signals to prevent opening note on right-click
+            self.tree_view.selectionModel().blockSignals(True)
             self.tree_view.setCurrentIndex(index)
+            self.tree_view.selectionModel().blockSignals(False)
             
             # Handle different models (Proxy vs Search Results)
             current_model = self.tree_view.model()
@@ -194,9 +190,6 @@ class Sidebar(QWidget):
             menu.addAction(action_new_folder)
             
         menu.exec(self.tree_view.viewport().mapToGlobal(position))
-        
-        # Reset flag after menu closes
-        self._suppress_selection_signal = False
 
     def rename_note_dialog(self):
         index = self.tree_view.currentIndex()

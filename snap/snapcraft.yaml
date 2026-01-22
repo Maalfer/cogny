@@ -1,7 +1,7 @@
 name: cogny
 base: core22
 icon: assets/logo.png
-version: '1.0.5'
+version: '1.0.6'
 summary: A hierarchical note-taking app built with PySide6.
 description: |
   Cogny is a powerful hierarchical note-taking application designed for developers and power users.

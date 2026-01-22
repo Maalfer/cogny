@@ -23,6 +23,9 @@ class UiSetupMixin:
         self.title_bar.minimize_clicked.connect(self.showMinimized)
         self.title_bar.maximize_clicked.connect(self.toggle_maximize_restore)
         self.title_bar.close_clicked.connect(self.close)
+        # Instantiate Search Manager EARLY (needed for title bar)
+        # We need sidebar created first.
+        
         main_layout.addWidget(self.title_bar)
         
         # 3. Instantiate Components (Needed for Actions)
@@ -36,8 +39,15 @@ class UiSetupMixin:
         self.tabbed_editor = TabbedEditorArea(file_manager=self.fm, parent=self)
         self.tabbed_editor.status_message.connect(self.on_editor_status)
         
+        # Initialize Search Manager now that sidebar exists
+        self.search_manager = SearchManager(self.fm, self.sidebar.tree_view, self.sidebar.proxy_model, self.sidebar.on_selection_changed)
+        # Add Search to Title Bar
+        self.title_bar.add_search_widget(self.search_manager.get_widget())
         # 4. Create Actions (Now dependencies exist)
         self.create_actions()
+        
+        # Add Toggle Button to Title Bar (after actions created)
+        self.title_bar.add_toggle_button(self.act_mode_toggle)
         
         # 5. Menu Bar (Below Title Bar)
         self.create_menus(main_layout)
@@ -59,23 +69,8 @@ class UiSetupMixin:
         self.restore_state()
 
     def create_toolbar(self, layout):
-        # Main Toolbar
         from PySide6.QtWidgets import QSizePolicy
-        toolbar = QToolBar("Barra Principal")
-        toolbar.setObjectName("MainToolbarV2")
-        toolbar.setMovable(False)
-        toolbar.setFloatable(False)
-        toolbar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        layout.addWidget(toolbar)
-        
-        # Search Bar
-        self.search_manager = SearchManager(self.fm, self.sidebar.tree_view, self.sidebar.proxy_model, self.sidebar.on_selection_changed)
-        toolbar.addWidget(self.search_manager.get_widget())
-        
-        toolbar.addSeparator()
-        toolbar.addAction(self.act_export_pdf)
-        toolbar.addAction(self.act_mode_toggle) # Ensure toggle is here
-        
+
         # Editor Format Toolbar (Below Main Toolbar)
         # Get current editor's text_editor
         current_editor = self.tabbed_editor.get_current_editor()
@@ -90,11 +85,13 @@ class UiSetupMixin:
         self.tabbed_editor.tab_widget.currentChanged.connect(self.on_tab_switched)
 
     def create_menus(self, layout):
-        # Manual Menu Bar
+        # Manual Menu Bar (will be embedded in title bar)
         from PySide6.QtWidgets import QMenuBar, QSizePolicy
         menubar = QMenuBar() # No parent initially
         menubar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        layout.addWidget(menubar)
+        
+        # Pass menu to title bar instead of adding to layout
+        self.title_bar.set_menu_bar(menubar)
 
         # File Menu
         file_menu = menubar.addMenu("&Archivo")

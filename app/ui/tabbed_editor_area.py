@@ -56,6 +56,10 @@ class TabbedEditorArea(QWidget):
         # Add to tabs
         index = self.tab_widget.addTab(editor_area, title)
         
+        # Custom Tooltip (Breadcrumb)
+        tooltip = self._get_tooltip_text(note_id)
+        self.tab_widget.setTabToolTip(index, tooltip)
+        
         # Customize close button for this tab
         self._customize_tab_close_button(index)
         
@@ -142,9 +146,30 @@ class TabbedEditorArea(QWidget):
         self.tab_widget.setTabText(current_index, title or "Sin nota")
         editor_area._tab_note_id = note_id
         
+        # Update Tooltip
+        tooltip = self._get_tooltip_text(note_id)
+        self.tab_widget.setTabToolTip(current_index, tooltip)
+        
         # Load the note
         if note_id:
             editor_area.load_note(note_id, is_folder, title)
+            
+    def _get_tooltip_text(self, note_id):
+        """Generates a breadcrumb-style tooltip from the note path."""
+        if not note_id:
+            return "Sin nota"
+            
+        # Remove extension
+        display_path = note_id
+        if display_path.endswith(".md"):
+             display_path = display_path[:-3]
+             
+        # Normalize separators
+        display_path = display_path.replace("\\", "/")
+        
+        # Create breadcrumb format
+        parts = display_path.split('/')
+        return " / ".join(parts)
     
     def close_tab(self, index):
         """Closes a tab at the given index."""

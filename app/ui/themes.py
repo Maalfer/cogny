@@ -915,8 +915,6 @@ class ThemeManager:
             border-bottom: 2px solid transparent;
             padding: 8px 16px;
             margin-right: 2px;
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
             min-width: 100px;
         }}
         
