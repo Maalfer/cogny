@@ -22,7 +22,9 @@ class DocumentExporter:
                 if self.fm:
                     resolved = self.fm.resolve_file_path(path)
                     if resolved:
-                        return f'src="{resolved}"'
+                        # Inject width to prevent overflow and enforce margin adherence
+                        # 600px is approximately fitting for A4 with margins (approx 16-17cm printable)
+                        return f'src="{resolved}" width="600"'
                 return match.group(0)
 
             # Regex to find src="..." attributes
@@ -51,6 +53,7 @@ class DocumentExporter:
         try:
             from docx import Document
             from docx.shared import Pt, Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
             
             doc = Document()
             
@@ -69,7 +72,7 @@ class DocumentExporter:
                 elif stripped.startswith('### '):
                     doc.add_heading(stripped[4:], level=3)
                     
-                # Check for images: ![Alt](path)
+        # Check for images: ![Alt](path)
                 elif stripped.startswith('![') and '](' in stripped and stripped.endswith(')'):
                     try:
                         # Extract path
@@ -82,7 +85,20 @@ class DocumentExporter:
                                 resolved_path = self.fm.resolve_file_path(image_path)
                             
                             if resolved_path and os.path.exists(resolved_path):
-                                doc.add_picture(resolved_path, width=Inches(6.0)) # Max width 6 inches
+                                # Calculate available width
+                                section = doc.sections[0]
+                                available_width = section.page_width - section.left_margin - section.right_margin
+                                
+                                # Add picture without defining width first to get native size
+                                picture = doc.add_picture(resolved_path)
+                                
+                                # Resize if too large
+                                if picture.width > available_width:
+                                    picture.width = available_width
+                                    
+                                # Center the image
+                                last_paragraph = doc.paragraphs[-1]
+                                last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                             else:
                                 # Fallback: Add as text if image not found
                                 doc.add_paragraph(f"[Imagen no encontrada: {image_path}]")
@@ -106,7 +122,17 @@ class DocumentExporter:
                                 resolved_path = self.fm.resolve_file_path(image_path)
                                 
                             if resolved_path and os.path.exists(resolved_path):
-                                doc.add_picture(resolved_path, width=Inches(6.0))
+                                # Calculate available width
+                                section = doc.sections[0]
+                                available_width = section.page_width - section.left_margin - section.right_margin
+                                
+                                picture = doc.add_picture(resolved_path)
+                                
+                                if picture.width > available_width:
+                                    picture.width = available_width
+                                    
+                                last_paragraph = doc.paragraphs[-1]
+                                last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                             else:
                                 doc.add_paragraph(f"[Imagen no encontrada: {image_path}]")
                         else:

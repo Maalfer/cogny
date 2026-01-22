@@ -27,10 +27,11 @@ class UiThemeMixin:
              title_style = ThemeManager.get_title_style(theme_name, global_bg, text_color)
              self.editor_area.title_edit.setStyleSheet(title_style)
         
-        # Apply Global Scrollbar Style
-        scrollbar_style = ThemeManager.get_scrollbar_style(theme_name) # scrollbar separate? maybe keep default
+        # Apply Global Scrollbar & Splitter Style
+        scrollbar_style = ThemeManager.get_scrollbar_style(theme_name)
         toolbar_style = ThemeManager.get_toolbar_style(theme_name, global_bg)
-        QApplication.instance().setStyleSheet(scrollbar_style + toolbar_style)
+        splitter_style = ThemeManager.get_splitter_style(theme_name)
+        QApplication.instance().setStyleSheet(scrollbar_style + toolbar_style + splitter_style)
         
         # Apply Sidebar Styles explicitly
         sidebar_style = ThemeManager.get_sidebar_style(theme_name, sidebar_bg, text_color)

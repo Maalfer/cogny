@@ -27,6 +27,27 @@ class TitleEditor(QPlainTextEdit):
         self.editing_finished.emit(self.toPlainText())
         super().focusOutEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_margins()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_margins()
+
+    def update_margins(self):
+        # Dynamic Centered Layout (Synced with NoteEditor)
+        max_content_width = 800 
+
+        current_width = self.width()
+        
+        if current_width > max_content_width:
+             margin = (current_width - max_content_width) // 2
+        else:
+             margin = 30
+             
+        self.setViewportMargins(margin, 0, margin, 0)
+
 # --- MODERN DIALOGS ---
 
 class ModernDialog(QDialog):

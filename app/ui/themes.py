@@ -127,9 +127,9 @@ class ThemeManager:
             sel_text = "#000000"
         return f"""
             NoteEditor {{
-                padding-left: 80px;
-                padding-right: 80px;
-                padding-top: 40px;
+                padding-left: 0px;
+                padding-right: 0px;
+                padding-top: 20px;
                 padding-bottom: 40px;
                 background-color: {bg_color};
                 color: {text_color};
@@ -174,7 +174,7 @@ class ThemeManager:
             a {{ color: {accent_color}; text-decoration: none; }}
             
             img {{
-                max-width: 700px;
+                max-width: 100%;
                 border-radius: 8px;
                 margin-top: 20px;
                 margin-bottom: 20px;
@@ -213,12 +213,10 @@ class ThemeManager:
                 border-bottom: 2px solid {border_color};
                 background-color: {bg_color};
                 color: {text_color};
-                padding-left: 80px;
-                padding-right: 80px;
+                padding-left: 0px;
+                padding-right: 0px;
                 padding-top: 30px;
                 padding-bottom: 10px;
-                margin-left: 20px;
-                margin-right: 20px;
                 margin-bottom: 20px;
             }}
             QToolButton {{
@@ -267,12 +265,10 @@ class ThemeManager:
                 border-bottom: 2px solid {border_color};
                 background-color: {bg_color};
                 color: {text_color};
-                padding-left: 80px;
-                padding-right: 80px;
-                padding-top: 10px;
-                padding-bottom: 0px;
-                margin-left: 20px;
-                margin-right: 20px;
+                padding-left: 0px;
+                padding-right: 0px;
+                padding-top: 20px;
+                padding-bottom: 10px;
                 margin-bottom: 10px;
             }}
         """
@@ -349,6 +345,7 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
+                border-right: 1px solid #6272a4;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -404,6 +401,7 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
+                border-right: 1px solid #313244;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -458,6 +456,7 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
+                border-right: 1px solid #3f3f46;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -511,6 +510,7 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
+                border-right: 1px solid #e4e4e7;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -554,6 +554,26 @@ class ThemeManager:
                 image: none;
             }}
             """
+    
+    @staticmethod
+    def get_splitter_style(theme: str) -> str:
+        """Returns stylesheet for QSplitter handle."""
+        if theme == "Dracula":
+            handle_color = "#6272a4"
+        elif theme == "AnuPpuccin":
+            handle_color = "#313244"
+        elif theme == "Dark":
+            handle_color = "#3f3f46"
+        else: # Light
+            handle_color = "#e4e4e7"
+            
+        return f"""
+        QSplitter::handle {{
+            background-color: {handle_color};
+            height: 1px; /* For vertical splitters if any */
+            width: 1px;  /* For horizontal splitters */
+        }}
+        """
 
     @staticmethod
     def get_toolbar_style(theme: str, global_bg: str = None) -> str:

@@ -147,7 +147,7 @@ class NoteEditor(QTextEdit):
 
     def update_margins(self):
         # Dynamic Centered Layout
-        max_content_width = 1200
+        max_content_width = 800
 
         current_width = self.width()
         
@@ -238,6 +238,21 @@ class NoteEditor(QTextEdit):
         cursor.insertTable(rows, cols, fmt)
         self.setTextCursor(cursor)
 
+    def insert_code_block(self, language="python"):
+        """Inserts a markdown code block for the specified language."""
+        cursor = self.textCursor()
+        # Ensure we are at start of line or insert newline
+        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+        # if cursor.selectedText().strip():
+        #     cursor.insertText("\n")
+        
+        # Simple insertion
+        cursor.insertText(f"```{language}\n\n```")
+        # Move cursor back up one line
+        cursor.movePosition(QTextCursor.Up)
+        self.setTextCursor(cursor)
+        self.setFocus()
+
     def _adjust_font_size(self, delta):
         self.current_font_size = max(8, self.current_font_size + delta)
         self.apply_theme(self.current_theme)
@@ -259,7 +274,9 @@ class NoteEditor(QTextEdit):
     def update_image_sizes(self):
         """Updates all image formats to match the current scale."""
         scale = getattr(self, "image_scale", 1.0)
-        base_width = 600 # Our standard width
+        # Use a nominal base width that matches our column target. 
+        # CSS max-width: 100% will clamp it, so we can be generous here to ensure quality.
+        base_width = 800 
         
         cursor = self.textCursor()
         cursor.beginEditBlock()
@@ -674,7 +691,7 @@ class NoteEditor(QTextEdit):
                     fmt = QTextImageFormat()
                     # We use the absolute path for the runtime object name/source
                     fmt.setName(full_abs_path)
-                    fmt.setWidth(600) 
+                    # fmt.setWidth(600) # REMOVED hardcoded width to allow CSS control (max-width: 100%)
                     self.textCursor().insertImage(fmt)
                     
                 except Exception as e:

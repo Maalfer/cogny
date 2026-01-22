@@ -111,3 +111,12 @@ class FormatToolbar(QToolBar):
         font.setBold(True)
         action_toc.setFont(font)
         self.addAction(action_toc)
+        
+        # Insert Code Block
+        action_code = QAction("Code", self)
+        action_code.setToolTip("Insertar Bloque de Código (Python)")
+        action_code.triggered.connect(lambda: self.text_editor.insert_code_block("python"))
+        font = action_code.font()
+        font.setBold(True)
+        action_code.setFont(font)
+        self.addAction(action_code)
