@@ -151,12 +151,14 @@
 
             <div class="code-block">
                 <div class="code-header">Terminal</div>
-                <pre><code>curl -fsSL https://Maalfer.github.io/cogny/cogny.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/cogny-archive-keyring.gpg
+                <pre><code># 1. Descarga la clave y sobreescribe si ya existe sin preguntar
+curl -fsSL https://maalfer.github.io/cogny/cogny.gpg.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/cogny-archive-keyring.gpg
 
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cogny-archive-keyring.gpg] https://Maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/cogny.list > /dev/null
+# 2. Añade el repositorio (esto es instantáneo)
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cogny-archive-keyring.gpg] https://maalfer.github.io/cogny stable main" | sudo tee /etc/apt/sources.list.d/cogny.list > /dev/null
 
-sudo apt update
-sudo apt install cogny</code></pre>
+# 3. Actualiza e instala automáticamente con -y
+sudo apt update && sudo apt install cogny -y</code></pre>
                 <button class="copy-btn" onclick="copyCode()">Copiar</button>
             </div>
         </div>

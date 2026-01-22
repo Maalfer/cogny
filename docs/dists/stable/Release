@@ -1,19 +1,19 @@
 Origin: Cogny
 Label: Cogny App
 Codename: stable
-Date: Wed, 21 Jan 2026 16:24:10 UTC
+Date: Thu, 22 Jan 2026 19:46:36 UTC
 Architectures: amd64
 Components: main
 Description: Repositorio Oficial de Cogny
 MD5Sum:
- 3274fe25ce799653bbbedff63853bea4 534 main/binary-amd64/Packages
- 9618143372a9a3eb388c1250307fe7c5 397 main/binary-amd64/Packages.gz
+ 8138ede00caeddd0da3d92794c641ddf 534 main/binary-amd64/Packages
+ b1f7273203aa8285315605b59b04b15d 398 main/binary-amd64/Packages.gz
  72129a904a0961be22caf8e326e5dba9 109 main/binary-amd64/Release
 SHA1:
- e51c7e093dcfa0b01152f59928f315e018be5c3f 534 main/binary-amd64/Packages
- a469ef6b5b01e2539b5a0090508773624beb72eb 397 main/binary-amd64/Packages.gz
+ a5af86ba2180c5041272c3b36abe1b9d0e1d586c 534 main/binary-amd64/Packages
+ f29f7c89cd94a10223b7325265012a7d8be403b8 398 main/binary-amd64/Packages.gz
  35016a46f4cb8bd54eef11fcdf920547f4dae80f 109 main/binary-amd64/Release
 SHA256:
- aa4b35287bdede6e388f292fc300e9c8269e2e528e050f80faaf81d5c9ad9ece 534 main/binary-amd64/Packages
- aeedf6f980a0edf68ba8f33a59b8258f31421dbdeace043be8cca671889de969 397 main/binary-amd64/Packages.gz
+ 0e084a49c41288819c7f2edda38f29638ac8a8072ffe450837f124a8d2ad2e32 534 main/binary-amd64/Packages
+ e59074566b5e012c3cf8a4ac0ad53b24a101e7d2cd24987b16f8ec6c5db3c850 398 main/binary-amd64/Packages.gz
  0fbd99cf8dc871fda679b93ed3529f4c140a4cb787b1220cbe89b50a9d74a963 109 main/binary-amd64/Release
