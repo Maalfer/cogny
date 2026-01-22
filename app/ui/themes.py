@@ -138,6 +138,7 @@ class ThemeManager:
                 color: {text_color};
                 selection-background-color: {sel_bg};
                 selection-color: {sel_text};
+                border: none;
             }}
             /* Markdown Headers */
             h1 {{ font-size: 28px; color: {text_color}; font-weight: 600; margin-top: 30px; margin-bottom: 15px; letter-spacing: -0.5px; }}

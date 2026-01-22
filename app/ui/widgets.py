@@ -12,8 +12,35 @@ class TitleEditor(QPlainTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setTabChangesFocus(True)
-    # Removed update_height and resizeEvent to allow manual resizing via QSplitter
-    pass
+        
+        # Connect signals for auto-resize
+        self.textChanged.connect(self.update_height)
+        self.blockCountChanged.connect(self.update_height)
+        self.update_height()
+
+    def update_height(self):
+        """Auto-adjust height based on content"""
+        # Ensure minimal height based on font
+        fm = self.fontMetrics()
+        min_doc_height = fm.height()
+        
+        doc_height = self.document().size().height()
+        # Fallback if doc_height is 0 (uninitialized layout)
+        if doc_height < min_doc_height:
+            doc_height = min_doc_height
+            
+        margins = self.contentsMargins()
+        # Add buffer for top/bottom padding defined in stylesheet (usually 20px+10px)
+        # We rely on document size including that, but QPlainTextEdit padding is inside viewport or widget?
+        # Stylesheet padding applies to the widget.
+        # contentsMargins returns widget margins (layout margins), usually 0.
+        # We need to account for stylesheet padding if possible, OR just trust document size?
+        # QPlainTextEdit document size usually accounts for text + block margins.
+        # But widget padding (from stylesheet) adds to required widget size.
+        
+        # Simple heuristic: height + 20 buffer
+        total_height = int(doc_height + margins.top() + margins.bottom())
+        self.setFixedHeight(total_height + 20)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -30,10 +57,12 @@ class TitleEditor(QPlainTextEdit):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.update_margins()
+        self.update_height()
 
     def showEvent(self, event):
         super().showEvent(event)
         self.update_margins()
+        self.update_height()
 
     def update_margins(self):
         # Dynamic Centered Layout (Synced with NoteEditor)

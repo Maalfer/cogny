@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QTextEdit, QToolButton, QApplication, QAbstractScrollArea, QScroller, QScrollerProperties
+from PySide6.QtWidgets import QTextEdit, QToolButton, QApplication, QAbstractScrollArea
 from PySide6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QSize
 from PySide6.QtGui import QImage, QTextDocument, QColor, QTextFormat, QIcon, QGuiApplication, QTextCursor, QKeySequence, QTextLength
 from app.ui.themes import ThemeManager
@@ -27,16 +27,7 @@ class NoteEditor(QTextEdit):
         self.is_loading = False # Performance flag
         
         
-        # Configure Kinetic Scrolling (Touch/Mouse Drag)
-        QScroller.grabGesture(self.viewport(), QScroller.LeftMouseButtonGesture)
-        scroller = QScroller.scroller(self.viewport())
-        props = scroller.scrollerProperties()
-        
-        # Tune for desktop feel
-        props.setScrollMetric(QScrollerProperties.DecelerationFactor, 0.5)
-        # props.setScrollMetric(QScrollerProperties.DragStartDistance, 0.001)
-        
-        scroller.setScrollerProperties(props)
+
         
         self.apply_theme("Light") # Default
 

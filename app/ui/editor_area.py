@@ -33,10 +33,10 @@ class EditorArea(QWidget):
 
     def setup_ui(self):
         # Vertical Splitter (Title / Content)
+        # Vertical Layout (Title / Content)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.splitter = QSplitter(Qt.Vertical)
+        layout.setSpacing(0)
         
         # Title
         self.title_edit = TitleEditor()
@@ -47,7 +47,6 @@ class EditorArea(QWidget):
         title_font.setPointSize(24)
         title_font.setBold(True)
         self.title_edit.setFont(title_font)
-        # Remove max height so long titles can wrap and be visible
         
         self.title_edit.return_pressed.connect(lambda: self.text_editor.setFocus())
         self.title_edit.setReadOnly(True)
@@ -62,16 +61,9 @@ class EditorArea(QWidget):
         # Load Theme
         self.apply_current_theme()
 
-        # Cleanup disabled to prevent data loss with loose loose coupling
-        # self.db.cleanup_images(self.current_note_id, image_ids)
-        # self.db.cleanup_attachments(self.current_note_id, att_ids)
-        self.splitter.addWidget(self.title_edit)
-        self.splitter.addWidget(self.text_editor)
-        self.splitter.setSizes([60, 700])
-        # Hide the splitter handle to remove visual separator
-        self.splitter.setHandleWidth(0)
-        
-        layout.addWidget(self.splitter)
+        # Add widgets directly to layout
+        layout.addWidget(self.title_edit)
+        layout.addWidget(self.text_editor)
 
     def apply_current_theme(self):
         settings = QSettings()
@@ -82,6 +74,11 @@ class EditorArea(QWidget):
         settings = QSettings()
         editor_bg = settings.value("theme_custom_editor_bg", "")
         self.text_editor.apply_theme(theme_name, editor_bg, text_color, global_bg)
+        
+        # Apply Title Style
+        title_style = ThemeManager.get_title_style(theme_name, global_bg, text_color)
+        self.title_edit.setStyleSheet(title_style)
+        
         if hasattr(self, "highlighter"):
              self.highlighter.set_theme(theme_name)
 
