@@ -56,7 +56,7 @@ class EditorArea(QWidget):
         self.text_editor = NoteEditor(self.fm)
         
         # Highlighter
-        self.highlighter = MarkdownHighlighter(self.text_editor.document())
+        self.highlighter = MarkdownHighlighter(self.text_editor.document(), self.text_editor)
         self.text_editor.highlighter = self.highlighter
         
         # Load Theme

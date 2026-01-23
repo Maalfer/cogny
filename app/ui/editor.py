@@ -34,6 +34,11 @@ class NoteEditor(QTextEdit):
     def set_loading_state(self, loading: bool):
         self.is_loading = loading
 
+    def setReadOnly(self, ro):
+        super().setReadOnly(ro)
+        if hasattr(self, "highlighter") and self.highlighter:
+            self.highlighter.rehighlight()
+
             
     def _wrap_selection(self, start_marker, end_marker=None):
         """Wraps selected text or inserts markers if empty."""

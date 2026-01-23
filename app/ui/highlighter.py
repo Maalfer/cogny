@@ -7,8 +7,9 @@ from pygments.formatters import HtmlFormatter
 from app.ui.themes import ThemeManager
 
 class MarkdownHighlighter(QSyntaxHighlighter):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, document, editor=None):
+        super().__init__(document)
+        self.editor = editor
         self.highlighting_rules = []
         self.active_block = None
 
@@ -68,7 +69,12 @@ class MarkdownHighlighter(QSyntaxHighlighter):
 
     def highlightBlock(self, text):
         # 0. Check if this block is active
-        is_active = (self.currentBlock() == self.active_block)
+        # CRITICAL: If editor is ReadOnly (Read Mode), we NEVER show syntax. Treat as inactive.
+        is_read_only = False
+        if self.editor:
+             is_read_only = self.editor.isReadOnly()
+        
+        is_active = (self.currentBlock() == self.active_block) and not is_read_only
 
         # Basic Markdown Rules (Headers, Bold, Italic) - Keep Live Preview Hiding
         
