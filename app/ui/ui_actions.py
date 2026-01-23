@@ -459,17 +459,13 @@ class UiActionsMixin:
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         
         if is_readonly:
-            # Current State: READ MODE (Viewer)
-            # Action: Switch TO Edit Mode
-            # Icon: Pencil (Edit)
-            icon_path = os.path.join(base_dir, "assets", "icons", "edit.svg")
-            tooltip = "Editar (Cambiar a Modo Edición)"
-        else:
-            # Current State: EDIT MODE (Editor)
-            # Action: Switch TO Read Mode
-            # Icon: Book (Read)
+            # State: Read Mode -> Icon: Book (Indicate Reading)
             icon_path = os.path.join(base_dir, "assets", "icons", "read.svg")
-            tooltip = "Lectura (Cambiar a Modo Lectura)"
+            tooltip = "Modo Lectura (Clic para Editar)"
+        else:
+            # State: Edit Mode -> Icon: Pencil (Indicate Editing)
+            icon_path = os.path.join(base_dir, "assets", "icons", "edit.svg")
+            tooltip = "Modo Edición (Clic para Leer)"
 
         self.act_mode_toggle.setIcon(QIcon(icon_path))
         self.act_mode_toggle.setToolTip(tooltip)

@@ -399,8 +399,14 @@ class EditorArea(QWidget):
 
     def eventFilter(self, obj, event):
         if obj == self.title_edit and event.type() == QEvent.Wheel:
-            # Forward wheel event to text_editor's scrollbar for smooth scrolling
-            # sending to verticalScrollBar ensure it scrolls
-            QApplication.sendEvent(self.text_editor.verticalScrollBar(), event)
+            # Forward wheel event to text_editor custom logic
+            if self.text_editor:
+                self.text_editor.manual_scroll(event)
             return True
         return super().eventFilter(obj, event)
+
+    def wheelEvent(self, event):
+        # Forward any bubble-up scroll events (e.g. from margins) to the editor
+        if self.text_editor:
+            self.text_editor.manual_scroll(event)
+            event.accept()
