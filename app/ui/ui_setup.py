@@ -23,6 +23,7 @@ class UiSetupMixin:
         self.title_bar.minimize_clicked.connect(self.showMinimized)
         self.title_bar.maximize_clicked.connect(self.toggle_maximize_restore)
         self.title_bar.close_clicked.connect(self.close)
+        self.title_bar.sidebar_toggle_clicked.connect(lambda: self.sidebar.setVisible(not self.sidebar.isVisible()))
         # Instantiate Search Manager EARLY (needed for title bar)
         # We need sidebar created first.
         

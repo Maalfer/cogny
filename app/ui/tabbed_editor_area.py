@@ -35,11 +35,21 @@ class TabbedEditorArea(QWidget):
         
         # Create first tab (empty placeholder)
         self.create_new_tab("Sin nota", None)
+        
+        # Initial check
+        self.update_tab_visibility()
     
     def setup_tab_close_buttons(self):
         """Setup custom close button styling."""
         # We'll update close buttons when tabs are added
         pass
+        
+    def update_tab_visibility(self):
+        """Hide tab bar if only one tab exists."""
+        if self.tab_widget.count() <= 1:
+            self.tab_widget.tabBar().setVisible(False)
+        else:
+            self.tab_widget.tabBar().setVisible(True)
     
     def create_new_tab(self, title, note_id):
         """Creates a new tab with an EditorArea instance."""
@@ -62,7 +72,10 @@ class TabbedEditorArea(QWidget):
         
         # Customize close button for this tab
         self._customize_tab_close_button(index)
-        
+
+        # Update visibility
+        self.update_tab_visibility()
+
         return editor_area
     
     def _customize_tab_close_button(self, index):
@@ -189,6 +202,9 @@ class TabbedEditorArea(QWidget):
         
         # Remove tab
         self.tab_widget.removeTab(index)
+        
+        # Update visibility
+        self.update_tab_visibility()
     
     def on_tab_changed(self, index):
         """Called when user switches tabs."""

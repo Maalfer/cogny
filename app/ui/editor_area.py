@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QSplitter, QVBoxLayout, QApplication
-from PySide6.QtCore import Qt, QSettings, Signal
+from PySide6.QtCore import Qt, QSettings, Signal, QEvent
 from PySide6.QtGui import QFont, QTextCursor, QTextDocument
 
 from app.ui.editor import NoteEditor
@@ -50,6 +50,7 @@ class EditorArea(QWidget):
         
         self.title_edit.return_pressed.connect(lambda: self.text_editor.setFocus())
         self.title_edit.setReadOnly(True)
+        self.title_edit.installEventFilter(self)
         
         # Content
         self.text_editor = NoteEditor(self.fm)
@@ -395,3 +396,11 @@ class EditorArea(QWidget):
             
         except Exception as e:
             ModernAlert.show(self, "Error", f"No se pudo adjuntar el archivo: {e}")
+
+    def eventFilter(self, obj, event):
+        if obj == self.title_edit and event.type() == QEvent.Wheel:
+            # Forward wheel event to text_editor's scrollbar for smooth scrolling
+            # sending to verticalScrollBar ensure it scrolls
+            QApplication.sendEvent(self.text_editor.verticalScrollBar(), event)
+            return True
+        return super().eventFilter(obj, event)

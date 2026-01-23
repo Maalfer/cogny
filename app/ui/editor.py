@@ -146,7 +146,21 @@ class NoteEditor(QTextEdit):
         if event.modifiers() & Qt.ControlModifier:
             pass  # Block Ctrl+Scroll zoom
         else:
-            super().wheelEvent(event)
+            # Manual Scroll to handle margins
+            vbar = self.verticalScrollBar()
+            delta = event.angleDelta().y()
+            
+            # Prioritize pixelDelta for high-res trackpads
+            if not event.pixelDelta().isNull():
+                delta = event.pixelDelta().y()
+            else:
+                 # Standard mouse wheel: 120 units usually ~3 lines. 
+                 # Let's approximate decent speed.
+                 delta = int(delta / 2) 
+            
+            # Subtract because positive delta (scrolling away/up) means moving UP document (decreasing value)
+            vbar.setValue(vbar.value() - delta)
+            event.accept()
 
 
     def update_margins(self):

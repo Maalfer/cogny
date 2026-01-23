@@ -11,6 +11,7 @@ class CustomTitleBar(QWidget):
     minimize_clicked = Signal()
     maximize_clicked = Signal()
     close_clicked = Signal()
+    sidebar_toggle_clicked = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -36,18 +37,11 @@ class CustomTitleBar(QWidget):
         # Menu Bar (will be set later)
         self.menu_bar = None
         self.hamburger_btn = None
+        self.sidebar_btn = None
         
-        # Spacer Left (will push title to center when menu is added)
+        
+        # Spacer
         layout.addStretch()
-        
-        # Center Container for Icons
-        self.center_container = QWidget()
-        self.center_layout = QHBoxLayout()
-        self.center_layout.setContentsMargins(0, 0, 0, 0)
-        self.center_layout.setSpacing(4)
-        self.center_container.setLayout(self.center_layout)
-        
-        layout.addWidget(self.center_container)
         
         # Spacer Right
         layout.addStretch()
@@ -68,10 +62,10 @@ class CustomTitleBar(QWidget):
     def add_search_widget(self, search_widget):
         """Add collapsible search widget to title bar."""
         if self.search_widget:
-            self.center_layout.removeWidget(self.search_widget)
+            self.layout().removeWidget(self.search_widget)
             self.search_widget.setParent(None)
             if self.search_btn:
-                self.center_layout.removeWidget(self.search_btn)
+                self.layout().removeWidget(self.search_btn)
                 self.search_btn.setParent(None)
         
         self.search_widget = search_widget
@@ -101,9 +95,15 @@ class CustomTitleBar(QWidget):
                 }
             """)
             
-            # Insert at beginning of center layout
-            self.center_layout.insertWidget(0, self.search_btn)
-            self.center_layout.insertWidget(1, self.search_widget)
+            
+            # Insert after sidebar toggle (Index 0=Hamburger, 1=Sidebar)
+            # So Search is 2, Widget is 3
+            current_idx = 2
+            if self.sidebar_btn:
+                 current_idx = self.layout().indexOf(self.sidebar_btn) + 1
+                 
+            self.layout().insertWidget(current_idx, self.search_btn)
+            self.layout().insertWidget(current_idx + 1, self.search_widget)
             
             # Configure Search Widget
             search_widget.setVisible(False)
@@ -137,8 +137,9 @@ class CustomTitleBar(QWidget):
 
     def add_toggle_button(self, action):
         """Add a toggle button (QAction proxy) to the title bar."""
+        """Add a toggle button (QAction proxy) to the title bar."""
         if self.toggle_btn:
-            self.center_layout.removeWidget(self.toggle_btn)
+            self.layout().removeWidget(self.toggle_btn)
             self.toggle_btn.setParent(None)
         
         self.toggle_btn = QToolButton()
@@ -158,9 +159,21 @@ class CustomTitleBar(QWidget):
             }
         """)
 
-        # Calculate index: After search (if exists) in center layout
-        idx = 2 if self.search_widget else 0
-        self.center_layout.insertWidget(idx, self.toggle_btn)
+        # Calculate index: We want to insert BEFORE the spacer.
+        # But simply iterating indices is safer.
+        # Order: Hamburger(0), Sidebar(1), SearchBtn(2), SearchWidget(3), Toggle(4) ... Spacer ... WindowControls
+        
+        current_idx = 0
+        if self.search_widget:
+             current_idx = self.layout().indexOf(self.search_widget) + 1
+        elif self.search_btn:
+             current_idx = self.layout().indexOf(self.search_btn) + 1
+        elif self.sidebar_btn:
+             current_idx = self.layout().indexOf(self.sidebar_btn) + 1
+        elif self.hamburger_btn:
+             current_idx = self.layout().indexOf(self.hamburger_btn) + 1
+             
+        self.layout().insertWidget(current_idx, self.toggle_btn)
 
             
     def set_menu_bar(self, menu_bar):
@@ -199,6 +212,34 @@ class CustomTitleBar(QWidget):
                 
                 # Insert at the very beginning of the MAIN layout (Left side)
                 self.layout().insertWidget(0, self.hamburger_btn)
+                
+            # Create Sidebar Toggle Button if it doesn't exist
+            if not self.sidebar_btn:
+                self.sidebar_btn = QPushButton()
+                
+                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                icon_path = os.path.join(base_dir, "assets", "icons", "sidebar.svg")
+                
+                self.sidebar_btn.setIcon(QIcon(icon_path))
+                self.sidebar_btn.setIconSize(QSize(20, 20))
+                self.sidebar_btn.setFixedSize(40, 40)
+                self.sidebar_btn.setFlat(True)
+                self.sidebar_btn.setCursor(Qt.PointingHandCursor)
+                self.sidebar_btn.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                        border-radius: 4px;
+                    }
+                    QPushButton:hover {
+                        background: rgba(0, 0, 0, 0.1);
+                    }
+                """)
+                self.sidebar_btn.clicked.connect(self.sidebar_toggle_clicked.emit)
+                self.sidebar_btn.setToolTip("Mostrar/Ocultar Barra Lateral")
+                
+                # Insert at index 1 (after hamburger)
+                self.layout().insertWidget(1, self.sidebar_btn)
     
     def _show_hamburger_menu(self):
         """Show the menu bar actions as a popup menu."""
