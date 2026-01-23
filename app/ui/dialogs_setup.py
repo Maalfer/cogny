@@ -183,7 +183,7 @@ class SetupDialog(QDialog):
         
         layout.addStretch()
         
-        version_label = QLabel("v1.0.6")
+        version_label = QLabel("v1.0.7")
         version_label.setAlignment(Qt.AlignRight)
         version_label.setStyleSheet("color: #666; font-size: 12px;")
         layout.addWidget(version_label)
