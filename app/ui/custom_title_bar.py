@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QMenuBar, QToolButton
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QMenuBar, QToolButton, QMenu
 from PySide6.QtCore import Qt, Signal, QPoint, QSize
 from PySide6.QtGui import QIcon, QPainter, QColor
 from PySide6.QtSvgWidgets import QSvgWidget
@@ -33,7 +33,9 @@ class CustomTitleBar(QWidget):
         self.toggle_btn = None
         
         # Menu Bar (will be set later)
+        # Menu Bar (will be set later)
         self.menu_bar = None
+        self.hamburger_btn = None
         
         # Spacer Left (will push title to center when menu is added)
         layout.addStretch()
@@ -170,25 +172,50 @@ class CustomTitleBar(QWidget):
         
         self.menu_bar = menu_bar
         if menu_bar:
-            # Menu bar is always at the far left of the main layout
-            self.layout().insertWidget(0, menu_bar)
-            # Make menu bar transparent for mouse events on non-menu areas
-            menu_bar.setStyleSheet("""
-                QMenuBar {
-                    background: transparent;
-                    border: none;
-                    margin: 0px;
-                    padding: 0px;
-                }
-                QMenuBar::item {
-                    background: transparent;
-                    padding: 4px 12px;
-                    margin: 0px;
-                }
-                QMenuBar::item:selected {
-                    background: rgba(255, 255, 255, 0.1);
-                }
-            """)
+            # Create Hamburger Button if it doesn't exist
+            if not self.hamburger_btn:
+                self.hamburger_btn = QPushButton()
+                
+                # Load SVG Icon
+                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                icon_path = os.path.join(base_dir, "assets", "icons", "menu.svg")
+                
+                self.hamburger_btn.setIcon(QIcon(icon_path))
+                self.hamburger_btn.setIconSize(QSize(20, 20))
+                self.hamburger_btn.setFixedSize(40, 40)
+                self.hamburger_btn.setFlat(True)
+                self.hamburger_btn.setCursor(Qt.PointingHandCursor)
+                self.hamburger_btn.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                        border-radius: 4px;
+                    }
+                    QPushButton:hover {
+                        background: rgba(0, 0, 0, 0.1);
+                    }
+                """)
+                self.hamburger_btn.clicked.connect(self._show_hamburger_menu)
+                
+                # Insert at the very beginning of the MAIN layout (Left side)
+                self.layout().insertWidget(0, self.hamburger_btn)
+    
+    def _show_hamburger_menu(self):
+        """Show the menu bar actions as a popup menu."""
+        if not self.menu_bar: return
+        
+        # Create a popup menu
+        popup_menu = QMenu(self)
+        
+        # Add actions from the actual menu bar
+        # Note: top-level menus in QMenuBar are "addMenu" which returns a QMenu. 
+        # But QMenuBar keeps them as actions.
+        for action in self.menu_bar.actions():
+            popup_menu.addAction(action)
+            
+        # Show menu at button position
+        pos = self.hamburger_btn.mapToGlobal(QPoint(0, self.hamburger_btn.height()))
+        popup_menu.exec(pos)
     
     def _create_window_button(self, button_type):
         """Create a window control button with SVG icon."""
