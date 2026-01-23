@@ -1,15 +1,15 @@
 Package: cogny
-Version: 1.0.6
+Version: 1.0.7
 Architecture: amd64
 Maintainer: Mario <mario@example.com>
 Depends: libc6, libgl1
 Priority: optional
 Section: utils
-Filename: pool/main/c/cogny/cogny_1.0.6_amd64.deb
-Size: 74734122
-SHA256: a1591e29d4fd7b6e381e96729f57a6e643f3120854f61df526e6da990bc25d7d
-SHA1: 80761b78a8be481634643c41aab3f0cf93da15a3
-MD5sum: 031a86fc02f431ebf64845c9decd49ad
+Filename: pool/main/c/cogny/cogny_1.0.7_amd64.deb
+Size: 74737812
+SHA256: 7f403edf598c2f49e73657dfc9d0bf049ba80136961043b50b2258f0a23b23e1
+SHA1: 5c1cfe88fa6503c1677bd0fefc628bd031c07706
+MD5sum: f7d7c584c10840e24291ba8cf4703a0f
 Description: Hierarchical Note Taking App
  Cogny is a modern note-taking application designed for efficiency.
  helping you organize your thoughts hierarchically.
