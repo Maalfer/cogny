@@ -38,13 +38,14 @@ class CustomTitleBar(QWidget):
         # Spacer Left (will push title to center when menu is added)
         layout.addStretch()
         
-        # Title
-        self.title_label = QLabel("Cogny")
-        self.title_label.setObjectName("TitleLabel")
-        self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
-        self.title_label.setAlignment(Qt.AlignCenter) # Center text in label
-        self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Allow clicks to pass through
-        layout.addWidget(self.title_label)
+        # Center Container for Icons
+        self.center_container = QWidget()
+        self.center_layout = QHBoxLayout()
+        self.center_layout.setContentsMargins(0, 0, 0, 0)
+        self.center_layout.setSpacing(4)
+        self.center_container.setLayout(self.center_layout)
+        
+        layout.addWidget(self.center_container)
         
         # Spacer Right
         layout.addStretch()
@@ -65,10 +66,10 @@ class CustomTitleBar(QWidget):
     def add_search_widget(self, search_widget):
         """Add collapsible search widget to title bar."""
         if self.search_widget:
-            self.layout().removeWidget(self.search_widget)
+            self.center_layout.removeWidget(self.search_widget)
             self.search_widget.setParent(None)
             if self.search_btn:
-                self.layout().removeWidget(self.search_btn)
+                self.center_layout.removeWidget(self.search_btn)
                 self.search_btn.setParent(None)
         
         self.search_widget = search_widget
@@ -98,9 +99,9 @@ class CustomTitleBar(QWidget):
                 }
             """)
             
-            # Insert at beginning
-            self.layout().insertWidget(0, self.search_btn)
-            self.layout().insertWidget(1, self.search_widget)
+            # Insert at beginning of center layout
+            self.center_layout.insertWidget(0, self.search_btn)
+            self.center_layout.insertWidget(1, self.search_widget)
             
             # Configure Search Widget
             search_widget.setVisible(False)
@@ -135,7 +136,7 @@ class CustomTitleBar(QWidget):
     def add_toggle_button(self, action):
         """Add a toggle button (QAction proxy) to the title bar."""
         if self.toggle_btn:
-            self.layout().removeWidget(self.toggle_btn)
+            self.center_layout.removeWidget(self.toggle_btn)
             self.toggle_btn.setParent(None)
         
         self.toggle_btn = QToolButton()
@@ -155,9 +156,9 @@ class CustomTitleBar(QWidget):
             }
         """)
 
-        # Calculate index: After search (if exists), before menu
+        # Calculate index: After search (if exists) in center layout
         idx = 2 if self.search_widget else 0
-        self.layout().insertWidget(idx, self.toggle_btn)
+        self.center_layout.insertWidget(idx, self.toggle_btn)
 
             
     def set_menu_bar(self, menu_bar):
@@ -169,18 +170,8 @@ class CustomTitleBar(QWidget):
         
         self.menu_bar = menu_bar
         if menu_bar:
-            # Position depends on search widget and toggle button
-            # Index logic:
-            # Search (0, 1) if present
-            # Toggle (next available) if present
-            
-            idx = 0
-            if self.search_widget:
-                idx += 2
-            if self.toggle_btn:
-                idx += 1
-            
-            self.layout().insertWidget(idx, menu_bar)
+            # Menu bar is always at the far left of the main layout
+            self.layout().insertWidget(0, menu_bar)
             # Make menu bar transparent for mouse events on non-menu areas
             menu_bar.setStyleSheet("""
                 QMenuBar {
@@ -261,7 +252,9 @@ class CustomTitleBar(QWidget):
     
     def set_title(self, title):
         """Update window title."""
-        self.title_label.setText(title)
+        # Title label removed, this is now a no-op or could update window title directly if needed
+        if self.parent_window:
+             self.parent_window.setWindowTitle(title)
     
     def update_maximize_icon(self, is_maximized):
         """Update maximize button icon based on window state."""
