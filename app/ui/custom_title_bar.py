@@ -40,10 +40,7 @@ class CustomTitleBar(QWidget):
         self.sidebar_btn = None
         
         
-        # Spacer
-        layout.addStretch()
-        
-        # Spacer Right
+        # Spacer (pushes everything to the right)
         layout.addStretch()
         
         # Window Control Buttons
@@ -97,10 +94,13 @@ class CustomTitleBar(QWidget):
             
             
             # Insert after sidebar toggle (Index 0=Hamburger, 1=Sidebar)
-            # So Search is 2, Widget is 3
-            current_idx = 2
+            # If they don't exist yet, we insert at 0. 
+            # Later they will insert themselves at 0 and 1, pushing us to 2.
+            current_idx = 0
             if self.sidebar_btn:
                  current_idx = self.layout().indexOf(self.sidebar_btn) + 1
+            elif self.hamburger_btn:
+                 current_idx = self.layout().indexOf(self.hamburger_btn) + 1
                  
             self.layout().insertWidget(current_idx, self.search_btn)
             self.layout().insertWidget(current_idx + 1, self.search_widget)
@@ -137,7 +137,6 @@ class CustomTitleBar(QWidget):
 
     def add_toggle_button(self, action):
         """Add a toggle button (QAction proxy) to the title bar."""
-        """Add a toggle button (QAction proxy) to the title bar."""
         if self.toggle_btn:
             self.layout().removeWidget(self.toggle_btn)
             self.toggle_btn.setParent(None)
@@ -159,10 +158,7 @@ class CustomTitleBar(QWidget):
             }
         """)
 
-        # Calculate index: We want to insert BEFORE the spacer.
-        # But simply iterating indices is safer.
-        # Order: Hamburger(0), Sidebar(1), SearchBtn(2), SearchWidget(3), Toggle(4) ... Spacer ... WindowControls
-        
+        # Calculate index
         current_idx = 0
         if self.search_widget:
              current_idx = self.layout().indexOf(self.search_widget) + 1

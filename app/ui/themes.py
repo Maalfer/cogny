@@ -347,7 +347,6 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
-                border-right: 1px solid #6272a4;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -403,7 +402,6 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
-                border-right: 1px solid #313244;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -458,7 +456,6 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
-                border-right: 1px solid #3f3f46;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;
@@ -512,7 +509,6 @@ class ThemeManager:
             QTreeView {{
                 background-color: {tree_bg};
                 border: none;
-                border-right: 1px solid #e4e4e7;
                 color: {text_color};
                 outline: 0;
                 selection-background-color: transparent;

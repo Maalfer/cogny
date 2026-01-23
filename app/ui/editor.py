@@ -43,9 +43,16 @@ class NoteEditor(QTextEdit):
         cursor = self.textCursor()
         if cursor.hasSelection():
             text = cursor.selectedText()
-            # Basic toggle logic could be added here (check if already wrapped), 
-            # but for now we just wrap.
-            cursor.insertText(f"{start_marker}{text}{end_marker}")
+            
+            # Smart Toggle: Check if already wrapped
+            if text.startswith(start_marker) and text.endswith(end_marker) and len(text) >= len(start_marker) + len(end_marker):
+                # Remove markers (Unwrap)
+                # Slice text to remove start_marker and end_marker
+                new_text = text[len(start_marker) : -len(end_marker)]
+                cursor.insertText(new_text)
+            else:
+                # Add markers (Wrap)
+                cursor.insertText(f"{start_marker}{text}{end_marker}")
         else:
             # No selection: insert markers and put cursor in middle
             cursor.insertText(f"{start_marker}{end_marker}")
