@@ -140,7 +140,7 @@ class TabbedEditorArea(QWidget):
         # Switch to the new tab
         self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
     
-    def open_note_in_current_tab(self, note_id, is_folder=False, title=None):
+    def open_note_in_current_tab(self, note_id, is_folder=False, title=None, **kwargs):
         """Opens a note in the current tab (replaces current content)."""
         current_index = self.tab_widget.currentIndex()
         if current_index == -1:
@@ -167,7 +167,7 @@ class TabbedEditorArea(QWidget):
         
         # Load the note
         if note_id:
-            editor_area.load_note(note_id, is_folder, title)
+            editor_area.load_note(note_id, is_folder, title, **kwargs)
             
     def _get_tooltip_text(self, note_id):
         """Generates a breadcrumb-style tooltip from the note path."""
@@ -271,7 +271,7 @@ class TabbedEditorArea(QWidget):
     
     def load_note(self, note_id, is_folder=False, title=None, **kwargs):
         """Loads note in current tab - for backward compatibility."""
-        self.open_note_in_current_tab(note_id, is_folder, title)
+        self.open_note_in_current_tab(note_id, is_folder, title, **kwargs)
     
     @property
     def note_loaded(self):

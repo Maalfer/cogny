@@ -34,7 +34,11 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
         # Window state tracking
         self._is_maximized = False
         self._normal_geometry = None
-        self._resize_margin = 5
+        # self._resize_margin = 5 -> Moved to Handler
+
+        # Resize Handler
+        from app.ui.managers.window_manager import WindowResizeHandler
+        self.resize_handler = WindowResizeHandler(self)
         
         # Install Event Filter for Resizing
         QApplication.instance().installEventFilter(self)
@@ -287,95 +291,13 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
 
     # --- Event Filter for Resizing ---
     def eventFilter(self, obj, event):
-        # Handle Resize Cursors and Logic Globally
-        if not self.isMaximized():
-            if event.type() == QEvent.MouseMove:
-                if self._check_resize_area(event.globalPosition().toPoint()):
-                    return True # Handled in check_resize_area (cursor set)
-                    
-            elif event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-                edges = self._get_edges(event.globalPosition().toPoint())
-                if edges:
-                    self._start_system_resize(edges)
-                    return True
+        # Delegate to Resize Handler
+        if self.resize_handler.handle_event(obj, event):
+            return True
 
         return super().eventFilter(obj, event)
 
-    def _check_resize_area(self, global_pos):
-        edges = self._get_edges(global_pos)
-        
-        if edges:
-            if edges == (True, False, False, False): # Left
-                self.setCursor(Qt.SizeHorCursor)
-            elif edges == (False, True, False, False): # Right
-                self.setCursor(Qt.SizeHorCursor)
-            elif edges == (False, False, True, False): # Top
-                self.setCursor(Qt.SizeVerCursor)
-            elif edges == (False, False, False, True): # Bottom
-                self.setCursor(Qt.SizeVerCursor)
-            elif edges == (True, False, True, False): # Top-Left
-                self.setCursor(Qt.SizeFDiagCursor)
-            elif edges == (False, True, True, False): # Top-Right
-                self.setCursor(Qt.SizeBDiagCursor)
-            elif edges == (True, False, False, True): # Bottom-Left
-                self.setCursor(Qt.SizeBDiagCursor)
-            elif edges == (False, True, False, True): # Bottom-Right
-                self.setCursor(Qt.SizeFDiagCursor)
-            return True
-        else:
-            # Only reset if we are NOT over a widget locally that sets its own cursor?
-            # Actually, because we filter EVERYTHING, we might break other cursors (like text selection).
-            # So we should only reset if we previously set it, or be careful.
-            # But the requirement is to resize.
-            # If we are NOT in the margin, we should probably NOT set cursor, 
-            # allowing child widget to set it.
-            # self.setCursor(Qt.ArrowCursor) -> This is dangerous if we are over text editor.
-            
-            # Simple fix: If we are not in margin, DO NOT return True, and let event propagate.
-            # But we must ensure cursor is reset if we leave the area. 
-            # QMainWindow cursor will be used if child doesn't set it.
-            # To explicitly clear specifically our resize cursor:
-            if self.cursor().shape() in [Qt.SizeHorCursor, Qt.SizeVerCursor, Qt.SizeFDiagCursor, Qt.SizeBDiagCursor]:
-                 self.setCursor(Qt.ArrowCursor)
-            return False
-
-    def _get_edges(self, global_pos):
-        # Map global to local
-        local_pos = self.mapFromGlobal(global_pos)
-        rect = self.rect()
-        m = self._resize_margin
-        
-        x = local_pos.x()
-        y = local_pos.y()
-        w = rect.width()
-        h = rect.height()
-        
-        left = x <= m
-        right = x >= w - m
-        top = y <= m
-        bottom = y >= h - m
-        
-        if left or right or top or bottom:
-            return (left, right, top, bottom)
-        return None
-
-    def _start_system_resize(self, edges):
-        left, right, top, bottom = edges
-        edge = None
-        
-        if top and left: edge = Qt.TopEdge | Qt.LeftEdge
-        elif top and right: edge = Qt.TopEdge | Qt.RightEdge
-        elif bottom and left: edge = Qt.BottomEdge | Qt.LeftEdge
-        elif bottom and right: edge = Qt.BottomEdge | Qt.RightEdge
-        elif left: edge = Qt.LeftEdge
-        elif right: edge = Qt.RightEdge
-        elif top: edge = Qt.TopEdge
-        elif bottom: edge = Qt.BottomEdge
-        
-        if edge:
-             window_handle = self.windowHandle()
-             if window_handle:
-                  window_handle.startSystemResize(edge)
+    # _check_resize_area, _get_edges, _start_system_resize moved to WindowResizeHandler
 
     def setup_tray_icon(self):
         from PySide6.QtWidgets import QSystemTrayIcon, QMenu

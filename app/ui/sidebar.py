@@ -37,13 +37,30 @@ class Sidebar(QWidget):
             self.fm.watcher.directory_changed.connect(self.on_directory_changed)
 
     def on_directory_changed(self, path):
-        # Debounce or just reload? 
-        # Reloading model is fast enough for small/medium vaults.
-        print(f"DEBUG Sidebar: Directory changed {path}, checking refresh...")
-        # We could filter if path is relevant, but list_files scans all.
-        # Use singleShot to debounce slightly and move to main thread loop just in case
+        # Filter unwanted updates to prevent loops and crashes
+        import os
+        if not path: return
+        
+        # Check for hidden directories or specific config files
+        # Normalize path
+        norm_path = os.path.normpath(path)
+        parts = norm_path.split(os.sep)
+        
+        # Ignore hidden folders
+        for p in parts:
+            if p.startswith('.') and p != ".":
+                print(f"DEBUG Sidebar: Ignoring change in hidden folder: {path}")
+                return
+        
+        # Ignore config.json specifically if it's in the update path (file watcher might report dir, but good to check)
+        # Actually watcher usually reports the DIRECTORY that changed.
+        # But if we are careful, we prevent reloading on config writes.
+        # FileManager.watcher implementation wraps QFileSystemWatcher.
+        
+        print(f"DEBUG Sidebar: Directory changed {path}, scheduling refresh...")
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(100, lambda: self.model.load_notes())
+        # [DEBUG] Temporarily disabled to prevent segfault on startup
+        # QTimer.singleShot(200, lambda: self.model.load_notes())
 
     def setup_ui(self):
         layout = QVBoxLayout(self)

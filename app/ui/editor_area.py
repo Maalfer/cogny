@@ -136,8 +136,21 @@ class EditorArea(QWidget):
         # Pass current note path to editor for relative link calculation
         self.text_editor.current_note_path = note_id
         
-        # Load Content from FS
-        markdown_content = self.fm.read_note(note_id)
+        def on_loaded(markdown_content):
+            print(f"DEBUG EditorArea: Async read finished for {note_id}. Content len: {len(markdown_content) if markdown_content else 0}")
+            # Verify we are still looking at the same note (user didn't switch fast)
+            if self.current_note_id != note_id: 
+                print(f"DEBUG EditorArea: Note ID changed (Current: {self.current_note_id} vs {note_id}), aborting render.")
+                return
+            self._on_content_ready(markdown_content, note_id, preload_images, async_load)
+
+        if async_load:
+            self.fm.read_note_async(note_id, on_loaded)
+        else:
+            markdown_content = self.fm.read_note(note_id)
+            on_loaded(markdown_content)
+
+    def _on_content_ready(self, markdown_content, note_id, preload_images, async_load):
         if markdown_content is None:
             markdown_content = ""
             

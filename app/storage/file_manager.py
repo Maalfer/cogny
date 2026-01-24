@@ -4,16 +4,57 @@ from typing import List, Optional, Dict, Tuple
 from pathlib import Path
  # Remove MetadataCache and VaultIndexer imports
 from app.storage.watcher import VaultWatcher
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
+from PySide6.QtWidgets import QApplication
+import uuid
+
+class FileLoaderWorker(QObject):
+    """Worker that lives in a separate thread."""
+    request_read = Signal(str, str) # request_id, path
+    read_finished = Signal(str, object) # request_id, content
+
+    @Slot(str, str)
+    def do_read(self, request_id, path):
+        print(f"DEBUG Worker [Thread {QThread.currentThread()}]: Received request {request_id} for {path}")
+        try:
+            if not os.path.exists(path):
+                print(f"DEBUG Worker: File not found {path}")
+                self.read_finished.emit(request_id, None)
+                return
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            print(f"DEBUG Worker: Read successful. Size {len(content)}. Emitting finished.")
+            self.read_finished.emit(request_id, content)
+        except Exception as e:
+            print(f"Error reading file async {path}: {e}")
+            self.read_finished.emit(request_id, None)
 
 class FileManager(QObject):
     """
     Manages file system operations for the note application.
-    Manages file system operations for the note application.
+    Uses a dedicated thread for async I/O to avoid segfaults.
     """
+    read_requested = Signal(str, str) # Internal signal to talk to worker
+
     def __init__(self, root_path: str):
         super().__init__()
         self.root_path = os.path.abspath(root_path)
+        print(f"DEBUG FileManager [Thread {QThread.currentThread()}]: Initializing...")
+        
+        # Async Loader Setup
+        self._callbacks = {}
+        self.loader_thread = QThread()
+        self.loader_worker = FileLoaderWorker()
+        self.loader_worker.moveToThread(self.loader_thread)
+        
+        # Connect signals
+        self.read_requested.connect(self.loader_worker.do_read)
+        self.loader_worker.read_finished.connect(self._on_read_finished)
+        
+        # Start thread
+        self.loader_thread.start()
+        print("DEBUG FileManager: Loader thread started.")
+
         # Use 'images' folder as requested by user
         self.images_path = os.path.join(self.root_path, "images")
         
@@ -197,6 +238,36 @@ class FileManager(QObject):
         except Exception as e:
             print(f"Error reading file {path}: {e}")
             return None
+
+    def read_note_async(self, rel_path: str, callback):
+        """Reads content of a markdown file asynchronously using QThread."""
+        path = self._get_abs_path(rel_path)
+        req_id = str(uuid.uuid4())
+        self._callbacks[req_id] = callback
+        self.read_requested.emit(req_id, path)
+
+    @Slot(str, object)
+    def _on_read_finished(self, req_id, content):
+        is_main = QThread.currentThread() == QApplication.instance().thread()
+        print(f"DEBUG FileManager [Thread {QThread.currentThread()}]: _on_read_finished for {req_id}. Is Main? {is_main}")
+        
+        if req_id in self._callbacks:
+            callback = self._callbacks.pop(req_id)
+            if callback:
+                print("DEBUG FileManager: Executing callback...")
+                # Callback is already running in MainThread because FileManager lives in MainThread
+                # and signal connection is Auto/Queued.
+                try:
+                    callback(content)
+                    print("DEBUG FileManager: Callback finished.")
+                except Exception as e:
+                     print(f"DEBUG FileManager: Error in callback: {e}")
+
+    def cleanup(self):
+        """Call this on app exit to stop thread."""
+        if self.loader_thread.isRunning():
+            self.loader_thread.quit()
+            self.loader_thread.wait()
 
     def save_note(self, rel_path: str, content: str) -> bool:
         """Saves content to a markdown file."""

@@ -39,13 +39,21 @@ class ImageLoader(QRunnable):
                     break
             
             # 2. Recursive Search (if not found in candidates)
+            # OPTIMIZED: Limit depth or better, rely on user structure. 
+            # Walking entire vault is too slow (causing lag).
+            # For now, we restrict to depth 3 and specific asset folders if possible.
+            # Or better: ONLY search if path looks relative?
+            # Let's simple skip full walk to improve performance. 
+            # Users should put images in standard places.
             if not found:
-                    for root, dirs, files in os.walk(self.root_path):
-                        dirs[:] = [d for d in dirs if not d.startswith('.')]
-                        if basename in files:
-                            target_path = os.path.join(root, basename)
-                            found = True
-                            break
+                # print(f"DEBUG: Deep search disabled for performance.")
+                pass
+                # for root, dirs, files in os.walk(self.root_path):
+                #     dirs[:] = [d for d in dirs if not d.startswith('.')]
+                #     if basename in files:
+                #         target_path = os.path.join(root, basename)
+                #         found = True
+                #         break
 
         img = QImage()
         if found:
@@ -134,5 +142,8 @@ class ImageHandler:
         """
         cls.mark_loading(path)
         loader = ImageLoader(path, cls.process_image_static, root_path)
-        loader.signals.finished.connect(callback)
+        # Force QueuedConnection to ensure callback runs in Main Thread (GUI Safety)
+        loader.signals.finished.connect(callback, Qt.QueuedConnection)
+        
+        # print(f"DEBUG ImageHandler: Starting async load for {os.path.basename(path)}")
         cls.get_thread_pool().start(loader)

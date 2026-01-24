@@ -864,11 +864,6 @@ class NoteEditor(QTextEdit):
 
     def preload_images(self, paths, on_finish_callback=None):
         """Pre-loads a list of image paths into the cache in background."""
-        # For simplicity, we just trigger load_async for all without a group callback 
-        # because tracking is complex across threads. 
-        # But for splash screen, we need completion.
-        
-        # Simplified implementation using ImageHandler
         if not paths:
             if on_finish_callback: on_finish_callback()
             return
@@ -878,18 +873,28 @@ class NoteEditor(QTextEdit):
             if on_finish_callback: on_finish_callback()
             return
 
-        total = len(needed)
-        processed = 0
+        self._preload_total = len(needed)
+        self._preload_processed = 0
+        self._preload_callback = on_finish_callback
         
-        def check(p, i):
-            nonlocal processed
-            processed += 1
-            if processed >= total:
-                if on_finish_callback:
-                    QTimer.singleShot(0, lambda: on_finish_callback())
+        print(f"DEBUG NoteEditor: Starting preload for {self._preload_total} images.")
 
         for path in needed:
-            ImageHandler.load_async(path, self.fm.root_path, check)
+            # Pass strict context via Bound Method which Qt can route safely?
+            # Actually, we rely on _on_preload_single_finished being a method of self (QObject)
+            # This ensures AutoConnection routes to MainThread.
+            ImageHandler.load_async(path, self.fm.root_path, self._on_preload_single_finished)
+
+    def _on_preload_single_finished(self, path, image):
+        self._preload_processed += 1
+        # print(f"DEBUG NoteEditor: Preload progress {self._preload_processed}/{self._preload_total}")
+        
+        if self._preload_processed >= self._preload_total:
+             if self._preload_callback:
+                 print("DEBUG NoteEditor: Preload finished. Triggering callback.")
+                 callback = self._preload_callback
+                 self._preload_callback = None # Clear ref
+                 callback()
 
     def render_images(self, start_pos=0, end_pos=None):
         text = self.toPlainText()
