@@ -80,8 +80,6 @@ class ActionManager:
         self.act_backup = QAction("Crear Respaldo...", self.window)
         self.act_backup.triggered.connect(self.show_backup_dialog)
 
-        self.act_attach = QAction("Adjuntar Archivo...", self.window)
-        self.act_attach.triggered.connect(self.tabbed_editor.attach_file)
 
         self.act_save = QAction("Guardar Nota", self.window)
         self.act_save.setShortcut(QKeySequence.Save)

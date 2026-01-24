@@ -499,12 +499,16 @@ class NoteEditor(QTextEdit):
                 cursor.setPosition(table.lastCursorPosition().position() + 1, QTextCursor.KeepAnchor)
                 cursor.removeSelectedText()
                 
+            
             menu.addAction("Eliminar Tabla", delete_table)
             
-            menu.exec(event.globalPos())
-            return
+        # Global Actions (Always available)
+        menu.addSeparator()
+        action_reveal_note = menu.addAction("Abrir en explorador de archivos")
+        action_reveal_note.triggered.connect(self.reveal_current_note)
             
-        super().contextMenuEvent(event)
+        menu.exec(event.globalPos())
+        # return super().contextMenuEvent(event) # Replaced by custom menu execution
 
     def mouseDoubleClickEvent(self, event):
         anchor = self.anchorAt(event.pos())
@@ -1041,5 +1045,12 @@ class NoteEditor(QTextEdit):
         finally:
             cursor.endEditBlock()
 
-    # show_in_explorer removed (moved to app/utils/system_utils.py)
+    def reveal_current_note(self):
+        """Opens the current note in the system file explorer."""
+        if hasattr(self, 'current_note_path') and self.current_note_path:
+             full_path = os.path.join(self.fm.root_path, self.current_note_path)
+             from app.utils.system_utils import show_in_explorer
+             show_in_explorer(full_path)
+        else:
+             print("WARNING: No current note path set in editor.")
 

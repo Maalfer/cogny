@@ -384,34 +384,7 @@ class EditorArea(QWidget):
         self.title_edit.clear()
         self.text_editor.clear()
 
-    def attach_file(self):
-        if self.current_note_id is None:
-            ModernAlert.show(self, "Sin Selección", "Por favor seleccione una nota para adjuntar el archivo.")
-            return
 
-        from PySide6.QtWidgets import QFileDialog
-        import os
-        
-        path, _ = QFileDialog.getOpenFileName(self, "Adjuntar Archivo")
-        if not path:
-            return
-            
-        filename = os.path.basename(path)
-        try:
-            with open(path, 'rb') as f:
-                data = f.read()
-            
-            # Save using FileManager (reusing save_image logic which saves to 'images' folder)
-            rel_path = self.fm.save_image(data, filename)
-            
-            # Insert Standard Markdown Link
-            # [Filename](images/filename.ext)
-            # Ensure path uses forward slashes
-            url_path = rel_path.replace("\\", "/")
-            self.text_editor.textCursor().insertText(f"[{filename}]({url_path})")
-            
-        except Exception as e:
-            ModernAlert.show(self, "Error", f"No se pudo adjuntar el archivo: {e}")
 
     def eventFilter(self, obj, event):
         if obj == self.title_edit and event.type() == QEvent.Wheel:

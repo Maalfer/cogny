@@ -285,9 +285,5 @@ class TabbedEditorArea(QWidget):
         if editor:
             editor.clear()
     
-    def attach_file(self):
-        """Attaches file in current tab."""
-        editor = self.get_current_editor()
-        if editor:
-            editor.attach_file()
+
 

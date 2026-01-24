@@ -156,7 +156,6 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
         exp.addSeparator()
         exp.addAction(am.act_backup)
         file.addSeparator()
-        file.addAction(am.act_attach)
         file.addSeparator()
         file.addAction(am.act_save)
         file.addSeparator()
