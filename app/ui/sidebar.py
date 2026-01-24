@@ -163,6 +163,19 @@ class Sidebar(QWidget):
             action_rename.triggered.connect(self.rename_note_dialog)
             menu.addAction(action_rename)
             
+            # 1.5 Show in Explorer
+            action_reveal = QAction("Mostrar en Explorador", self)
+            
+            def reveal_helper():
+                from app.utils.system_utils import show_in_explorer
+                # item.note_id is relative path. Need absolute.
+                abs_path = self.fm._get_abs_path(item.note_id)
+                show_in_explorer(abs_path)
+                
+            action_reveal.triggered.connect(reveal_helper)
+            menu.addAction(action_reveal)
+            menu.addSeparator()
+            
             # 2. Creation Actions
             is_folder = getattr(item, 'is_folder', False) or item.rowCount() > 0
             

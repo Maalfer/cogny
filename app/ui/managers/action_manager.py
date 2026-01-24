@@ -51,6 +51,9 @@ class ActionManager:
         self.act_open_vault = QAction("Abrir Bóveda...", self.window)
         self.act_open_vault.triggered.connect(self.open_vault)
         
+        self.act_open_explorer = QAction("Abrir en Explorador de Archivos", self.window)
+        self.act_open_explorer.triggered.connect(self.open_vault_in_explorer)
+        
         self.act_new_root = QAction("Nueva Nota Raíz", self.window)
         self.act_new_root.triggered.connect(self.sidebar.add_root_note)
 
@@ -151,17 +154,13 @@ class ActionManager:
         return None
 
     def new_vault(self):
-        dialog = QFileDialog(self.window, "Seleccionar ubicación para la nueva bóveda", os.path.expanduser("~/Documentos"))
-        dialog.setFileMode(QFileDialog.Directory)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        # Use static method for better native portal integration on Linux
+        path = QFileDialog.getExistingDirectory(self.window, "Seleccionar ubicación para la nueva bóveda", os.path.expanduser("~/Documentos"))
         
-        if dialog.exec():
-            selected_files = dialog.selectedFiles()
-            if selected_files:
-                path = selected_files[0]
-                from app.ui.widgets import ModernInput
-                name, ok = ModernInput.get_text(self.window, "Nueva Bóveda", "Nombre de la bóveda:")
-                if ok and name.strip():
+        if path:
+            from app.ui.widgets import ModernInput
+            name, ok = ModernInput.get_text(self.window, "Nueva Bóveda", "Nombre de la bóveda:")
+            if ok and name.strip():
                     full_path = os.path.join(path, name.strip())
                     try:
                         os.makedirs(full_path, exist_ok=False)
@@ -176,14 +175,15 @@ class ActionManager:
                         ModernAlert.show(self.window, "Error", f"No se pudo crear la bóveda: {e}")
 
     def open_vault(self):
-        dialog = QFileDialog(self.window, "Abrir Bóveda (Seleccionar Carpeta)", os.path.expanduser("~/Documentos"))
-        dialog.setFileMode(QFileDialog.Directory)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        # Use static method
+        path = QFileDialog.getExistingDirectory(self.window, "Abrir Bóveda (Seleccionar Carpeta)", os.path.expanduser("~/Documentos"))
         
-        if dialog.exec():
-             selected_files = dialog.selectedFiles()
-             if selected_files:
-                 self.window.load_vault(selected_files[0])
+        if path:
+             self.window.load_vault(path)
+
+    def open_vault_in_explorer(self):
+        from app.utils.system_utils import show_in_explorer
+        show_in_explorer(self.file_manager.root_path)
 
     def export_note_pdf(self, note_id):
         # 1. Check for Multi-Selection

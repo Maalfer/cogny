@@ -453,7 +453,22 @@ class NoteEditor(QTextEdit):
         if hit_image and image_path:
             menu.addSeparator()
             action_show = menu.addAction("Mostrar imagen en el explorador de archivos")
-            action_show.triggered.connect(lambda: self.show_in_explorer(image_path))
+            # Resolve path here or inside helper? Helper takes absolute or relative?
+            # Helper takes absolute. We need to resolve relative paths against Vault Root.
+            # But duplicate logic?
+            # Let's import show_in_explorer and do lightweight resolution here or let helper handle?
+            # Our helper only takes path.
+            # NoteEditor knows FM root.
+            
+            # Helper logic:
+            def open_helper():
+                from app.utils.system_utils import show_in_explorer
+                final_path = image_path
+                if not os.path.isabs(final_path) and not final_path.startswith("file:"):
+                     final_path = os.path.join(self.fm.root_path, final_path)
+                show_in_explorer(final_path)
+                
+            action_show.triggered.connect(open_helper)
             menu.addSeparator()
 
         table = cursor.currentTable()
@@ -1013,34 +1028,5 @@ class NoteEditor(QTextEdit):
         finally:
             cursor.endEditBlock()
 
-    def show_in_explorer(self, path_or_url):
-        import subprocess
-        import sys
-        
-        # Resolve Path
-        final_path = path_or_url
-        if path_or_url.startswith("file://"):
-             final_path = QUrl(path_or_url).toLocalFile()
-        
-        if not os.path.isabs(final_path):
-             candidate = os.path.join(self.fm.root_path, final_path)
-             if os.path.exists(candidate):
-                 final_path = candidate
-        
-        if not os.path.exists(final_path):
-             print(f"ERROR: Image path not found: {final_path}")
-             return
+    # show_in_explorer removed (moved to app/utils/system_utils.py)
 
-        if sys.platform == 'win32':
-            subprocess.run(['explorer', '/select,', os.path.normpath(final_path)])
-        elif sys.platform == 'darwin':
-            subprocess.run(['open', '-R', final_path])
-        else:
-            try:
-                # Linux: try to select file if possible, else open parent
-                folder = os.path.dirname(final_path)
-                # Try nautilus/dolphin select
-                # But safer is just xdg-open folder for "Vibe" generic linux
-                subprocess.Popen(['xdg-open', folder])
-            except:
-                pass

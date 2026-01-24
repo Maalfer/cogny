@@ -137,6 +137,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
         file = menubar.addMenu("&Archivo")
         file.addAction(am.act_new_vault)
         file.addAction(am.act_open_vault)
+        file.addAction(am.act_open_explorer) # New
         file.addAction(am.act_new_root)
         file.addAction(am.act_new_folder_root)
         file.addSeparator()
