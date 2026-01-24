@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 
 # Configuración
 APP_NAME="cogny"
-VERSION="1.0.7"
+VERSION="1.0.8"
 ARCH="amd64"
 DEB_FILE="${APP_NAME}_${VERSION}_${ARCH}.deb"
 APT_REPO_DIR="docs"

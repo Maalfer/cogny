@@ -438,6 +438,14 @@ class NoteEditor(QTextEdit):
         if fmt.isImageFormat():
             hit_image = True
             image_path = fmt.toImageFormat().name()
+        
+        # 1b. Check Right Side (Cursor might be BEFORE the image if clicked on left half)
+        if not hit_image:
+             cursor_right = QTextCursor(cursor)
+             cursor_right.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
+             if cursor_right.charFormat().isImageFormat():
+                 hit_image = True
+                 image_path = cursor_right.charFormat().toImageFormat().name()
             
         # 2. Check Text Link (Source Mode) if 1 failed
         if not hit_image:
@@ -452,7 +460,7 @@ class NoteEditor(QTextEdit):
                      
         if hit_image and image_path:
             menu.addSeparator()
-            action_show = menu.addAction("Mostrar imagen en el explorador de archivos")
+            action_show = menu.addAction("Abrir en explorador de archivos")
             # Resolve path here or inside helper? Helper takes absolute or relative?
             # Helper takes absolute. We need to resolve relative paths against Vault Root.
             # But duplicate logic?

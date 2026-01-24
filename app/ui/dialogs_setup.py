@@ -183,10 +183,10 @@ class SetupDialog(QDialog):
         
         layout.addStretch()
         
-        version_label = QLabel("v1.0.7")
-        version_label.setAlignment(Qt.AlignRight)
-        version_label.setStyleSheet("color: #666; font-size: 12px;")
-        layout.addWidget(version_label)
+        self.version_label = QLabel("v1.0.8")
+        self.version_label.setAlignment(Qt.AlignRight)
+        self.version_label.setStyleSheet("color: #666; font-size: 12px;")
+        layout.addWidget(self.version_label)
 
     def create_new_vault(self):
         # Re-use the dialog but rename attributes if needed

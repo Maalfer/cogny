@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QMainWindow, QToolBar, QSplitter, QWidget, QVBoxLayout, QMenuBar, QSizePolicy
-from PySide6.QtGui import QIcon, QAction
-from PySide6.QtCore import QSettings, Signal, QTimer, Qt
+from PySide6.QtWidgets import QMainWindow, QToolBar, QSplitter, QWidget, QVBoxLayout, QMenuBar, QSizePolicy, QApplication
+from PySide6.QtGui import QIcon, QAction, QCursor
+from PySide6.QtCore import QSettings, Signal, QTimer, Qt, QEvent, QPoint
 import os
 
 from app.storage.file_manager import FileManager
@@ -29,13 +29,15 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
         
         # Frameless Window
         self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setMouseTracking(True)
         
         # Window state tracking
         self._is_maximized = False
         self._normal_geometry = None
-        self._is_resizing = False
-        self._resize_direction = None
         self._resize_margin = 5
+        
+        # Install Event Filter for Resizing
+        QApplication.instance().installEventFilter(self)
         
         self.is_draft = is_draft
         self.vault_path = vault_path
@@ -283,57 +285,97 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
         if hasattr(self, 'title_bar'):
             self.title_bar.update_maximize_icon(self._is_maximized)
 
-    # ... (Resize Events and Tray Icon logic can be imported or kept. 
-    # For brevity in this tool call, I will include them simplified or identical)
-    # They are lengthy but necessary for Custom Title Bar.
-    
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and not self.isMaximized():
-            self._resize_direction = self._get_resize_direction(event.pos())
-            if self._resize_direction:
-                self._is_resizing = True
-                self._resize_start_pos = event.globalPosition().toPoint()
-                self._resize_start_geometry = self.geometry()
-                event.accept()
-                return
-        super().mousePressEvent(event)
+    # --- Event Filter for Resizing ---
+    def eventFilter(self, obj, event):
+        # Handle Resize Cursors and Logic Globally
+        if not self.isMaximized():
+            if event.type() == QEvent.MouseMove:
+                if self._check_resize_area(event.globalPosition().toPoint()):
+                    return True # Handled in check_resize_area (cursor set)
+                    
+            elif event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                edges = self._get_edges(event.globalPosition().toPoint())
+                if edges:
+                    self._start_system_resize(edges)
+                    return True
 
-    def mouseMoveEvent(self, event):
-        if self._is_resizing and self._resize_direction:
-            delta = event.globalPosition().toPoint() - self._resize_start_pos
-            geo = self._resize_start_geometry
-            new_geo = geo 
-            # (Simplifying resize logic: assuming standard implementation)
-            # Re-implementing correctly:
-            if 'left' in self._resize_direction: new_geo.setLeft(geo.left() + delta.x())
-            if 'right' in self._resize_direction: new_geo.setRight(geo.right() + delta.x())
-            if 'top' in self._resize_direction: new_geo.setTop(geo.top() + delta.y())
-            if 'bottom' in self._resize_direction: new_geo.setBottom(geo.bottom() + delta.y())
+        return super().eventFilter(obj, event)
+
+    def _check_resize_area(self, global_pos):
+        edges = self._get_edges(global_pos)
+        
+        if edges:
+            if edges == (True, False, False, False): # Left
+                self.setCursor(Qt.SizeHorCursor)
+            elif edges == (False, True, False, False): # Right
+                self.setCursor(Qt.SizeHorCursor)
+            elif edges == (False, False, True, False): # Top
+                self.setCursor(Qt.SizeVerCursor)
+            elif edges == (False, False, False, True): # Bottom
+                self.setCursor(Qt.SizeVerCursor)
+            elif edges == (True, False, True, False): # Top-Left
+                self.setCursor(Qt.SizeFDiagCursor)
+            elif edges == (False, True, True, False): # Top-Right
+                self.setCursor(Qt.SizeBDiagCursor)
+            elif edges == (True, False, False, True): # Bottom-Left
+                self.setCursor(Qt.SizeBDiagCursor)
+            elif edges == (False, True, False, True): # Bottom-Right
+                self.setCursor(Qt.SizeFDiagCursor)
+            return True
+        else:
+            # Only reset if we are NOT over a widget locally that sets its own cursor?
+            # Actually, because we filter EVERYTHING, we might break other cursors (like text selection).
+            # So we should only reset if we previously set it, or be careful.
+            # But the requirement is to resize.
+            # If we are NOT in the margin, we should probably NOT set cursor, 
+            # allowing child widget to set it.
+            # self.setCursor(Qt.ArrowCursor) -> This is dangerous if we are over text editor.
             
-            if new_geo.width() >= self.minimumWidth() and new_geo.height() >= self.minimumHeight():
-                self.setGeometry(new_geo)
-            event.accept()
-        elif not self.isMaximized():
-            self.setCursor(Qt.ArrowCursor) # Simplify cursor for now
-        super().mouseMoveEvent(event)
+            # Simple fix: If we are not in margin, DO NOT return True, and let event propagate.
+            # But we must ensure cursor is reset if we leave the area. 
+            # QMainWindow cursor will be used if child doesn't set it.
+            # To explicitly clear specifically our resize cursor:
+            if self.cursor().shape() in [Qt.SizeHorCursor, Qt.SizeVerCursor, Qt.SizeFDiagCursor, Qt.SizeBDiagCursor]:
+                 self.setCursor(Qt.ArrowCursor)
+            return False
 
-    def mouseReleaseEvent(self, event):
-        self._is_resizing = False
-        self._resize_direction = None
-        super().mouseReleaseEvent(event)
-
-    def _get_resize_direction(self, pos):
-        margin = 5
+    def _get_edges(self, global_pos):
+        # Map global to local
+        local_pos = self.mapFromGlobal(global_pos)
         rect = self.rect()
-        left = pos.x() <= margin
-        right = pos.x() >= rect.width() - margin
-        top = pos.y() <= margin
-        bottom = pos.y() >= rect.height() - margin
-        if left: return 'left'
-        if right: return 'right'
-        if top: return 'top'
-        if bottom: return 'bottom'
+        m = self._resize_margin
+        
+        x = local_pos.x()
+        y = local_pos.y()
+        w = rect.width()
+        h = rect.height()
+        
+        left = x <= m
+        right = x >= w - m
+        top = y <= m
+        bottom = y >= h - m
+        
+        if left or right or top or bottom:
+            return (left, right, top, bottom)
         return None
+
+    def _start_system_resize(self, edges):
+        left, right, top, bottom = edges
+        edge = None
+        
+        if top and left: edge = Qt.TopEdge | Qt.LeftEdge
+        elif top and right: edge = Qt.TopEdge | Qt.RightEdge
+        elif bottom and left: edge = Qt.BottomEdge | Qt.LeftEdge
+        elif bottom and right: edge = Qt.BottomEdge | Qt.RightEdge
+        elif left: edge = Qt.LeftEdge
+        elif right: edge = Qt.RightEdge
+        elif top: edge = Qt.TopEdge
+        elif bottom: edge = Qt.BottomEdge
+        
+        if edge:
+             window_handle = self.windowHandle()
+             if window_handle:
+                  window_handle.startSystemResize(edge)
 
     def setup_tray_icon(self):
         from PySide6.QtWidgets import QSystemTrayIcon, QMenu
@@ -360,6 +402,7 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
              event.ignore()
              self.hide()
         else:
+             QApplication.instance().removeEventFilter(self)
              event.accept()
 
     def preload_initial_state(self):
@@ -402,7 +445,10 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
 
     def switch_vault(self, new_path):
         import sys
-        # Hard restart for simplicity or re-init?
+        
+        # Clean up event filter
+        QApplication.instance().removeEventFilter(self)
+        
         # Re-init is smoother.
         self.is_draft = False
         self.vault_path = new_path
@@ -424,12 +470,15 @@ class MainWindow(UiStateMixin, UiThemeMixin, QMainWindow):
         
         # Rebuild
         self.setup_ui()
-        self.action_manager = ActionManager(self) # Re-init actions with new components?? Actions bind to window methods. 
-        # Actually window components (sidebar) CHANGED. So actions referencing self.sidebar are stale!
-        # WE MUST REFRESH ACTION MANAGER.
+        self.action_manager = ActionManager(self)
         self.setup_menus_and_toolbars()
         
         self.setWindowTitle(f"Cogny - {os.path.basename(new_path)}")
+        
+        # Re-install filter? The object is the same, so it should persist unless we explicitly removed it? 
+        # Actually EventFilter is on SELF. If self is not destroyed, it persists. 
+        # But we called removeEventFilter at start of this method just in case.
+        QApplication.instance().installEventFilter(self)
 
     def setup_autosave(self):
         self.autosave_timer = QTimer(self)

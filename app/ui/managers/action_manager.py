@@ -289,7 +289,7 @@ class ActionManager:
             
             success = False
             if is_docx:
-                success = exporter.export_docx(raw_text, path)
+                success = exporter.export_docx(content, path)
             else:
                 success = exporter.export_odt(content, path, base_url=self.file_manager.root_path)
                 

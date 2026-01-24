@@ -15,8 +15,11 @@ def show_in_explorer(path_or_url):
     path = os.path.abspath(path)
     
     if not os.path.exists(path):
-         print(f"ERROR: Path not found: {path}")
-         return
+         print(f"WARNING: Path not found: {path}. Trying parent directory.")
+         path = os.path.dirname(path)
+         if not os.path.exists(path):
+             print(f"ERROR: Parent path also not found: {path}")
+             return
 
     if sys.platform == 'win32':
         subprocess.run(['explorer', '/select,', os.path.normpath(path)])

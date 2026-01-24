@@ -2,3 +2,5 @@ PySide6
 Pygments
 markdown
 weasyprint
+python-docx
+htmldocx
