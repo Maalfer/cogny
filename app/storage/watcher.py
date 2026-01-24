@@ -3,6 +3,7 @@ from PySide6.QtCore import QObject, Signal, QFileSystemWatcher
 
 class VaultWatcher(QObject):
     file_changed = Signal(str) # rel_path
+    directory_changed = Signal(str) # path changed
     
     def __init__(self, vault_path: str):
         super().__init__()
@@ -21,14 +22,8 @@ class VaultWatcher(QObject):
         self.watcher.fileChanged.connect(self._on_file_changed)
 
     def _on_dir_changed(self, path):
-        # Re-scan dir to find new subdirs or files?
-        # QFileSystemWatcher on directories signals when content changes (add/remove file)
-        # But doesn't tell us WHAT changed in standard API.
-        # Ideally we'd trigger a quick scan or use a better watcher like watchdog.
-        # For this prototype: we can rely on Indexer's periodic scan or 
-        # just assume user added/removed something and trigger Indexer scan if we want to be safe.
-        # BUT for created files, we need to add them to watcher if they are directories.
-        pass
+        print(f"DEBUG: Directory changed: {path}")
+        self.directory_changed.emit(path)
 
     def _on_file_changed(self, path):
         # Update specific file

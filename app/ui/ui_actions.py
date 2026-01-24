@@ -81,6 +81,9 @@ class UiActionsMixin:
         self.act_exit.setShortcut(QKeySequence.Quit)
         self.act_exit.triggered.connect(self.close)
 
+        self.act_options = QAction("Opciones...", self)
+        self.act_options.triggered.connect(self.show_options_dialog)
+
         # Edit Actions (Delegated to text_editor)
         self.act_undo = QAction("Deshacer", self)
         self.act_undo.setShortcut(QKeySequence.Undo)
@@ -470,3 +473,8 @@ class UiActionsMixin:
         self.act_mode_toggle.setIcon(QIcon(icon_path))
         self.act_mode_toggle.setToolTip(tooltip)
         self.act_mode_toggle.setText("") # Clear text if any
+
+    def show_options_dialog(self):
+        from app.ui.dialogs.dialogs_options import OptionsDialog
+        dlg = OptionsDialog(self)
+        dlg.exec()

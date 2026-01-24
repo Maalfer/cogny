@@ -28,6 +28,22 @@ class Sidebar(QWidget):
         # Reconnect Signals that depend on model instance
         if hasattr(self, 'on_rows_moved'):
             self.model.rowsMoved.connect(self.on_rows_moved)
+            
+        # Connect Watcher Signals
+        if hasattr(self.fm, 'watcher'):
+            try:
+                self.fm.watcher.directory_changed.disconnect(self.on_directory_changed)
+            except: pass
+            self.fm.watcher.directory_changed.connect(self.on_directory_changed)
+
+    def on_directory_changed(self, path):
+        # Debounce or just reload? 
+        # Reloading model is fast enough for small/medium vaults.
+        print(f"DEBUG Sidebar: Directory changed {path}, checking refresh...")
+        # We could filter if path is relevant, but list_files scans all.
+        # Use singleShot to debounce slightly and move to main thread loop just in case
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: self.model.load_notes())
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -35,8 +51,12 @@ class Sidebar(QWidget):
 
         # Tree View
         self.tree_view = QTreeView()
-        self.model = NoteTreeModel(self.fm)
+        self.model = NoteTreeModel(self.fm) # Restore model init
         self.model.load_notes()
+        
+        # Connect Watcher (Initial)
+        if hasattr(self.fm, 'watcher'):
+            self.fm.watcher.directory_changed.connect(self.on_directory_changed)
 
         # Proxy Model for Search/Filtering
         self.proxy_model = QSortFilterProxyModel(self)

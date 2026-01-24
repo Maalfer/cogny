@@ -1,32 +1,52 @@
-name: APT Repository
+name: Update APT Repository
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'docs/**'  # Avoid infinite loop if we push to docs
-      - 'README.md'
+  workflow_run:
+    workflows: ["Build Linux Deb"]
+    types:
+      - completed
+
+permissions:
+  contents: write
 
 jobs:
-  build-and-deploy:
+  update-repo:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+      - name: Download Deb Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cogny_deb
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: .
+
       - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y reprepro libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0
+
+      - name: Prepare Deb File
+        run: |
+            # Move from the unzipped folder (if created) or ensure it is in root
+            # download-artifact with path: . puts it in current dir? 
+            # If name is cogny_deb, it might put it in cogny_deb/file.deb if not flat.
+            # Let's check contents
+            ls -R
+            # Move any .deb to current directory if not already
+            find . -name "*.deb" -exec mv {} . \;
 
       - name: Build and Update Repo
         env:
@@ -36,6 +56,7 @@ jobs:
         run: |
           chmod +x scripts/compilar-deb.sh scripts/gestion-repositorio.sh
           # Run the management script
+          # It will see the .deb file and skip compilation
           ./scripts/gestion-repositorio.sh
 
       - name: Sync Web Assets

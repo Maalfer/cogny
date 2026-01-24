@@ -34,11 +34,13 @@ class CustomTitleBar(QWidget):
         self.toggle_btn = None
         
         # Menu Bar (will be set later)
-        # Menu Bar (will be set later)
         self.menu_bar = None
         self.hamburger_btn = None
         self.sidebar_btn = None
         
+        # Title Label (Optional, if we want to show it in the bar itself one day)
+        # self.title_label = QLabel()
+        # layout.addWidget(self.title_label)
         
         # Spacer (pushes everything to the right)
         layout.addStretch()
@@ -316,9 +318,20 @@ class CustomTitleBar(QWidget):
     
     def set_title(self, title):
         """Update window title."""
-        # Title label removed, this is now a no-op or could update window title directly if needed
-        if self.parent_window:
-             self.parent_window.setWindowTitle(title)
+        # 1. Break Recursion:
+        # MainWindow.setWindowTitle calls this.
+        # If we call parent.setWindowTitle back, it loops.
+        # Solution: Since MainWindow handles the logic, CustomTitleBar is just visual.
+        # If we had a label, we'd update self.title_label.setText(title).
+        # We DON'T need to set parent title because parent ALREADY initiated this call.
+        pass # No-op because we currently don't show title text in this minimalist bar
+        
+        # If we wanted to support calling title_bar.set_title("Foo") externally (not from main window):
+        if self.parent_window and self.parent_window.windowTitle() != title:
+             # Only update parent if different, but block signals or use internal property?
+             # MainWindow.setWindowTitle is the Master.
+             # So we should block signals or just assume this method is ONLY for syncing visual state.
+             pass 
     
     def update_maximize_icon(self, is_maximized):
         """Update maximize button icon based on window state."""
@@ -332,6 +345,7 @@ class CustomTitleBar(QWidget):
     def _on_maximize_clicked(self):
         """Handle maximize/restore toggle."""
         self.maximize_clicked.emit()
+        # MainWindow handles logic via signal connect
         if self.parent_window:
             is_maximized = self.parent_window.isMaximized()
             self.update_maximize_icon(is_maximized)

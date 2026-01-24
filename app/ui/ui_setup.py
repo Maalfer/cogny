@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import QSplitter, QToolBar
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
-from app.ui.buscador import SearchManager
-from app.ui.barra_herramientas import FormatToolbar
+from app.ui.features.search import SearchManager
+from app.ui.views.toolbar import FormatToolbar
 from app.ui.sidebar import Sidebar
 from app.ui.tabbed_editor_area import TabbedEditorArea
 
@@ -117,6 +117,8 @@ class UiSetupMixin:
         file_menu.addAction(self.act_attach)
         file_menu.addSeparator()
         file_menu.addAction(self.act_save)
+        file_menu.addSeparator()
+        file_menu.addAction(self.act_options)
         file_menu.addSeparator()
         file_menu.addAction(self.act_exit)
 

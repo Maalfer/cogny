@@ -2,9 +2,10 @@ from PySide6.QtWidgets import QWidget, QSplitter, QVBoxLayout, QApplication
 from PySide6.QtCore import Qt, QSettings, Signal, QEvent
 from PySide6.QtGui import QFont, QTextCursor, QTextDocument
 
-from app.ui.editor import NoteEditor
-from app.ui.widgets import TitleEditor, ModernInfo, ModernAlert, ModernConfirm
-from app.ui.highlighter import MarkdownHighlighter
+from app.ui.editors.note_editor import NoteEditor
+from app.ui.components.inputs import TitleEditor
+from app.ui.components.dialogs import ModernInfo, ModernAlert, ModernConfirm
+from app.ui.editors.highlighter import MarkdownHighlighter
 from app.ui.themes import ThemeManager
 from app.ui.markdown_renderer import MarkdownRenderer
 
@@ -291,7 +292,7 @@ class EditorArea(QWidget):
 
     # Deprecated loading callbacks removed
 
-    def save_current_note(self):
+    def save_current_note(self, silent=False):
         if self.current_note_id is None:
             return
 
@@ -318,10 +319,12 @@ class EditorArea(QWidget):
         # `toPlainText` preserves them as text string `[filename](attachment://id)`.
         
         success = self.fm.save_note(self.current_note_id, content)
-        if success:
-             self.status_message.emit("Guardado.", 2000)
-        else:
-             self.status_message.emit("Error al guardar.", 2000)
+        
+        if not silent:
+            if success:
+                 self.status_message.emit("Guardado.", 2000)
+            else:
+                 self.status_message.emit("Error al guardar.", 2000)
         
         return title
 

@@ -4,8 +4,8 @@ from PySide6.QtGui import QAction, QKeySequence
 import os
 from datetime import datetime
 
-from app.ui.buscador import SearchManager
-from app.ui.barra_herramientas import FormatToolbar
+from app.ui.features.search import SearchManager
+from app.ui.views.toolbar import FormatToolbar
 from app.ui.sidebar import Sidebar
 from app.ui.editor_area import EditorArea
 from app.ui.widgets import ModernInfo, ModernAlert

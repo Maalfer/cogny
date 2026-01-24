@@ -119,7 +119,10 @@ class FileManager(QObject):
                 
             # Files (Leaves)
             for f in files:
-                if not f.endswith('.md'): continue
+                is_md = f.endswith('.md')
+                is_image = f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'))
+                
+                if not (is_md or is_image): continue
                 
                 path = os.path.join(rel_dir, f)
                 if path.startswith("./"): path = path[2:]
@@ -265,26 +268,27 @@ class FileManager(QObject):
             print(f"Error moving {old_path} to {new_path}: {e}")
             return None
 
-    def save_image(self, data: bytes, filename: str) -> str:
+    def save_image(self, data: bytes, filename: str, folder: str = "images") -> str:
         """
-        Saves an image to the 'images' directory.
+        Saves an image to the specified relative folder (default 'images').
         """
-        if not os.path.exists(self.images_path):
-             os.makedirs(self.images_path, exist_ok=True)
+        dest_dir = self._get_abs_path(folder)
+        if not os.path.exists(dest_dir):
+             os.makedirs(dest_dir, exist_ok=True)
              
-        path = os.path.join(self.images_path, filename)
+        path = os.path.join(dest_dir, filename)
         
         # Rename if exists
         base, ext = os.path.splitext(filename)
         counter = 1
         while os.path.exists(path):
-            path = os.path.join(self.images_path, f"{base}_{counter}{ext}")
+            path = os.path.join(dest_dir, f"{base}_{counter}{ext}")
             counter += 1
             
         with open(path, 'wb') as f:
             f.write(data)
             
-        return os.path.join("images", os.path.basename(path))
+        return self._get_rel_path(path)
 
     def search_content(self, query: str) -> List[Dict]:
         """

@@ -8,6 +8,7 @@ class TabbedEditorArea(QWidget):
     """Manages multiple note editors in tabs, similar to a web browser."""
     status_message = Signal(str, int)
     note_renamed = Signal(str, str)
+    content_changed = Signal()
     
     def __init__(self, file_manager, parent=None):
         super().__init__(parent)
@@ -62,6 +63,7 @@ class TabbedEditorArea(QWidget):
         # Connect signals
         editor_area.status_message.connect(self.status_message)
         editor_area.note_renamed.connect(self.note_renamed)
+        editor_area.text_editor.textChanged.connect(self.content_changed.emit)
         
         # Add to tabs
         index = self.tab_widget.addTab(editor_area, title)
@@ -215,13 +217,13 @@ class TabbedEditorArea(QWidget):
         # (handled automatically by focus events)
         pass
     
-    def save_current_note(self):
+    def save_current_note(self, silent=False):
         """Saves the note in the active tab."""
         current_index = self.tab_widget.currentIndex()
         if current_index >= 0:
             editor_area = self.tab_widget.widget(current_index)
             if editor_area:
-                return editor_area.save_current_note()
+                return editor_area.save_current_note(silent=silent)
     
     def get_current_editor(self):
         """Returns the current EditorArea instance."""
