@@ -3,14 +3,20 @@ from .light import LightTheme
 from .dark import DarkTheme
 from .dracula import DraculaTheme
 from .anuppuccin import AnuPpuccinTheme
+from .midnight_gold import MidnightGoldTheme
 
 class ThemeManager:
     _themes = {
         "Light": LightTheme(),
         "Dark": DarkTheme(),
         "Dracula": DraculaTheme(),
-        "AnuPpuccin": AnuPpuccinTheme()
+        "AnuPpuccin": AnuPpuccinTheme(),
+        "Midnight Gold": MidnightGoldTheme()
     }
+
+    @staticmethod
+    def get_available_themes() -> list[str]:
+        return list(ThemeManager._themes.keys())
 
     @staticmethod
     def get_theme(theme_name: str) -> BaseTheme:

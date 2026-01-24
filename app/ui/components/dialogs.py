@@ -1,7 +1,9 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QFrame, QGraphicsDropShadowEffect, QWidget, QListWidget, QListWidgetItem, QColorDialog, QComboBox, QFileDialog
 from PySide6.QtCore import Qt, QSettings, QSize
 from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor
 import json
+from app.ui.themes import ThemeManager
 
 class ModernDialog(QDialog):
     def __init__(self, title, message, parent=None):
@@ -17,7 +19,7 @@ class ModernDialog(QDialog):
         self.setLayout(self.layout)
         
         # Determine specific colors based on theme
-        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
+        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin", "Midnight Gold"]:
             bg_color = "#18181b"
             border_color = "#3f3f46"
             text_color = "#e4e4e7"
@@ -202,14 +204,14 @@ class ThemeSettingsDialog(ModernDialog):
         # Row 1: Base Theme
         row1 = QHBoxLayout()
         tk_label = QLabel("Tema Base:")
-        tk_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"] else "color: #18181b;")
+        tk_label.setStyleSheet("color: #e4e4e7;" if self.current_theme in ["Dark", "Dracula", "AnuPpuccin", "Midnight Gold"] else "color: #18181b;")
         
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Light", "Dark", "Dracula", "AnuPpuccin"])
+        self.theme_combo.addItems(ThemeManager.get_available_themes())
         current_theme = self.config_manager.get("theme", "Dark")
         self.theme_combo.setCurrentText(current_theme)
         
-        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
+        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin", "Midnight Gold"]:
             combo_style = """
                 QComboBox {
                     background-color: #27272a;
@@ -335,7 +337,7 @@ class ThemeSettingsDialog(ModernDialog):
         reset_btn = QPushButton("Restaurar Valores por Defecto")
         reset_btn.setCursor(Qt.PointingHandCursor)
         
-        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
+        if self.current_theme in ["Dark", "Dracula", "AnuPpuccin", "Midnight Gold"]:
             reset_style = """
                 QPushButton {
                     background-color: #27272a;
@@ -380,7 +382,7 @@ class ThemeSettingsDialog(ModernDialog):
             """)
             btn.setText(color_str)
         else:
-            if self.current_theme in ["Dark", "Dracula", "AnuPpuccin"]:
+            if self.current_theme in ["Dark", "Dracula", "AnuPpuccin", "Midnight Gold"]:
                 btn.setStyleSheet("""
                     QPushButton {
                         background-color: #27272a;

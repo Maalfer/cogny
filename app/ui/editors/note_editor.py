@@ -481,26 +481,9 @@ class NoteEditor(QTextEdit):
 
         table = cursor.currentTable()
         if table:
-            menu.addSeparator()
-            
-            # Table Actions
-            menu.addAction("Insertar Fila Arriba", lambda: table.insertRows(table.cellAt(cursor).row(), 1))
-            menu.addAction("Insertar Fila Abajo", lambda: table.insertRows(table.cellAt(cursor).row() + 1, 1))
-            menu.addSeparator()
-            menu.addAction("Insertar Columna Izquierda", lambda: table.insertColumns(table.cellAt(cursor).column(), 1))
-            menu.addAction("Insertar Columna Derecha", lambda: table.insertColumns(table.cellAt(cursor).column() + 1, 1))
-            menu.addSeparator()
-            menu.addAction("Eliminar Fila", lambda: table.removeRows(table.cellAt(cursor).row(), 1))
-            menu.addAction("Eliminar Columna", lambda: table.removeColumns(table.cellAt(cursor).column(), 1))
-            menu.addSeparator()
-            
-            def delete_table():
-                cursor.setPosition(table.firstCursorPosition().position() - 1)
-                cursor.setPosition(table.lastCursorPosition().position() + 1, QTextCursor.KeepAnchor)
-                cursor.removeSelectedText()
-                
-            
-            menu.addAction("Eliminar Tabla", delete_table)
+            from app.ui.editors.tablas import TableHandler
+            TableHandler.handle_context_menu(self, menu, cursor)
+
             
         # Global Actions (Always available)
         menu.addSeparator()
@@ -954,96 +937,12 @@ class NoteEditor(QTextEdit):
         self.render_tables(start_pos, end_pos)
 
     def render_tables(self, start_pos=0, end_pos=None):
-        text = self.toPlainText()
-        if end_pos is None:
-            end_pos = len(text)
-        
-        lines = text.split('\\n')
-        tables_to_render = []
-        current_table_lines = []
-        table_start_pos = 0
-        line_pos = 0
-        
-        for i, line in enumerate(lines):
-            line_start = line_pos
-            line_end = line_pos + len(line)
-            line_pos = line_end + 1
-            
-            if line_end < start_pos or line_start > end_pos:
-                if current_table_lines:
-                    tables_to_render.append((table_start_pos, current_table_lines))
-                    current_table_lines = []
-                continue
-            
-            stripped = line.strip()
-            if stripped.startswith('|') and stripped.endswith('|'):
-                if not current_table_lines:
-                    table_start_pos = line_start
-                current_table_lines.append(line)
-            else:
-                if current_table_lines:
-                    tables_to_render.append((table_start_pos, current_table_lines))
-                    current_table_lines = []
-        
-        if current_table_lines:
-            tables_to_render.append((table_start_pos, current_table_lines))
-        
-        if not tables_to_render:
-            return
-        
-        cursor = self.textCursor()
-        cursor.beginEditBlock()
-        try:
-            for table_start, table_lines in reversed(tables_to_render):
-                if len(table_lines) < 2: continue
-                
-                table_text = '\\n'.join(table_lines)
-                table_end = table_start + len(table_text)
-                
-                rows_data = []
-                header_row = None
-                
-                for idx, line in enumerate(table_lines):
-                    cells = [cell.strip() for cell in line.strip('|').split('|')]
-                    if idx == 1 and all(set(cell.replace('-', '').replace(':', '').replace(' ', '')) == set() for cell in cells):
-                        continue
-                    if header_row is None: header_row = cells
-                    else: rows_data.append(cells)
-                
-                if not header_row: continue
-                
-                num_cols = len(header_row)
-                num_rows = len(rows_data) + 1
-                
-                cursor.setPosition(table_start)
-                cursor.setPosition(table_end, QTextCursor.KeepAnchor)
-                cursor.removeSelectedText()
-                
-                from PySide6.QtGui import QTextTableFormat, QTextCharFormat
-                fmt = QTextTableFormat()
-                fmt.setCellPadding(5)
-                fmt.setCellSpacing(0)
-                fmt.setBorder(1)
-                fmt.setWidth(QTextLength(QTextLength.PercentageLength, 100))
-                
-                table = cursor.insertTable(num_rows, num_cols, fmt)
-                
-                for col, header_text in enumerate(header_row):
-                    cell = table.cellAt(0, col)
-                    cell_cursor = cell.firstCursorPosition()
-                    header_fmt = QTextCharFormat()
-                    header_fmt.setFontWeight(700)
-                    cell_cursor.setCharFormat(header_fmt)
-                    cell_cursor.insertText(header_text)
-                
-                for row_idx, row_data in enumerate(rows_data):
-                    for col, cell_text in enumerate(row_data):
-                        if col < num_cols:
-                            cell = table.cellAt(row_idx + 1, col)
-                            cell_cursor = cell.firstCursorPosition()
-                            cell_cursor.insertText(cell_text)
-        finally:
-            cursor.endEditBlock()
+        from app.ui.editors.tablas import TableHandler
+        TableHandler.render_tables(self, start_pos, end_pos)
+
+    def insert_table(self, rows=2, cols=2):
+        from app.ui.editors.tablas import TableHandler
+        TableHandler.insert_table(self, rows, cols)
 
     def reveal_current_note(self):
         """Opens the current note in the system file explorer."""

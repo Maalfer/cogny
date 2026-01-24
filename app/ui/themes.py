@@ -8,6 +8,10 @@ class ThemeManager:
         return NewThemeManager.get_palette(theme, global_bg, text_color)
 
     @staticmethod
+    def get_available_themes() -> list[str]:
+        return NewThemeManager.get_available_themes()
+
+    @staticmethod
     def get_editor_style(theme: str, editor_bg: str = None, text_color: str = None, global_bg: str = None) -> str:
         return NewThemeManager.get_editor_style(theme, editor_bg, text_color, global_bg)
 
