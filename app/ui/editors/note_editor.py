@@ -371,13 +371,29 @@ class NoteEditor(QTextEdit):
                          check_cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
             
             if check_cursor and (check_cursor.hasSelection() or (not cursor.hasSelection() and check_cursor.position() != cursor.position())):
-                if self.cursor_contains_image(check_cursor):
+                images_to_delete = self.get_selected_images(check_cursor)
+                
+                if images_to_delete:
                     from app.ui.components.dialogs import ModernConfirm
-                    # Using ModernConfirm instead of QMessageBox directly for consistency
-                    ret = ModernConfirm.show(self, "Eliminar Imagen", 
-                                               "¿Estás seguro de que quieres eliminar la(s) imagen(es) seleccionada(s)?")
+                    
+                    msg = "¿Estás seguro de que quieres eliminar la(s) imagen(es) seleccionada(s) del disco? Esta acción no se puede deshacer."
+                    if len(images_to_delete) == 1:
+                        msg = "¿Estás seguro de que quieres eliminar esta imagen del disco? Esta acción no se puede deshacer."
+                        
+                    ret = ModernConfirm.show(self, "Eliminar Imagen del Disco", msg)
+                    
                     if not ret:
                         return
+                        
+                    # Delete files
+                    for img_path in images_to_delete:
+                        try:
+                            # Convert to relative path if possible for consistency, though internal delete might handle abs
+                            # FileManager.delete_item handles absolute paths too
+                            self.fm.delete_item(img_path)
+                            print(f"DEBUG: Deleted image file {img_path}")
+                        except Exception as e:
+                            print(f"ERROR deleting image {img_path}: {e}")
 
         if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
             cursor = self.textCursor()
@@ -396,7 +412,10 @@ class NoteEditor(QTextEdit):
                 
         super().keyPressEvent(event)
 
-    def cursor_contains_image(self, cursor):
+    def get_selected_images(self, cursor):
+        """Returns a list of absolute paths of images contained within the cursor selection."""
+        images = []
+        
         start = min(cursor.anchor(), cursor.position())
         end = max(cursor.anchor(), cursor.position())
         
@@ -412,9 +431,34 @@ class NoteEditor(QTextEdit):
                 frag_start = frag.position()
                 frag_end = frag_start + frag.length()
                 
+                # Check intersection
                 if frag_end > start and frag_start < end:
-                    if frag.charFormat().isImageFormat():
-                        return True
+                    fmt = frag.charFormat()
+                    if fmt.isImageFormat():
+                        img_fmt = fmt.toImageFormat()
+                        name = img_fmt.name()
+                        
+                        # Resolve to absolute path if not already
+                        # The name typically stores the absolute path in our implementation (see _save_and_insert_image)
+                        # But let's sure.
+                        full_path = name
+                        
+                        # If it's a relative path, resolve it
+                        # Note: _save_and_insert_image sets fmt.setName(full_abs_path)
+                        # So it should be absolute.
+                        # But if it was loaded from disk via loadResource, it might differ?
+                        # loadResource handles relative paths.
+                        
+                        # Let's rely on FM to resolve if needed, but best to have absolute for deletion
+                        if not os.path.isabs(full_path) and not full_path.startswith("file:"):
+                             # Attempt resolution
+                             resolved = self.fm.resolve_file_path(full_path)
+                             if resolved:
+                                 full_path = resolved
+                                 
+                        if full_path and os.path.exists(full_path):
+                            if full_path not in images:
+                                images.append(full_path)
                         
                 it += 1
                 
@@ -422,7 +466,32 @@ class NoteEditor(QTextEdit):
                 break
             block = block.next()
             
-        return False
+        return images
+
+    def cursor_contains_image(self, cursor):
+        # We can now implement this in terms of get_selected_images or keep it for efficiency
+        # Let's keep the logic simple or reuse.
+        # Original implementation was doing partial overlap check.
+        # My new get_selected_images does the same loop.
+        # Let's just use get result of get_selected_images but that might be slower if we just want check.
+        # But wait, cursor_contains_image in original code just returned True/False.
+        # I'll keep this method for backward compatibility if any other method uses it (none seen in snippet),
+        # or just let it exist. BUT, in my replacement, I am REPLACING it.
+        # Wait, I am NOT replacing it in my replacement content?
+        # I SHOULD include it if I want to keep it, OR remove it.
+        # The prompt asked for "Add get_selected_images helper and update keyPressEvent".
+        # If I remove cursor_contains_image, will anything break?
+        # keyPressEvent was the only user.
+        # So I can remove it effectively by replacing the block that contained it.
+        # My replacement block covers lines 357 to 425.
+        # Line 399 was cursor_contains_image implementation.
+        # So I will effectively overwrite (remove) it unless I include it.
+        # I will include it as a wrapper or just let it die if I verify it's not used elsewhere.
+        # I grep search result showed `cursor_contains_image` only in `note_editor.py`.
+        # So it is safe to remove or replace.
+        # I'll implement `cursor_contains_image` just in case someone calls it, but delegating to get_selected_images or just simply return bool(self.get_selected_images(cursor)).
+        # Actually proper behavior is better.
+        return len(self.get_selected_images(cursor)) > 0
 
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
