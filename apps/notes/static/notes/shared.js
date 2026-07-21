@@ -40,7 +40,10 @@
       const name = t.target.split('|')[0].split('#')[0].trim();
       const ext = (name.split('.').pop() || '').toLowerCase();
       if (ext === 'pdf') return `<iframe src="${url}" style="width:100%;height:480px;border:0"></iframe>`;
-      return `<img src="${url}" alt="${esc(name)}">`;
+      // data-resolved: ya trae una URL firmada válida — el fixup genérico de
+      // <img> en postProcess() (pensado para ![alt](ref) sin resolver) no
+      // debe tocarla, o la sobreescribiría con el aviso de "no disponible".
+      return `<img src="${url}" alt="${esc(name)}" data-resolved="1">`;
     },
   };
   const wikilink = {
@@ -178,6 +181,7 @@
     // Imágenes markdown normales ![alt](ref) / <img src="ref"> — el renderer
     // de `embed` ya resolvió las ![[...]] arriba.
     container.querySelectorAll('img').forEach(img => {
+      if (img.hasAttribute('data-resolved')) return;   // ya resuelta por el renderer de `embed`
       const src = img.getAttribute('src') || '';
       if (/^(https?:|data:)/.test(src)) return;
       let url;
