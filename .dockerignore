@@ -1,0 +1,16 @@
+.git
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+data/
+media/
+static_collected/
+.env
+.env.*
+!.env.example
+docs/
+assets/
+.dockerignore
+Dockerfile
+docker-compose.yml

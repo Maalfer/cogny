@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-insecure-change-me}
+      ASSET_VERSION: ${ASSET_VERSION:-v1}
+      DATA_ROOT: /app/data
+      VAULT_ROOT: /app/data/vault
+      AVATARS_ROOT: /app/data/avatars
+      DB_PATH: /app/data/db.sqlite3
+    volumes:
+      - ./data:/app/data

@@ -54,6 +54,19 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+### Con Docker
+
+```bash
+docker compose up --build
+```
+
+Levanta Cogny en `http://localhost:8000`. Las notas, avatares y la base de datos
+se persisten en `./data`. Para crear el primer usuario:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
 ## Despliegue
 
 `scripts/cogny.service` es la referencia de la unidad systemd usada en producción (gunicorn detrás de un proxy inverso con TLS). Tras cualquier cambio en los estáticos, ejecuta `collectstatic`, sube `ASSET_VERSION` en `.env` y reinicia el servicio para invalidar la caché.
