@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ note_name }} — Cogny{% endblock %}
+{% block extra_head %}
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/vendor/highlight-github-dark.min.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/notes/notes.css?v={{ ASSET_VERSION }}">
+{% endblock %}
+{% block header_title %}{{ note_name }}{% endblock %}
+{% block header_actions %}{% endblock %}
+
+{% block content %}
+<div class="shared-note-wrap">
+  <div class="shared-note-banner">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+    Nota compartida por {{ owner_username }} · sólo lectura
+  </div>
+  <article class="markdown-body" id="shared-content"></article>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/notes/marked.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/highlight.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/katex/katex.min.js?v={{ ASSET_VERSION }}"></script>
+{{ content|json_script:"shared-content-data" }}
+{{ assets|json_script:"shared-assets-data" }}
+<script>window.COGNY = { assetVersion: "{{ ASSET_VERSION }}" };</script>
+<script src="/static/notes/shared.js?v={{ ASSET_VERSION }}"></script>
+{% endblock %}

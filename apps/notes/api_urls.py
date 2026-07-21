@@ -20,4 +20,7 @@ urlpatterns = [
     path("storage", views.storage, name="storage"),
     path("pdf", views.notes_pdf, name="pdf"),
     path("optimize-images", views.optimize_images, name="optimize_images"),
+    path("share/create", views.share_create, name="share_create"),
+    path("share/status", views.share_status, name="share_status"),
+    path("share/revoke", views.share_revoke, name="share_revoke"),
 ]

@@ -6,6 +6,7 @@ from django.http import HttpResponseRedirect
 from django.views.generic import RedirectView
 
 from apps.core import views as core_views
+from apps.notes import views as notes_views
 
 
 class _Redirect307(HttpResponseRedirect):
@@ -31,6 +32,10 @@ urlpatterns = [
 
     # Compat: el vault se movió a la raíz; /notes/ (marcadores, PWA vieja) redirige.
     path("notes/", RedirectView.as_view(url="/", permanent=True)),
+
+    # Nota compartida públicamente (sin login; contraseña opcional por nota).
+    path("s/<str:token>/", notes_views.shared_note_view, name="shared_note"),
+    path("s/<str:token>/asset", notes_views.shared_note_asset, name="shared_note_asset"),
 
     # APIs JSON.
     path("api/notes/", include("apps.notes.api_urls")),

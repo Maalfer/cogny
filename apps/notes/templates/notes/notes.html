@@ -333,6 +333,36 @@
     </div>
   </div>
 </div>
+
+<!-- Compartir nota -->
+<div class="modal-back" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+  <div class="modal">
+    <h3 id="share-modal-title">Compartir nota</h3>
+    <p>Cualquiera con el enlace podrá ver esta nota en modo lectura, sin necesidad de cuenta.</p>
+    <div id="share-loading" style="text-align:center;padding:1.6rem 0">
+      <div class="spinner" style="width:28px;height:28px;border-width:3px;margin:0 auto"></div>
+    </div>
+    <div id="share-body" style="display:none">
+      <div class="share-link-row">
+        <input type="text" id="share-link-field" readonly aria-label="Enlace público de la nota">
+        <button type="button" class="share-copy-btn" id="share-copy-btn">Copiar</button>
+      </div>
+      <div class="share-status-row"><span class="share-status-dot"></span><span id="share-status-text">Enlace activo</span></div>
+      <button type="button" class="share-pw-toggle" id="share-pw-toggle-row" aria-controls="share-pw-field">
+        <span>Proteger con contraseña<small>Sólo quien la conozca podrá abrir el enlace</small></span>
+        <span class="share-switch" id="share-pw-switch" role="switch" aria-checked="false"></span>
+      </button>
+      <div class="share-pw-field" id="share-pw-field">
+        <input type="text" class="vault-input-field" id="share-pw-input" placeholder="Contraseña" autocomplete="off" maxlength="120">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="share-stop" style="margin-right:auto;color:#f87171;display:none">Dejar de compartir</button>
+      <button class="btn-cancel" id="share-cancel">Cerrar</button>
+      <button class="btn-primary" id="share-save" disabled>Guardar</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

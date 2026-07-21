@@ -909,7 +909,8 @@ function showCtxMenu(e,it){
     html+=`<button data-act="open-new-tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>Abrir en nueva pestaña</button><div class="ctx-sep"></div>`;
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF</button>`;
-    html+=`<button data-act="pdf-dark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-5.4-5.4c0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>Exportar a PDF (oscuro)</button><div class="ctx-sep"></div>`;
+    html+=`<button data-act="pdf-dark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-5.4-5.4c0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>Exportar a PDF (oscuro)</button>
+    <button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button><div class="ctx-sep"></div>`;
   }
   html+=`<button data-act="rename"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>Renombrar</button>`;
   html+=`<button data-act="delete" class="danger"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>Borrar</button>`;
@@ -931,6 +932,7 @@ function showCtxMenu(e,it){
       else if(a==='open-new-tab') openInNewTab(it.path);
       else if(a==='pdf') exportNotePDF(it,false);
       else if(a==='pdf-dark') exportNotePDF(it,true);
+      else if(a==='share') openShareModal(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };
   });
   setTimeout(()=>_ctxBtns[0]?.focus(),20);
@@ -940,6 +942,90 @@ document.addEventListener('click', e=>{ if(!e.target.closest('#ctx-menu')) hideC
 document.addEventListener('scroll', hideCtx, true);
 
 /* (Los clics de wikilink/tag/embed se gestionan en initEditor, sobre el editor CM.) */
+
+/* ════════════ Compartir nota (enlace público, con contraseña opcional) ════════ */
+let shareItem = null;
+let sharePwOn = false;
+
+function closeShareModal(){ $('share-modal').classList.remove('show'); shareItem=null; }
+
+async function openShareModal(it){
+  shareItem = it;
+  $('share-modal').classList.add('show');
+  $('share-loading').style.display=''; $('share-body').style.display='none';
+  $('share-save').disabled = true; $('share-stop').style.display='none';
+  sharePwOn = false;
+  $('share-pw-switch').classList.remove('on'); $('share-pw-switch').setAttribute('aria-checked','false');
+  $('share-pw-field').classList.remove('show'); $('share-pw-input').value='';
+  try{
+    const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
+    if(res.shared){
+      $('share-link-field').value = res.url;
+      $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
+      $('share-stop').style.display='';
+      if(res.has_password){
+        sharePwOn = true;
+        $('share-pw-switch').classList.add('on'); $('share-pw-switch').setAttribute('aria-checked','true');
+        $('share-pw-field').classList.add('show');
+        $('share-pw-input').placeholder = 'Dejar en blanco para no cambiarla';
+      }
+    } else {
+      $('share-link-field').value = '';
+      $('share-status-text').textContent = 'Todavía no se ha compartido';
+    }
+  }catch(e){
+    $('share-status-text').textContent = 'Error al consultar el estado';
+  }
+  $('share-loading').style.display='none'; $('share-body').style.display='';
+  $('share-save').disabled = false;
+}
+
+$('share-pw-toggle-row').addEventListener('click', ()=>{
+  sharePwOn = !sharePwOn;
+  $('share-pw-switch').classList.toggle('on', sharePwOn);
+  $('share-pw-switch').setAttribute('aria-checked', String(sharePwOn));
+  $('share-pw-field').classList.toggle('show', sharePwOn);
+  if(sharePwOn) setTimeout(()=>$('share-pw-input').focus(), 10);
+});
+
+$('share-save').addEventListener('click', async ()=>{
+  if(!shareItem) return;
+  const btn=$('share-save'); btn.disabled=true; btn.textContent='Guardando…';
+  const password = sharePwOn ? $('share-pw-input').value : '';
+  try{
+    const res = await api('/api/notes/share/create', {path: shareItem.path, password});
+    if(res.error){ alert(res.error); return; }
+    $('share-link-field').value = res.url;
+    $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
+    $('share-stop').style.display='';
+    if(res.has_password) $('share-pw-input').placeholder='Dejar en blanco para no cambiarla';
+    $('share-pw-input').value='';
+  }catch(e){
+    alert('Error de red al compartir la nota');
+  }finally{
+    btn.disabled=false; btn.textContent='Guardar';
+  }
+});
+
+$('share-copy-btn').addEventListener('click', async ()=>{
+  const val=$('share-link-field').value; if(!val) return;
+  try{ await navigator.clipboard.writeText(val); }
+  catch(_){ $('share-link-field').select(); try{document.execCommand('copy');}catch(__){} }
+  const btn=$('share-copy-btn'); const orig=btn.textContent;
+  btn.textContent='¡Copiado!'; btn.classList.add('copied');
+  setTimeout(()=>{ btn.textContent=orig; btn.classList.remove('copied'); }, 1400);
+});
+
+$('share-stop').addEventListener('click', async ()=>{
+  if(!shareItem) return;
+  if(!confirm('¿Dejar de compartir esta nota? El enlace actual dejará de funcionar.')) return;
+  const res = await api('/api/notes/share/revoke', {path: shareItem.path});
+  if(res.error){ alert(res.error); return; }
+  closeShareModal();
+});
+
+$('share-cancel').addEventListener('click', closeShareModal);
+$('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
 
 /* ════════════ Imágenes: clic derecho → Eliminar (borra el archivo y la referencia) ════════════ */
 const iconTrash='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
@@ -1236,6 +1322,7 @@ document.addEventListener('keydown', e=>{
   if($('img-lightbox').classList.contains('show')){ closeLightbox(); return; }
   if($('storage-modal').classList.contains('show')){ $('storage-modal').classList.remove('show'); return; }
   if($('imgdir-modal').classList.contains('show')){ $('imgdir-modal').classList.remove('show'); return; }
+  if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
 });

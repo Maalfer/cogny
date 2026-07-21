@@ -1,4 +1,33 @@
 """Notes vault — el contenido vive en disco (archivos .md por usuario).
 
-Esta app es 'view-only' para Django ORM: las notas son archivos Markdown
-bajo settings.VAULT_ROOT/<user_id>/. No definimos modelos."""
+Esta app es 'view-only' para Django ORM en cuanto al contenido: las notas son
+archivos Markdown bajo settings.VAULT_ROOT/<user_id>/. El único modelo que sí
+definimos es metadata de enlaces públicos (no contenido)."""
+from django.conf import settings
+from django.db import models
+
+
+class SharedNote(models.Model):
+    """Enlace público a una nota concreta (`user` + `path` del vault).
+
+    `token` es la parte pública de la URL (`/s/<token>/`); una nota sólo puede
+    tener un enlace activo a la vez (unique_together), así que reabrir el
+    modal de "Compartir" reutiliza el mismo token en vez de invalidar enlaces
+    ya repartidos. `password_hash` vacío = acceso libre; con contraseña, el
+    hash se guarda con el mismo hasher que usa Django para las cuentas.
+    """
+
+    token = models.CharField(max_length=32, primary_key=True, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="shared_notes")
+    path = models.CharField(max_length=600)
+    password_hash = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "path"], name="uniq_shared_note_per_path"),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}:{self.path} ({self.token})"

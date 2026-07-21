@@ -4,14 +4,18 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import zipfile
 from pathlib import Path
+from urllib.parse import quote
 
 log = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.hashers import check_password, make_password
+from django.core import signing
 from django.http import (
     FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse,
 )
@@ -19,6 +23,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST, require_GET
 
 from apps.core.api import error_response as _err
+from .models import SharedNote
 
 
 # ════════════ Helpers ════════════
@@ -246,6 +251,214 @@ def delete(request):
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".heic", ".avif"}
 _NOTE_EXTS = {".md"}
+
+
+# ════════════ Compartir nota (enlace público, con contraseña opcional) ═════════
+
+@login_required
+@require_POST
+def share_create(request):
+    """Crea (o actualiza) el enlace público de una nota.
+
+    Reutiliza el token existente si la nota ya se había compartido antes, para
+    que el enlace no cambie cada vez que se reabre el modal de "Compartir".
+    `password` vacío/ausente quita la contraseña; con valor, la (re)establece.
+    """
+    root = _user_root(request)
+    try:
+        data = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _err("JSON inválido")
+    rel = (data.get("path") or "").strip()
+    password = data.get("password") or ""
+    try:
+        target = _safe(root, rel)
+    except ValueError as e:
+        return _err(str(e))
+    if not target.exists() or target.suffix.lower() != ".md":
+        return _err("Nota no encontrada", 404)
+    rel_path = _rel_of(root, target)
+    share, _created = SharedNote.objects.get_or_create(
+        user=request.user, path=rel_path,
+        defaults={"token": secrets.token_urlsafe(16)},
+    )
+    share.password_hash = make_password(password) if password else ""
+    share.save(update_fields=["password_hash", "updated_at"])
+    return JsonResponse({
+        "success": True, "token": share.token,
+        "url": request.build_absolute_uri(f"/s/{share.token}/"),
+        "has_password": bool(share.password_hash),
+    })
+
+
+@login_required
+@require_GET
+def share_status(request):
+    """Estado actual del enlace público de una nota (o `shared: false`)."""
+    root = _user_root(request)
+    rel = request.GET.get("path", "")
+    try:
+        target = _safe(root, rel)
+    except ValueError as e:
+        return _err(str(e))
+    rel_path = _rel_of(root, target)
+    share = SharedNote.objects.filter(user=request.user, path=rel_path).first()
+    if not share:
+        return JsonResponse({"shared": False})
+    return JsonResponse({
+        "shared": True, "token": share.token,
+        "url": request.build_absolute_uri(f"/s/{share.token}/"),
+        "has_password": bool(share.password_hash),
+    })
+
+
+@login_required
+@require_POST
+def share_revoke(request):
+    """Deja de compartir una nota (borra el enlace público)."""
+    root = _user_root(request)
+    try:
+        data = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _err("JSON inválido")
+    rel = (data.get("path") or "").strip()
+    try:
+        target = _safe(root, rel)
+    except ValueError as e:
+        return _err(str(e))
+    rel_path = _rel_of(root, target)
+    SharedNote.objects.filter(user=request.user, path=rel_path).delete()
+    return JsonResponse({"success": True})
+
+
+# ── Vista pública (sin login) de una nota compartida ────────────────────────
+
+# Sólo imágenes y PDFs se resuelven en la vista pública: los embeds a OTRAS
+# notas (![[OtraNota]]) no se exponen (evita que compartir una nota filtre el
+# resto de la bóveda por transclusión) y se muestran como "no disponible".
+_SHARE_ASSET_EXTS = _IMAGE_EXTS | {".pdf"}
+_EMBED_REF_RE = re.compile(
+    r'!\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]|!\[[^\]]*\]\(([^)\s]+)\)|<img\s[^>]*src=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+_SHARE_ASSET_SALT = "cogny.notes.share_asset"
+
+
+def _extract_asset_refs(content: str) -> set:
+    refs = set()
+    for m in _EMBED_REF_RE.finditer(content or ""):
+        ref = (m.group(1) or m.group(2) or m.group(3) or "").strip()
+        if ref and not re.match(r"^(https?:|data:|mailto:)", ref, re.IGNORECASE):
+            refs.add(ref)
+    return refs
+
+
+def _resolve_asset_ref(root: Path, ref: str):
+    """Resuelve una referencia de embed a un archivo del vault (o None).
+
+    Misma semántica que `findFileByName` del cliente: ruta exacta primero,
+    si no por nombre de archivo en cualquier parte del vault.
+    """
+    cleaned = ref.replace("\\", "/").split("#")[0].strip().lstrip("./")
+    if not cleaned:
+        return None
+    try:
+        direct = _safe(root, cleaned)
+        if direct.is_file() and direct.suffix.lower() in _SHARE_ASSET_EXTS:
+            return direct
+    except ValueError:
+        pass
+    base = cleaned.rsplit("/", 1)[-1].lower()
+    base_noext = re.sub(r"\.[^.]+$", "", base)
+    for p in root.rglob("*"):
+        try:
+            if not p.is_file() or p.suffix.lower() not in _SHARE_ASSET_EXTS:
+                continue
+        except OSError:
+            continue
+        nlow = p.name.lower()
+        if nlow == base or p.stem.lower() == base_noext:
+            return p
+    return None
+
+
+def _sign_share_asset(token: str, rel_path: str) -> str:
+    return signing.dumps({"t": token, "p": rel_path}, salt=_SHARE_ASSET_SALT)
+
+
+def _build_share_assets(root: Path, token: str, content: str) -> dict:
+    """`{ref_original: url_firmada}` sólo para las imágenes/PDFs referenciados
+    por ESTA nota — nunca la bóveda entera."""
+    out = {}
+    for ref in _extract_asset_refs(content):
+        hit = _resolve_asset_ref(root, ref)
+        if hit:
+            rel = _rel_of(root, hit)
+            sig = quote(_sign_share_asset(token, rel), safe="")
+            out[ref] = f"/s/{token}/asset?p={sig}"
+    return out
+
+
+def _share_gate_key(token: str) -> str:
+    return f"shared_verified_{token}"
+
+
+def shared_note_view(request, token):
+    share = SharedNote.objects.filter(token=token).select_related("user").first()
+    if not share:
+        raise Http404
+    root = (settings.VAULT_ROOT / str(share.user_id)).resolve()
+    try:
+        target = _safe(root, share.path)
+    except ValueError:
+        raise Http404
+    if not target.exists() or target.suffix.lower() != ".md":
+        raise Http404
+
+    gate_key = _share_gate_key(token)
+    error = ""
+    if share.password_hash:
+        if request.method == "POST":
+            password = request.POST.get("password", "")
+            if check_password(password, share.password_hash):
+                request.session[gate_key] = True
+            else:
+                error = "Contraseña incorrecta"
+        if not request.session.get(gate_key):
+            return render(request, "notes/shared_gate.html", {"error": error})
+
+    content = target.read_text(encoding="utf-8")
+    assets = _build_share_assets(root, token, content)
+    return render(request, "notes/shared.html", {
+        "note_name": target.stem,
+        "content": content,
+        "assets": assets,
+        "owner_username": share.user.username,
+    })
+
+
+@require_GET
+def shared_note_asset(request, token):
+    share = SharedNote.objects.filter(token=token).first()
+    if not share:
+        raise Http404
+    if share.password_hash and not request.session.get(_share_gate_key(token)):
+        raise Http404
+    try:
+        data = signing.loads(request.GET.get("p", ""), salt=_SHARE_ASSET_SALT,
+                              max_age=60 * 60 * 24 * 90)
+    except signing.BadSignature:
+        raise Http404
+    if data.get("t") != token:
+        raise Http404
+    root = (settings.VAULT_ROOT / str(share.user_id)).resolve()
+    try:
+        target = _safe(root, data.get("p", ""))
+    except ValueError:
+        raise Http404
+    if not target.exists() or target.is_dir():
+        raise Http404
+    return FileResponse(open(target, "rb"))
 
 
 @login_required
