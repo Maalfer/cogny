@@ -97,12 +97,10 @@
 
 {% block scripts %}
 <script>
-const CSRF = "{{ csrf_token }}";
-
 function api(url, body) {
   return fetch(url, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({...body, csrf_token: CSRF})
+    body: JSON.stringify(body)
   }).then(r => r.json());
 }
 
@@ -131,7 +129,6 @@ document.getElementById('avatar-file-input').addEventListener('change', async e 
   toast('Subiendo foto…');
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('csrf_token', CSRF);
   try {
     const res = await fetch('/api/profile/upload-picture', {method:'POST', body:fd}).then(r=>r.json());
     if (res.success) {

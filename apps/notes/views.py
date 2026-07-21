@@ -152,8 +152,6 @@ def file_save(request):
         return _err(str(e))
     if target.suffix.lower() != ".md":
         return _err("Solo se permiten archivos .md")
-    if target == root:
-        return _err("Ruta inválida")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return JsonResponse({"success": True, "path": _rel_of(root, target),
@@ -398,8 +396,15 @@ def optimize_images(request):
                              "name": img_path.name, "converted": converted,
                              "skipped": skipped, "saved_bytes": saved_bytes})
 
-        # Reescribir referencias en notas.
+        # Reescribir referencias en notas: sólo dentro de embeds ![[nombre]]
+        # (la sintaxis que usa esta app para insertar imágenes), no un
+        # replace ciego que podría corromper prosa que mencione el mismo
+        # nombre de archivo por coincidencia.
         if renames:
+            rename_patterns = [
+                (re.compile(r"(?<=!\[\[)" + re.escape(old_name) + r"(?=[|\]])"), new_name)
+                for old_name, new_name in renames if old_name != new_name
+            ]
             md_files = list(root.rglob("*.md"))
             yield jline({"phase": "rewriting", "notes": len(md_files)})
             for md in md_files:
@@ -408,9 +413,8 @@ def optimize_images(request):
                 except OSError:
                     continue
                 new_text = text
-                for old_name, new_name in renames:
-                    if old_name != new_name:
-                        new_text = new_text.replace(old_name, new_name)
+                for pattern, new_name in rename_patterns:
+                    new_text = pattern.sub(new_name, new_text)
                 if new_text != text:
                     try:
                         md.write_text(new_text, encoding="utf-8")
@@ -521,7 +525,10 @@ def _maybe_to_webp(uploaded_file):
     """
     import io
     ext = Path(uploaded_file.name or "").suffix.lower()
-    if ext in _KEEP_AS_IS:
+    if ext in _KEEP_AS_IS or ext not in _IMAGE_EXTS:
+        # No es una extensión de imagen ráster reconocida (pdf, zip, docx...):
+        # nos ahorramos leer el archivo entero en memoria sólo para que
+        # Pillow falle al abrirlo.
         return None, None
     try:
         from PIL import Image, ImageOps
@@ -566,15 +573,28 @@ def asset(request):
 @require_GET
 def export_vault(request):
     root = _user_root(request)
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    # Escribimos a un fichero temporal en disco (no a BytesIO): para vaults
+    # de cientos de MB evita mantener el ZIP entero en RAM por duplicado
+    # (una vez al construirlo, otra vez al leerlo con getvalue()).
+    # TemporaryFile no deja rastro en disco: el hueco se libera solo al
+    # cerrarse, incluso si el proceso muere a medias.
+    tmp = _tempfile.TemporaryFile()
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in root.rglob("*"):
             if f.is_file() and not any(p.startswith(".") for p in f.parts):
                 zf.write(f, arcname=str(f.relative_to(root)))
-    buf.seek(0)
-    resp = HttpResponse(buf.getvalue(), content_type="application/zip")
-    resp["Content-Disposition"] = f'attachment; filename="vault-{request.user.username}.zip"'
+    size = tmp.tell()
+    tmp.seek(0)
+    resp = FileResponse(tmp, content_type="application/zip")
+    fname = _sanitize_name(request.user.username) or "vault"
+    resp["Content-Disposition"] = f'attachment; filename="vault-{fname}.zip"'
+    resp["Content-Length"] = str(size)
     return resp
+
+
+# Tope de tamaño descomprimido por importación: generoso para vaults reales
+# (unos pocos GB de notas+imágenes) pero evita que un ZIP bomb llene el disco.
+_MAX_IMPORT_UNCOMPRESSED = 2 * 1024 ** 3
 
 
 @login_required
@@ -585,19 +605,26 @@ def import_vault(request):
     if not f:
         return _err("Falta archivo")
     mode = request.POST.get("mode", "merge")
-    if mode == "replace":
-        for it in root.iterdir():
-            if it.name.startswith("."): continue
-            if it.is_dir(): shutil.rmtree(it)
-            else: it.unlink()
     try:
         with zipfile.ZipFile(f, "r") as zf:
-            for info in zf.infolist():
-                if info.is_dir(): continue
-                name = info.filename
-                if name.startswith("/") or ".." in name.split("/"):
-                    continue
-                target = root / name
+            members = [info for info in zf.infolist() if not info.is_dir()]
+            total_uncompressed = sum(info.file_size for info in members)
+            if total_uncompressed > _MAX_IMPORT_UNCOMPRESSED:
+                return _err("El ZIP supera el tamaño máximo permitido al descomprimir")
+            # Valida TODAS las rutas (misma regla que el resto de endpoints:
+            # sin ".." y con profundidad acotada) antes de tocar el disco, para
+            # no dejar una importación a medias si una entrada es inválida.
+            try:
+                targets = [(info, _safe(root, info.filename)) for info in members]
+            except ValueError as e:
+                return _err(f"Ruta inválida en el ZIP ({e})")
+
+            if mode == "replace":
+                for it in root.iterdir():
+                    if it.name.startswith("."): continue
+                    if it.is_dir(): shutil.rmtree(it)
+                    else: it.unlink()
+            for info, target in targets:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with open(target, "wb") as fp:
                     fp.write(zf.read(info))
@@ -611,6 +638,127 @@ import subprocess as _subprocess
 import tempfile as _tempfile
 
 import glob as _glob
+from html import escape as _html_escape
+from html.parser import HTMLParser as _HTMLParser
+
+
+# Etiquetas sin uso legítimo en el HTML ya renderizado de una nota (no las
+# genera marked/KaTeX/Mermaid/highlight.js): se eliminan junto a su contenido.
+_UNSAFE_TAGS = {"script", "iframe", "object", "embed", "link", "meta", "base", "applet", "form"}
+
+# html.parser pone en minúsculas todo nombre de etiqueta/atributo, pero SVG
+# (que Mermaid genera embebido en el HTML de la nota) es sensible a
+# mayúsculas en varios nombres — sin restaurarlos, cosas como viewBox o
+# foreignObject dejan de surtir efecto y el diagrama se renderiza mal.
+# Tablas de "ajuste" de SVG del propio estándar HTML5 (recortadas a los
+# nombres que sí tienen mayúsculas; el resto ya sobrevive intacto).
+_SVG_TAG_CASE = {t.lower(): t for t in (
+    "altGlyph", "altGlyphDef", "altGlyphItem", "animateColor", "animateMotion",
+    "animateTransform", "clipPath", "feBlend", "feColorMatrix",
+    "feComponentTransfer", "feComposite", "feConvolveMatrix", "feDiffuseLighting",
+    "feDisplacementMap", "feDistantLight", "feDropShadow", "feFlood", "feFuncA",
+    "feFuncB", "feFuncG", "feFuncR", "feGaussianBlur", "feImage", "feMerge",
+    "feMergeNode", "feMorphology", "feOffset", "fePointLight", "feSpecularLighting",
+    "feSpotLight", "feTile", "feTurbulence", "foreignObject", "glyphRef",
+    "linearGradient", "radialGradient", "textPath",
+)}
+_SVG_ATTR_CASE = {a.lower(): a for a in (
+    "attributeName", "attributeType", "baseFrequency", "calcMode", "clipPath",
+    "clipPathUnits", "diffuseConstant", "edgeMode", "filterUnits", "glyphRef",
+    "gradientTransform", "gradientUnits", "kernelMatrix", "kernelUnitLength",
+    "keyPoints", "keySplines", "keyTimes", "lengthAdjust", "limitingConeAngle",
+    "markerHeight", "markerUnits", "markerWidth", "maskContentUnits", "maskUnits",
+    "numOctaves", "pathLength", "patternContentUnits", "patternTransform",
+    "patternUnits", "pointsAtX", "pointsAtY", "pointsAtZ", "preserveAlpha",
+    "preserveAspectRatio", "primitiveUnits", "refX", "refY", "repeatCount",
+    "repeatDur", "requiredExtensions", "requiredFeatures", "specularConstant",
+    "specularExponent", "spreadMethod", "startOffset", "stdDeviation",
+    "stitchTiles", "surfaceScale", "systemLanguage", "tableValues", "targetX",
+    "targetY", "textLength", "viewBox", "viewTarget", "xChannelSelector",
+    "yChannelSelector", "zoomAndPan",
+)}
+# Atributos que pueden apuntar a un recurso: sólo se permiten esquemas inofensivos
+# (http/https/mailto/data:image), rutas relativas o fragmentos (#ancla).
+_URI_ATTRS = {"src", "href", "xlink:href", "action", "formaction"}
+_SAFE_URI_RE = re.compile(r"^(https?:|mailto:|data:image/|#|/|[^:]*$)", re.IGNORECASE)
+
+
+class _NoteHTMLSanitizer(_HTMLParser):
+    """Sanitiza el HTML de una nota antes de imprimirlo a PDF.
+
+    Es una lista de bloqueo (no de permiso): el contenido renderizado incluye
+    demasiadas etiquetas/atributos legítimos (KaTeX, Mermaid-SVG, highlight.js)
+    como para enumerarlos todos sin arriesgarse a romper el renderizado. En su
+    lugar neutralizamos los vectores concretos: handlers on*, iframes/objects/
+    scripts, y cualquier URI que no sea http(s)/mailto/data:image/relativa
+    (bloquea en particular `file://`, que con Chromium en modo headless podría
+    leer notas de otros usuarios o el .env del servidor).
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.out = []
+        self._skip_depth = 0
+
+    def _clean_attrs(self, attrs):
+        cleaned = []
+        for name, value in attrs:
+            lname = name.lower()
+            if lname.startswith("on"):
+                continue
+            if lname in _URI_ATTRS and value and not _SAFE_URI_RE.match(value.strip()):
+                continue
+            cleaned.append((_SVG_ATTR_CASE.get(lname, name), value))
+        return cleaned
+
+    def _emit_start(self, tag, attrs, self_closing):
+        if tag in _UNSAFE_TAGS:
+            self._skip_depth += 1
+            return
+        if self._skip_depth:
+            return
+        tag = _SVG_TAG_CASE.get(tag, tag)
+        attr_str = "".join(
+            f' {n}="{_html_escape(v, quote=True)}"' if v is not None else f" {n}"
+            for n, v in self._clean_attrs(attrs)
+        )
+        self.out.append(f"<{tag}{attr_str}{' /' if self_closing else ''}>")
+
+    def handle_starttag(self, tag, attrs):
+        self._emit_start(tag, attrs, self_closing=False)
+
+    def handle_startendtag(self, tag, attrs):
+        self._emit_start(tag, attrs, self_closing=True)
+
+    def handle_endtag(self, tag):
+        if tag in _UNSAFE_TAGS:
+            self._skip_depth = max(0, self._skip_depth - 1)
+            return
+        if self._skip_depth:
+            return
+        self.out.append(f"</{_SVG_TAG_CASE.get(tag, tag)}>")
+
+    def handle_data(self, data):
+        if not self._skip_depth:
+            self.out.append(data)
+
+    def handle_entityref(self, name):
+        if not self._skip_depth:
+            self.out.append(f"&{name};")
+
+    def handle_charref(self, name):
+        if not self._skip_depth:
+            self.out.append(f"&#{name};")
+
+    # Comentarios, doctype y processing instructions se descartan sin más
+    # (no aportan nada al HTML ya renderizado de una nota).
+
+
+def _sanitize_note_html(raw: str) -> str:
+    parser = _NoteHTMLSanitizer()
+    parser.feed(raw or "")
+    parser.close()
+    return "".join(parser.out)
 
 
 def _resolve_chromium():
@@ -679,8 +827,7 @@ def notes_pdf(request):
         data = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return _err("JSON invalido")
-    body_html = data.get("html") or ""
-    body_html = re.sub(r"(?is)<script\b.*?</script>", "", body_html)
+    body_html = _sanitize_note_html(data.get("html") or "")
     if not body_html.strip():
         return _err("Nada que exportar")
     title = _sanitize_name(data.get("title") or "nota") or "nota"
@@ -703,6 +850,11 @@ def notes_pdf(request):
             _CHROMIUM_BIN, "--headless", "--no-sandbox", "--disable-gpu",
             "--disable-dev-shm-usage", "--disable-crash-reporter", "--disable-breakpad",
             "--no-zygote", "--single-process", "--allow-file-access-from-files",
+            # El HTML ya viene renderizado (KaTeX/Mermaid/highlight corrieron en
+            # el cliente); Chromium sólo necesita maquetar e imprimir, no
+            # ejecutar JS. Esto neutraliza cualquier handler on*/script que se
+            # hubiera colado pese al saneado de _sanitize_note_html.
+            "--disable-javascript",
             "--user-data-dir=" + os.path.join(workdir, "ud"),
             "--no-pdf-header-footer", "--virtual-time-budget=8000",
             "--print-to-pdf=" + out_pdf, "file://" + in_html,

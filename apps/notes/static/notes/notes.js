@@ -25,7 +25,7 @@ const IMG_EXT = ['png','jpg','jpeg','gif','webp','svg','bmp','ico'];
 
 function api(url, body) {
   return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({...body, csrf_token: CSRF})}).then(r => r.json());
+    body: JSON.stringify(body)}).then(r => r.json());
 }
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function assetUrl(path){return '/api/notes/asset?path=' + encodeURIComponent(path);}

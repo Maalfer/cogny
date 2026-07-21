@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
@@ -93,6 +94,10 @@ def change_username(request):
     username = (data.get("username") or "").strip()
     if not username:
         return JsonResponse({"error": "Nombre vacío"}, status=400)
+    try:
+        UnicodeUsernameValidator()(username)
+    except ValidationError:
+        return JsonResponse({"error": "Sólo letras, números y @/./+/-/_"}, status=400)
     if User.objects.filter(username__iexact=username).exclude(pk=request.user.pk).exists():
         return JsonResponse({"error": "Ese nombre ya existe"}, status=400)
     request.user.username = username
