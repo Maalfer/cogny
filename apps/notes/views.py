@@ -313,6 +313,23 @@ def share_status(request):
 
 
 @login_required
+@require_GET
+def share_list(request):
+    """Todos los enlaces públicos activos del usuario (panel "Enlaces compartidos")."""
+    shares = SharedNote.objects.filter(user=request.user).order_by("-updated_at")
+    return JsonResponse({"shares": [
+        {
+            "path": s.path,
+            "name": Path(s.path).stem,
+            "token": s.token,
+            "url": request.build_absolute_uri(f"/s/{s.token}/"),
+            "has_password": bool(s.password_hash),
+        }
+        for s in shares
+    ]})
+
+
+@login_required
 @require_POST
 def share_revoke(request):
     """Deja de compartir una nota (borra el enlace público)."""

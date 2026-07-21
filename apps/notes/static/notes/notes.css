@@ -243,6 +243,20 @@
 .share-pw-field.show{display:block}
 .share-status-row{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:rgba(255,255,255,.5);margin:-.3rem 0 1rem}
 .share-status-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0}
+
+/* Modal "Enlaces compartidos" */
+.shared-links-list{display:flex;flex-direction:column;gap:.5rem;max-height:52vh;overflow-y:auto;margin:0 0 1rem}
+.shared-link-item{display:flex;align-items:center;gap:.6rem;background:rgba(255,255,255,.05);border:1px solid var(--vault-line);border-radius:10px;padding:.6rem .7rem}
+.sli-info{flex:1;min-width:0}
+.sli-name{color:#fff;font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sli-meta{display:flex;align-items:center;gap:.35rem;color:rgba(255,255,255,.5);font-size:.76rem;margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sli-meta svg{width:12px;height:12px;flex-shrink:0}
+.sli-actions{display:flex;gap:.25rem;flex-shrink:0}
+.sli-actions button{background:rgba(255,255,255,.08);border:none;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;flex-shrink:0}
+.sli-actions button svg{width:16px;height:16px}
+.sli-actions button:hover{background:rgba(255,255,255,.16)}
+.sli-actions button.sli-revoke:hover{background:rgba(239,68,68,.25);color:#f87171}
+.sli-actions button.copied{background:#16a34a}
 /* tags */
 .tag-pill{background:rgba(6,182,212,.15);color:#5fd4e6;border-radius:10px;padding:.05em .55em;font-size:.82em;font-weight:600;text-decoration:none}
 /* properties (frontmatter) */
