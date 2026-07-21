@@ -1,0 +1,36 @@
+[Unit]
+Description=cogny (vault de notas — Django + gunicorn WSGI)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/cogny/django_app
+EnvironmentFile=/var/www/cogny/django_app/.env
+Environment=HOME=/var/www/cogny
+Environment=DJANGO_SETTINGS_MODULE=config.settings.prod
+# WSGI puro: las vistas son síncronas, no hay nada async que justifique ASGI/uvicorn.
+# gthread aguanta bien el I/O de ficheros grandes (export ZIP, PDF) sin bloquear.
+ExecStart=/var/www/cogny/venv/bin/gunicorn \
+    config.wsgi:application \
+    --workers 2 \
+    --threads 4 \
+    --bind 127.0.0.1:8002 \
+    --timeout 300 \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile -
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/www/cogny
+
+[Install]
+WantedBy=multi-user.target

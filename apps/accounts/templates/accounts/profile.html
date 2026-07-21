@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Mi perfil — Cogny{% endblock %}
+
+{% block header_title %}Mi perfil{% endblock %}
+
+{% block content %}
+<div class="pf-body">
+
+  <!-- Hero -->
+  <div class="pf-hero">
+    <div class="pf-hero-bg"></div>
+    <div class="pf-avatar-wrap" id="avatar-wrap">
+      <div class="pf-avatar" id="avatar-display">
+        {% with av=user.id|avatar_url %}
+          {% if av %}<img src="{{ av }}" alt="" id="avatar-img" decoding="async">{% endif %}
+          <span id="avatar-letter"{% if av %} style="display:none"{% endif %}>{{ user.username|slice:":1"|upper }}</span>
+        {% endwith %}
+      </div>
+      <div class="pf-avatar-ring" id="avatar-ring"></div>
+      <div class="pf-avatar-cam">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0-8.4a5.2 5.2 0 1 1 0 10.4 5.2 5.2 0 0 1 0-10.4zM3 4V1h2v3h3v2H5v3H3V6H0V4h3zm4 4V5h7l1.83 2H21c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8h4z"/></svg>
+      </div>
+      <input type="file" id="avatar-file-input" accept="image/*">
+    </div>
+    <div class="pf-hero-name" id="hero-name">{{ user.username }}</div>
+    <div class="pf-hero-meta">
+      <span class="pf-hero-since">Miembro desde {{ user.created_at|slice:":10" }}</span>
+    </div>
+    <div id="avatar-upload-msg" class="pf-upload-msg"></div>
+  </div>
+
+  <div class="pf-sections">
+
+    <!-- Nombre -->
+    <div class="pf-card">
+      <div class="pf-card-header">
+        <div class="pf-card-icon pf-icon-user">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+        </div>
+        <div class="pf-card-label">Nombre de usuario</div>
+      </div>
+      <div class="pf-card-body">
+        <div class="pf-input-row">
+          <input type="text" id="new-username" value="{{ user.username }}" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" class="pf-input">
+          <button class="pf-save-btn" id="btn-save-username">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          </button>
+        </div>
+        <div id="username-msg" class="pf-msg"></div>
+      </div>
+    </div>
+
+    <!-- Contraseña -->
+    <div class="pf-card">
+      <div class="pf-card-header pf-card-toggle" id="pw-toggle">
+        <div class="pf-card-icon pf-icon-lock">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        </div>
+        <div class="pf-card-label">Contraseña</div>
+        <div class="pf-chevron" id="pw-chevron"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></div>
+      </div>
+      <div class="pf-card-body pf-pw-body" id="pw-body" style="display:none">
+        <div class="pf-pw-field">
+          <input type="password" id="current-pw" placeholder="Contraseña actual" autocomplete="current-password" class="pf-input">
+          <button class="pf-eye" data-target="current-pw" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;opacity:.4"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
+        </div>
+        <div class="pf-pw-field">
+          <input type="password" id="new-pw" placeholder="Nueva contraseña (mín. 4)" autocomplete="new-password" class="pf-input">
+          <button class="pf-eye" data-target="new-pw" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;opacity:.4"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg></button>
+        </div>
+        <div class="pf-pw-field">
+          <input type="password" id="new-pw2" placeholder="Repite la nueva contraseña" autocomplete="new-password" class="pf-input">
+          <button class="pf-eye" data-target="new-pw2" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;opacity:.4"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg></button>
+        </div>
+        <button class="btn btn-secondary btn-full" id="btn-save-password">Cambiar contraseña</button>
+        <div id="password-msg" class="pf-msg"></div>
+      </div>
+    </div>
+
+    <!-- Ajustes -->
+    <a href="/settings" class="pf-card pf-card-toggle" style="text-decoration:none;color:inherit;display:flex;align-items:center;padding:0">
+      <div class="pf-card-header" style="flex:1">
+        <div class="pf-card-icon pf-icon-settings">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </div>
+        <div class="pf-card-label">Ajustes</div>
+        <div class="pf-chevron"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></div>
+      </div>
+    </a>
+
+
+  </div>
+</div>
+
+<div class="pf-toast" id="pf-toast"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = "{{ csrf_token }}";
+
+function api(url, body) {
+  return fetch(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({...body, csrf_token: CSRF})
+  }).then(r => r.json());
+}
+
+let toastTimer;
+function toast(text, ok = true) {
+  const t = document.getElementById('pf-toast');
+  t.textContent = text;
+  t.className = 'pf-toast show ' + (ok ? 'ok' : 'err');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+function showMsg(el, text, ok) {
+  el.textContent = text;
+  el.className = 'pf-msg show ' + (ok ? 'ok' : 'err');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+document.getElementById('avatar-wrap').addEventListener('click', () => {
+  document.getElementById('avatar-file-input').click();
+});
+document.getElementById('avatar-file-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const ring = document.getElementById('avatar-ring');
+  ring.classList.add('uploading');
+  toast('Subiendo foto…');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('csrf_token', CSRF);
+  try {
+    const res = await fetch('/api/profile/upload-picture', {method:'POST', body:fd}).then(r=>r.json());
+    if (res.success) {
+      const display = document.getElementById('avatar-display');
+      let img = display.querySelector('img');
+      if (!img) { img = document.createElement('img'); img.id='avatar-img'; img.onerror=()=>img.remove(); img.alt=''; display.insertBefore(img, display.firstChild); }
+      img.src = res.url + '?v=' + Date.now();
+      const letter = document.getElementById('avatar-letter');
+      if (letter) letter.style.display = 'none';
+      toast('Foto actualizada');
+    } else { toast(res.error || 'Error', false); }
+  } catch { toast('Error de conexión', false); }
+  ring.classList.remove('uploading');
+  e.target.value = '';
+});
+
+document.getElementById('btn-save-username').addEventListener('click', async () => {
+  const username = document.getElementById('new-username').value.trim();
+  const msg = document.getElementById('username-msg');
+  const btn = document.getElementById('btn-save-username');
+  btn.classList.add('saving');
+  const res = await api('/api/profile/change-username', {username});
+  btn.classList.remove('saving');
+  if (res.success) {
+    showMsg(msg, '✓ Nombre actualizado', true);
+    document.getElementById('hero-name').textContent = res.username;
+    document.getElementById('avatar-letter').textContent = res.username[0].toUpperCase();
+    toast('Nombre actualizado');
+  } else { showMsg(msg, res.error || 'Error', false); }
+});
+document.getElementById('new-username').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-save-username').click(); });
+
+let pwOpen = false;
+document.getElementById('pw-toggle').addEventListener('click', () => {
+  pwOpen = !pwOpen;
+  document.getElementById('pw-body').style.display = pwOpen ? '' : 'none';
+  document.getElementById('pw-chevron').style.transform = pwOpen ? 'rotate(90deg)' : '';
+  if (pwOpen) document.getElementById('current-pw').focus();
+});
+document.getElementById('btn-save-password').addEventListener('click', async () => {
+  const cp = document.getElementById('current-pw').value;
+  const np = document.getElementById('new-pw').value;
+  const np2 = document.getElementById('new-pw2').value;
+  const msg = document.getElementById('password-msg');
+  if (np !== np2) { showMsg(msg, 'Las contraseñas no coinciden', false); return; }
+  const res = await api('/api/profile/change-password', {current_password: cp, new_password: np});
+  if (res.success) {
+    showMsg(msg, '✓ Contraseña actualizada', true);
+    toast('Contraseña actualizada');
+    ['current-pw','new-pw','new-pw2'].forEach(id => document.getElementById(id).value = '');
+  } else { showMsg(msg, res.error || 'Error', false); }
+});
+
+document.querySelectorAll('.pf-eye').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.target);
+    input.type = input.type === 'text' ? 'password' : 'text';
+    btn.querySelector('svg').style.opacity = input.type === 'text' ? '1' : '0.4';
+  });
+});
+</script>
+{% endblock %}

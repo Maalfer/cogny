@@ -1,0 +1,6 @@
+# cogny — dependencias de ejecución (pineadas). Regenerar tras cambios con:
+#   /var/www/cogny/venv/bin/pip freeze
+Django==6.0.7
+gunicorn==26.0.0
+whitenoise==6.12.0
+Pillow==12.3.0

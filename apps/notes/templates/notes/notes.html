@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}Cogny{% endblock %}
+{% block body_class %}subapp-body notes-body{% endblock %}
+
+{% block header_title %}<span class="sync-dot" id="sync-dot"></span>{% endblock %}
+
+{% block header_actions %}
+<button class="vault-hdr-btn" id="btn-toggle-sidebar" title="Mostrar/ocultar lista" aria-label="Lista de notas" aria-expanded="true">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h4v18H5a2 2 0 0 1-2-2V5zm8-2h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-8V3z"/></svg>
+</button>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/vendor/highlight-github-dark.min.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/notes/notes.css?v={{ ASSET_VERSION }}">
+{% endblock %}
+
+{% block content %}
+<div class="vault" id="vault">
+  <aside class="vault-side" id="vault-side">
+    <div class="vault-side-head">
+      <span>Mi bóveda</span>
+      <span class="grow"></span>
+      <button id="btn-search" title="Buscar (clic para abrir)" aria-pressed="false" aria-label="Buscar en la bóveda">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+      </button>
+      <button id="btn-collapse-all" title="Contraer todas las carpetas">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 18.59 8.83 20 12 16.83 15.17 20l1.41-1.41L12 14l-4.59 4.59zm9.18-13.18L15.17 4 12 7.17 8.83 4 7.41 5.41 12 10l4.59-4.59z"/></svg>
+      </button>
+      <button id="btn-expand-all" title="Expandir todas las carpetas">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z"/></svg>
+      </button>
+      <div class="vault-settings-wrap" id="vault-settings-wrap">
+        <button id="btn-img-dir" title="Ajustes de la bóveda" class="vsw-trigger" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.48.48 0 0 0 13.45 2h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.47a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+        </button>
+        <div class="vault-settings-menu hidden" id="vault-settings-menu">
+          <button class="vsm-item" id="vsm-imgdir">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+            Ubicación de imágenes
+          </button>
+          <div class="vsm-sep"></div>
+          <button class="vsm-item" id="vsm-export">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM12 2 6.5 9h3.5v6h4V9h3.5L12 2z" transform="rotate(180 12 11)"/></svg>
+            Exportar bóveda
+          </button>
+          <button class="vsm-item" id="vsm-import">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM12 2 6.5 9h3.5v6h4V9h3.5L12 2z"/></svg>
+            Importar bóveda
+          </button>
+          <div class="vsm-sep"></div>
+          <button class="vsm-item" id="vsm-storage">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
+            Almacenamiento
+          </button>
+        </div>
+      </div>
+      <!-- Botones fantasma: mantienen los event listeners del JS sin ser visibles -->
+      <button id="btn-export" style="display:none"></button>
+      <button id="btn-import" style="display:none"></button>
+    </div>
+    <div class="vault-side-top">
+      <button id="btn-new-note" title="Nueva nota">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm1 16h-2v-2h-2v2H9v-2H7v-2h2v-2h2v2h2v2h2v2z"/></svg>
+        Nota
+      </button>
+      <button id="btn-new-folder" title="Nueva carpeta">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm6 11h-3v3h-2v-3H8v-2h3v-3h2v3h3v2z"/></svg>
+        Carpeta
+      </button>
+    </div>
+    <div class="vault-search hidden" id="vault-search">
+      <input type="search" id="vault-search-input" placeholder="Buscar notas..." autocomplete="off" aria-label="Buscar notas en la bóveda">
+      <button type="button" id="vault-search-clear" class="vault-search-clear" aria-label="Borrar búsqueda" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="vault-tree" id="vault-tree"></div>
+  </aside>
+
+  <div class="vault-resizer" id="rz-side" title="Arrastra para ajustar el ancho de la lista"></div>
+
+  <section class="vault-main split" id="vault-main">
+    <div class="tab-bar" id="tab-bar"></div>
+    <div class="vault-toolbar" id="vault-toolbar" style="display:none">
+      <div class="vault-title" id="vault-title"></div>
+      <span class="vault-status" id="vault-status"></span>
+      <button class="vault-tool-btn" id="btn-format" title="Formato: insertar tablas, negritas, callouts…" aria-label="Barra de formato">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v3h5.5v12h3V7H19V4z"/></svg>
+        <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+      <div class="format-bar" id="format-bar">
+        <div class="fmt-group">
+          <span class="fmt-label">Encabezados</span>
+          <button data-fmt="h1" title="Título 1">H1</button>
+          <button data-fmt="h2" title="Título 2">H2</button>
+          <button data-fmt="h3" title="Título 3">H3</button>
+          <button data-fmt="h4" title="Título 4">H4</button>
+        </div>
+        <div class="fmt-sep"></div>
+        <div class="fmt-group">
+          <span class="fmt-label">Texto</span>
+          <button data-fmt="bold" title="Negrita"><b>B</b></button>
+          <button data-fmt="italic" title="Cursiva"><i>I</i></button>
+          <button data-fmt="strike" title="Tachado"><s>S</s></button>
+          <button data-fmt="code" title="Código en línea">&lt;/&gt;</button>
+          <button data-fmt="highlight" title="Resaltar texto">▒ Resaltar</button>
+        </div>
+        <div class="fmt-sep"></div>
+        <div class="fmt-group">
+          <span class="fmt-label">Listas</span>
+          <button data-fmt="ul" title="Lista con viñetas">• Lista</button>
+          <button data-fmt="ol" title="Lista numerada">1. Lista</button>
+          <button data-fmt="task" title="Lista de tareas">☑ Tareas</button>
+        </div>
+        <div class="fmt-sep"></div>
+        <div class="fmt-group">
+          <span class="fmt-label">Bloques</span>
+          <button data-fmt="quote" title="Cita">❝ Cita</button>
+          <button data-fmt="codeblock" title="Bloque de código">{ } Código</button>
+          <button data-fmt="table" title="Insertar tabla">▦ Tabla</button>
+          <button data-fmt="hr" title="Separador horizontal">— Separador</button>
+          <button data-fmt="link" title="Enlace web">🔗 Enlace</button>
+          <button data-fmt="image" title="Insertar imagen">🖼 Imagen</button>
+        </div>
+        <div class="fmt-sep"></div>
+        <div class="fmt-group">
+          <span class="fmt-label">Insertar</span>
+          <button data-fmt="wikilink" title="Enlace a otra nota del vault">[[ ]] Nota</button>
+          <button data-fmt="tag" title="Etiqueta (#tag)">#️⃣ Etiqueta</button>
+          <button data-fmt="mathinline" title="Fórmula matemática en línea (KaTeX)">∑ Fórmula</button>
+          <button data-fmt="mathblock" title="Fórmula matemática en bloque (KaTeX)">∑ Bloque</button>
+          <button data-fmt="footnote" title="Nota al pie">⁽¹⁾ Pie</button>
+          <button data-fmt="mermaid" title="Diagrama Mermaid">🔀 Diagrama</button>
+          <button data-fmt="comment" title="Comentario oculto (no se renderiza)">💬 Comentario</button>
+          <button data-fmt="frontmatter" title="Propiedades de la nota (frontmatter)">📑 Propiedades</button>
+        </div>
+        <div class="fmt-sep"></div>
+        <div class="fmt-group">
+          <span class="fmt-label">Callouts</span>
+          <button data-call="info" title="Callout de información">ℹ️ Info</button>
+          <button data-call="tip" title="Callout de consejo">💡 Tip</button>
+          <button data-call="success" title="Callout de éxito">✅ Éxito</button>
+          <button data-call="warning" title="Callout de aviso">⚠️ Aviso</button>
+          <button data-call="danger" title="Callout de peligro">⛔ Peligro</button>
+          <button data-call="note" title="Callout de nota">📝 Nota</button>
+          <button data-call="question" title="Callout de pregunta">❓ Pregunta</button>
+          <button data-call="example" title="Callout de ejemplo">🧪 Ejemplo</button>
+          <button data-call="quote" title="Callout de cita">❝ Cita</button>
+          <button data-call="abstract" title="Callout de resumen">📋 Resumen</button>
+          <button data-fmt="calloutfold" title="Callout plegable (se contrae al hacer clic)">▸ Plegable</button>
+        </div>
+      </div>
+      <button class="vault-tool-btn" id="btn-insert-img" title="Insertar imagen (o pega/arrastra en el editor)" aria-label="Insertar imagen">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg>
+      </button>
+      <button class="vault-tool-btn" id="btn-nav-back" title="Nota anterior" aria-label="Ir a la nota anterior" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+      </button>
+      <button class="vault-tool-btn" id="btn-nav-fwd" title="Nota siguiente" aria-label="Ir a la nota siguiente" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </button>
+      <button class="vault-tool-btn" id="btn-zoom" title="Tamaño del texto e imágenes" aria-label="Zoom de notas">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+      </button>
+      <div class="zoom-pop" id="zoom-pop">
+        <button type="button" id="zoom-out" aria-label="Disminuir">−</button>
+        <button type="button" id="zoom-val" title="Restablecer a 100%">100%</button>
+        <button type="button" id="zoom-in" aria-label="Aumentar">+</button>
+      </div>
+    </div>
+    <div class="vault-body" id="vault-body" style="display:none">
+      <div id="cm-host" class="vault-cm"></div>
+    </div>
+    <div class="vault-empty" id="vault-empty">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+      <p>Selecciona o crea una nota para empezar</p>
+      <div class="empty-actions">
+        <button id="empty-new"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm1 16h-2v-2h-2v2H9v-2H7v-2h2v-2h2v2h2v2h2v2z"/></svg>Nueva nota</button>
+        <button id="empty-import"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM12 2 6.5 9h3.5v6h4V9h3.5L12 2z"/></svg>Importar bóveda</button>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block body_end %}
+<div class="ctx-menu" id="ctx-menu"></div>
+<div id="print-pane" class="markdown-body"></div>
+<div id="img-lightbox" class="img-lightbox" aria-hidden="true"><button class="lightbox-close" aria-label="Cerrar imagen" onclick="closeLightbox()">&#215;</button><img alt=""></div>
+<input type="file" id="import-file" accept=".zip,.md,application/zip,application/x-zip-compressed,application/octet-stream,text/markdown" style="display:none">
+<input type="file" id="asset-file" accept="image/*" multiple style="display:none">
+
+<div class="modal-back" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+  <div class="modal">
+    <h3 id="import-modal-title">Importar bóveda</h3>
+    <p>Sube un <b>.zip</b> de una bóveda de Obsidian (o un único <b>.md</b>). Tus notas se añadirán a tu bóveda privada.</p>
+    <div class="modal-drop" id="import-drop">📁 Pulsa para elegir un archivo<br><small style="opacity:.7">(o arrástralo aquí en escritorio)</small></div>
+    <div id="import-fname" style="color:#fff;font-size:.85rem;margin:-.6rem 0 1rem;display:none"></div>
+    <div class="modal-progress" id="import-progress"><span></span></div>
+    <label class="sel" data-mode="merge"><input type="radio" name="impmode" value="merge" checked><span>Combinar<small>Añade las notas a las que ya tienes</small></span></label>
+    <label data-mode="replace"><input type="radio" name="impmode" value="replace"><span>Reemplazar<small>Borra tu bóveda actual y la sustituye</small></span></label>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="import-cancel">Cancelar</button>
+      <button class="btn-primary" id="import-go" disabled>Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Selector de carpeta para imágenes -->
+<div class="modal-back" id="imgdir-modal" role="dialog" aria-modal="true" aria-labelledby="imgdir-modal-title">
+  <div class="modal">
+    <h3 id="imgdir-modal-title">Ubicación de las imágenes</h3>
+    <p>Elige dónde se guardarán las imágenes que pegues o subas dentro de la bóveda.</p>
+    <div id="imgdir-list" class="imgdir-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="imgdir-cancel">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Almacenamiento de la bóveda -->
+<div class="modal-back storage-back" id="storage-modal" role="dialog" aria-modal="true" aria-labelledby="storage-modal-title">
+  <div class="storage-sheet">
+    <header class="storage-header">
+      <div>
+        <h3 id="storage-modal-title">Almacenamiento</h3>
+        <p class="storage-sub">Resumen de tu bóveda</p>
+      </div>
+      <button class="storage-close" id="storage-cancel" aria-label="Cerrar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    </header>
+
+    <div id="storage-loading" class="storage-loading">
+      <div class="spinner" style="width:32px;height:32px;border-width:3px;margin:0 auto"></div>
+      <p>Calculando…</p>
+    </div>
+
+    <div id="storage-body" class="storage-body" style="display:none">
+      <!-- Hero: tamaño total -->
+      <div class="storage-hero">
+        <div class="storage-hero-label">Tamaño total</div>
+        <div class="storage-hero-val" id="storage-total">—</div>
+        <div class="storage-stack" id="storage-stack" aria-hidden="true"></div>
+      </div>
+
+      <!-- Grid de 3 categorías -->
+      <div class="storage-grid">
+        <div class="storage-card" data-kind="notes">
+          <div class="storage-card-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg></div>
+          <div class="storage-card-label">Notas</div>
+          <div class="storage-card-val" id="storage-notes-bytes">—</div>
+          <div class="storage-card-meta" id="storage-notes-n">—</div>
+        </div>
+        <div class="storage-card" data-kind="images">
+          <div class="storage-card-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></div>
+          <div class="storage-card-label">Imágenes</div>
+          <div class="storage-card-val" id="storage-images-bytes">—</div>
+          <div class="storage-card-meta" id="storage-images-n">—</div>
+        </div>
+        <div class="storage-card" data-kind="other">
+          <div class="storage-card-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/></svg></div>
+          <div class="storage-card-label">Otros</div>
+          <div class="storage-card-val" id="storage-other-bytes">—</div>
+          <div class="storage-card-meta" id="storage-other-n">—</div>
+        </div>
+      </div>
+
+      <div class="storage-foot">
+        <span id="storage-files">—</span>
+        <span class="storage-foot-sep">·</span>
+        <span id="storage-folders">—</span>
+      </div>
+
+      <!-- Sección de acción -->
+      <section class="storage-action-box">
+        <div class="storage-action-head">
+          <div>
+            <div class="storage-action-title">Optimizar imágenes</div>
+            <div class="storage-action-desc">Recodifica todas las imágenes ráster a WebP. Las referencias de tus notas se actualizan automáticamente.</div>
+          </div>
+        </div>
+        <label class="storage-check">
+          <input type="checkbox" id="opt-backup-first" checked>
+          <span class="storage-check-box" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          </span>
+          <span class="storage-check-label">
+            Descargar backup ZIP antes
+            <small>Recomendado. Te permite revertir importando el .zip si algo va mal.</small>
+          </span>
+        </label>
+        <button class="btn-primary storage-action-btn" id="btn-optimize-images">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" transform="rotate(45 12 12)"/></svg>
+          Optimizar imágenes
+        </button>
+      </section>
+
+      <div id="storage-progress" class="storage-progress" style="display:none">
+        <div class="storage-progress-msg" id="storage-progress-msg">Trabajando…</div>
+        <div class="storage-progress-bar"><div class="storage-progress-bar-fill"></div></div>
+      </div>
+      <div id="storage-result" class="storage-result" style="display:none"></div>
+    </div>
+
+    <div id="storage-err" class="storage-error" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Diálogo de texto inline (reemplaza prompt del navegador) -->
+<div class="modal-back" id="input-dialog" role="dialog" aria-modal="true" aria-labelledby="id-title" style="display:none">
+  <div class="modal">
+    <h3 id="id-title"></h3>
+    <p id="id-desc" style="display:none;margin-bottom:.7rem;font-size:.88rem"></p>
+    <input type="text" class="vault-input-field" id="id-field" autocomplete="off" maxlength="250">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="id-cancel">Cancelar</button>
+      <button class="btn-primary" id="id-ok">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Diálogo de confirmación inline (reemplaza confirm del navegador) -->
+<div class="modal-back" id="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="cd-title" style="display:none">
+  <div class="modal">
+    <h3 id="cd-title"></h3>
+    <p id="cd-msg" style="margin-bottom:1.2rem"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cd-cancel">Cancelar</button>
+      <button class="btn-primary btn-danger" id="cd-ok">Sí, borrar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+
+<script src="/static/notes/marked.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/highlight.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/katex/katex.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/codemirror/balucm.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/notes/md-ctxmenu.js?v={{ ASSET_VERSION }}" defer></script>
+<script>
+/* Valores de servidor para el editor (único puente plantilla → notes.js estático). */
+window.COGNY = {
+  csrf: "{{ csrf_token }}",
+  uploadHost: "{{ UPLOAD_HOST|default:'' }}",
+  assetVersion: "{{ ASSET_VERSION }}",
+};
+</script>
+<script src="/static/notes/notes.js?v={{ ASSET_VERSION }}"></script>
+{% endblock %}

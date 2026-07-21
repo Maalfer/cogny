@@ -1,0 +1,211 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="view-transition" content="same-origin">
+<title>{% block title %}Cogny{% endblock %}</title>
+<link rel="icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}" type="image/x-icon">
+<link rel="shortcut icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png?v={{ ASSET_VERSION }}">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v={{ ASSET_VERSION }}">
+<link rel="manifest" href="/manifest.json">
+{# Prefetch al backend en cuanto se hace el TLS handshake — acelera el primer fetch JSON #}
+<link rel="preconnect" href="//{{ request.get_host }}">
+<script>(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
+<link rel="stylesheet" href="/static/css/app.css?v={{ ASSET_VERSION }}">
+{% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}subapp-body{% endblock %}">
+<div id="bh-loading-bar" aria-hidden="true"></div>
+<div id="bh-nav-overlay" aria-hidden="true"><div class="bh-nav-spinner"></div></div>
+<script>
+/* CSRF global: añade X-CSRFToken a todas las llamadas fetch() same-origin no seguras.
+   Evita repetir el header en cada template y arregla los 403 de fetch JSON/FormData. */
+(function() {
+  var CSRF = "{{ csrf_token|default:'' }}";
+  window.BH_CSRF = CSRF;
+  if (!CSRF || !window.fetch) return;
+  var origFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    init = init || {};
+    var url = (typeof input === 'string') ? input : (input && input.url) || '';
+    var method = (init.method || (typeof input === 'object' && input.method) || 'GET').toUpperCase();
+    var isSameOrigin = url.startsWith('/') || url.startsWith(location.origin);
+    if (isSameOrigin && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      var h = new Headers(init.headers || {});
+      if (!h.has('X-CSRFToken')) h.set('X-CSRFToken', CSRF);
+      init.headers = h;
+      if (!init.credentials) init.credentials = 'same-origin';
+    }
+    return origFetch(input, init);
+  };
+})();
+</script>
+
+{% block header %}
+<header class="bh-header">
+  <div class="bh-header-left">
+    {% block header_left %}
+    <a href="/" class="bh-brand" aria-label="Inicio Cogny">
+      <img src="/static/icons/icon-192.png?v={{ ASSET_VERSION }}" alt="" width="24" height="24" class="bh-brand-icon">
+      <span>Cogny</span>
+    </a>
+    {% endblock %}
+  </div>
+  <div class="bh-header-title">{% block header_title %}{% endblock %}</div>
+  <div class="bh-header-actions">
+    {% block header_actions %}{% endblock %}
+    {% if user_id %}
+    <nav class="bh-desk-nav" aria-label="Navegación escritorio">
+      <a href="/settings" class="bh-desk-btn" title="Ajustes"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></a>
+      <div class="bh-desk-sep"></div>
+      <a href="/profile" class="bh-desk-user" title="Mi perfil">
+        <div class="bh-desk-avatar">
+          {% with av=user_id|avatar_url %}{% if av %}<img src="{{ av }}" alt="" loading="lazy" decoding="async">{% endif %}{% endwith %}
+          <span>{% if username %}{{ username|slice:":1"|upper }}{% else %}?{% endif %}</span>
+        </div>
+        <span class="bh-desk-username">{{ username }}</span>
+      </a>
+      <a href="/logout" class="bh-desk-btn bh-desk-logout" title="Cerrar sesión" onclick="return confirm('¿Cerrar sesión?')"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg></a>
+    </nav>
+    <button class="hb-toggle" id="hb-toggle" aria-label="Menú" aria-expanded="false">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+    </button>
+    {% endif %}
+  </div>
+</header>
+{% endblock %}
+
+<div class="{% block wrapper_class %}subapp-wrapper{% endblock %}">
+  {% block content %}{% endblock %}
+</div>
+
+{% if user_id %}
+<!-- Hamburger drawer -->
+<div class="hb-overlay" id="hb-overlay" aria-hidden="true"></div>
+<aside class="hb-drawer" id="hb-drawer" aria-hidden="true">
+  <header class="hb-drawer-header">
+    <a href="/profile" class="hb-user">
+      <div class="hb-user-avatar">
+        {% with av=user_id|avatar_url %}{% if av %}<img src="{{ av }}" alt="" loading="lazy" decoding="async">{% endif %}{% endwith %}
+        <span>{% if username %}{{ username|slice:":1"|upper }}{% else %}?{% endif %}</span>
+      </div>
+      <div class="hb-user-info">
+        <div class="hb-user-name">{{ username }}</div>
+        <div class="hb-user-role">{{ user_role }}</div>
+      </div>
+    </a>
+    <button class="hb-close" id="hb-close" aria-label="Cerrar menú">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+  </header>
+  <nav class="hb-nav">
+    <a href="/profile" class="hb-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+      <span>Mi perfil</span>
+    </a>
+    <a href="/settings" class="hb-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      <span>Ajustes</span>
+    </a>
+    <div class="hb-sep"></div>
+    <a href="/logout" class="hb-item hb-danger" onclick="return confirm('¿Cerrar sesión?')">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+      <span>Cerrar sesión</span>
+    </a>
+  </nav>
+</aside>
+<script>window.APP = window.APP || { csrf: "{{ csrf_token|default:'' }}", userId: {{ user_id|default:'null' }} };</script>
+{% endif %}
+
+{% block body_end %}{% endblock %}
+
+<script>
+/* Hamburger drawer */
+(function() {
+  const tog = document.getElementById('hb-toggle');
+  if (!tog) return;
+  const drw = document.getElementById('hb-drawer');
+  const ovr = document.getElementById('hb-overlay');
+  const cls = document.getElementById('hb-close');
+  function open() {
+    drw.classList.add('open');
+    ovr.classList.add('show');
+    tog.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+  function close() {
+    drw.classList.remove('open');
+    ovr.classList.remove('show');
+    tog.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
+  tog.addEventListener('click', open);
+  cls.addEventListener('click', close);
+  ovr.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+})();
+
+/* Last-page memory */
+(function() {
+  const skip = ['/', '/logout', '/register'];
+  if (!skip.includes(location.pathname)) {
+    localStorage.setItem('bh-last-page', location.pathname + location.search);
+  }
+})();
+
+/* Service worker registration */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  /* Cuando un SW nuevo toma control (p.ej. tras purgar una caché vieja con un
+     login CSRF caduco), recargar UNA vez para que la página venga ya fresca. */
+  let _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swReloaded) return;
+    _swReloaded = true;
+    location.reload();
+  });
+}
+</script>
+
+<script>
+/* Animación de carga al navegar */
+(function () {
+  var bar = document.getElementById('bh-loading-bar');
+  var overlay = document.getElementById('bh-nav-overlay');
+  var hasVT = CSS && CSS.supports('selector(::view-transition-new(*))');
+
+  function resetNav() {
+    if (overlay) overlay.classList.remove('bh-nav-overlay-active');
+    document.querySelectorAll('.app-card.bh-loading').forEach(function (c) { c.classList.remove('bh-loading'); });
+    if (bar) bar.classList.remove('bh-bar-active');
+  }
+
+  document.addEventListener('click', function (e) {
+    var card = e.target.closest('.app-card');
+    if (!card || card.classList.contains('bh-loading')) return;
+    card.classList.add('bh-loading');
+    if (bar) {
+      bar.classList.remove('bh-bar-active');
+      void bar.offsetWidth;
+      bar.classList.add('bh-bar-active');
+    }
+    if (!hasVT && overlay) overlay.classList.add('bh-nav-overlay-active');
+  });
+
+  /* BFCache: al volver atrás la página se restaura sin reload */
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) resetNav();
+  });
+  /* Fallback para navegadores que recargan al volver */
+  window.addEventListener('DOMContentLoaded', resetNav);
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

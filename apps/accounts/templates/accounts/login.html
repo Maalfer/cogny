@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}" type="image/x-icon">
+<link rel="shortcut icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}">
+
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<title>Cogny — Iniciar sesión</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png?v={{ ASSET_VERSION }}">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v={{ ASSET_VERSION }}">
+<script>(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
+<link rel="stylesheet" href="/static/css/app.css?v={{ ASSET_VERSION }}">
+</head>
+<body class="auth-body">
+<div class="auth-container">
+  <div class="auth-logo">
+    <img class="logo-svg" src="/static/icons/icon-192.png?v={{ ASSET_VERSION }}" alt="" width="60" height="60">
+    <h1>Cogny</h1>
+    <p>Tu plataforma personal</p>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="/" class="auth-form">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="username">Usuario</label>
+      <input type="text" id="username" name="username"
+             value="{{ username_val|default:'' }}"
+             placeholder="Tu nombre de usuario" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+    </div>
+    <div class="form-group">
+      <label for="password">Contraseña</label>
+      <div style="position:relative;display:flex;align-items:center">
+      <input type="password" id="password" name="password" placeholder="Tu contraseña" autocomplete="current-password" required style="padding-right:2.75rem;width:100%">
+      <button type="button" onclick="(function(){var i=document.getElementById('password');i.type=i.type==='text'?'password':'text'})()" style="position:absolute;right:.625rem;background:none;border:none;color:var(--text3);cursor:pointer;padding:0;display:flex">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+      </button>
+    </div>
+    </div>
+    <button type="submit" class="btn btn-primary btn-full">Iniciar sesión</button>
+  </form>
+
+  <p class="auth-footer">Cogny &copy; {% now "Y" %}</p>
+</div>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
