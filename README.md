@@ -19,6 +19,9 @@ Cogny es una aplicación web de notas al estilo Obsidian construida con Django. 
 <td width="50%"><img src="assets/screenshots/demo2.png" alt="Exportar a PDF"><br><sub>Exportar cualquier nota a PDF, en claro u oscuro.</sub></td>
 <td width="50%"><img src="assets/screenshots/demo3.png" alt="Búsqueda"><br><sub>Búsqueda instantánea por nombre y contenido.</sub></td>
 </tr>
+<tr>
+<td colspan="2"><img src="assets/screenshots/demo4.png" alt="Almacenamiento, optimización de imágenes y backups"><br><sub>Estadísticas de la bóveda, optimización de imágenes a WebP y backup en ZIP antes de aplicarla.</sub></td>
+</tr>
 </table>
 
 ## Características
@@ -27,7 +30,7 @@ Cogny es una aplicación web de notas al estilo Obsidian construida con Django. 
 - Editor con resaltado de sintaxis, fórmulas (KaTeX), diagramas (Mermaid) y callouts.
 - Exportación de notas a PDF, con imágenes y estilos incrustados.
 - Búsqueda instantánea por nombre y por contenido.
-- Adjuntos con optimización automática de imágenes a WebP.
+- Optimización de imágenes a WebP, al subirlas o en bloque para toda la bóveda, con backup ZIP previo opcional.
 - Importación y exportación de la bóveda completa en un único ZIP.
 - Progressive Web App instalable, con caché de estáticos para uso offline.
 
