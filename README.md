@@ -4,6 +4,7 @@
 
 <h1 align="center">Cogny</h1>
 <p align="center">Bóveda de notas en Markdown, autoalojada y minimalista.</p>
+<p align="center"><a href="https://maalfer.github.io/cogny/">maalfer.github.io/cogny</a></p>
 
 <p align="center"><img src="assets/screenshots/demo1.png" width="850" alt="Bóveda de notas"></p>
 
