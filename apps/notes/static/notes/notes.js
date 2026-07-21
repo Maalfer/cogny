@@ -958,23 +958,24 @@ async function openShareModal(it){
   $('share-pw-switch').classList.remove('on'); $('share-pw-switch').setAttribute('aria-checked','false');
   $('share-pw-field').classList.remove('show'); $('share-pw-input').value='';
   try{
-    const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
-    if(res.shared){
-      $('share-link-field').value = res.url;
-      $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
-      $('share-stop').style.display='';
-      if(res.has_password){
-        sharePwOn = true;
-        $('share-pw-switch').classList.add('on'); $('share-pw-switch').setAttribute('aria-checked','true');
-        $('share-pw-field').classList.add('show');
-        $('share-pw-input').placeholder = 'Dejar en blanco para no cambiarla';
-      }
-    } else {
-      $('share-link-field').value = '';
-      $('share-status-text').textContent = 'Todavía no se ha compartido';
+    let res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
+    if(!res.shared){
+      // El enlace se genera en el acto al abrir el modal (sin contraseña por
+      // defecto); "Guardar" queda para aplicar/quitar la contraseña después.
+      res = await api('/api/notes/share/create', {path: it.path, password:''});
+      if(res.error) throw new Error(res.error);
+    }
+    $('share-link-field').value = res.url;
+    $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
+    $('share-stop').style.display='';
+    if(res.has_password){
+      sharePwOn = true;
+      $('share-pw-switch').classList.add('on'); $('share-pw-switch').setAttribute('aria-checked','true');
+      $('share-pw-field').classList.add('show');
+      $('share-pw-input').placeholder = 'Dejar en blanco para no cambiarla';
     }
   }catch(e){
-    $('share-status-text').textContent = 'Error al consultar el estado';
+    $('share-status-text').textContent = 'Error al generar el enlace';
   }
   $('share-loading').style.display='none'; $('share-body').style.display='';
   $('share-save').disabled = false;
