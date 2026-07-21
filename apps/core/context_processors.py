@@ -6,6 +6,7 @@ def global_context(request):
     user = getattr(request, "user", None)
     return {
         "ASSET_VERSION": getattr(settings, "ASSET_VERSION", "v1"),
+        "APP_VERSION": getattr(settings, "VERSION", "0.0.0"),
         "bh_theme": getattr(request, "bh_theme", "dark"),
         # Aliases convenientes en las plantillas (acceso directo sin request.user).
         "username": user.username if user and user.is_authenticated else "",

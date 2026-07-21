@@ -22,6 +22,10 @@ if ENV_FILE.exists():
 # ── Núcleo ───────────────────────────────────────────────────────────────────
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or "cogny-dev-secret-CHANGE-ME"
 
+# Versión de la app (fichero VERSION en la raíz del repo). Se muestra en el
+# header de la UI — súbela ahí en cada release, junto al tag de git.
+VERSION = (BASE_DIR / "VERSION").read_text().strip() if (BASE_DIR / "VERSION").exists() else "0.0.0"
+
 _hosts = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 ALLOWED_HOSTS = _hosts or ["127.0.0.1", "localhost"]
 

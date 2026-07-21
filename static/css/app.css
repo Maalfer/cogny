@@ -911,6 +911,18 @@ a{ touch-action: manipulation; }
 .bh-brand:hover{ background: var(--bg3); }
 .bh-brand:active{ transform: scale(.97); }
 .bh-brand-icon{ width: 24px; height: 24px; color: var(--cyan); }
+.bh-version{
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan);
+  background: rgba(6, 182, 212, .12);
+  border: 1px solid rgba(6, 182, 212, .3);
+  border-radius: 999px;
+  padding: .1rem .45rem;
+  line-height: 1.4;
+}
 /* Drawer toggle button is always visible (desktop + mobile) for consistency */
 .bh-header .hb-toggle{ display: flex; }
 /* =============================================
