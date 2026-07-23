@@ -273,7 +273,10 @@ function buildTreeDOM(items, container, depth, parentPath){
     // La carpeta de adjuntos concentra cientos de imágenes subidas por el backend
     // (upload() la fuerza siempre en la raíz): no se puede arrastrar ni recibir
     // sueltas "dentro" o se rompería esa ruta fija y el propósito de la carpeta.
-    const isAttach=(it.type==='folder' && it.name==='Adjuntos');
+    // OJO: comparar por PATH (no por nombre) — si no, una subcarpeta cualquiera
+    // que el usuario llame "Adjuntos" en otro sitio del árbol heredaría por error
+    // esta restricción (no expandible / no arrastrable).
+    const isAttach=(it.type==='folder' && it.path==='Adjuntos');
     if(it.type==='folder'){
       // No expandible por click, para no generar un DOM enorme que ralentiza la web.
       const isOpen=!isAttach && expanded.has(it.path); if(!isOpen && !isAttach) row.classList.add('collapsed');
@@ -313,7 +316,9 @@ function buildTreeDOM(items, container, depth, parentPath){
           const rows=[...document.querySelectorAll('#vault-tree .tree-row')].filter(r=>!r.closest('.tree-children.hidden'));
           const i=rows.indexOf(row);const next=rows[i+(e.key==='ArrowDown'?1:-1)];if(next)next.focus();}});
     }
-    row.querySelector('.row-menu').addEventListener('click', e=>{e.stopPropagation(); showCtxMenu(e, it);});
+    const menuBtn=row.querySelector('.row-menu');
+    menuBtn.addEventListener('click', e=>{e.stopPropagation(); showCtxMenu(e, it);});
+    menuBtn.draggable=false;   // que un clic impreciso sobre "···" no arranque el drag de la fila
     wireRowDrag(row, it, parentPath, isAttach);
   });
 }
@@ -350,11 +355,18 @@ function wireRowDrag(row, it, parentPath, isAttach){
   row.addEventListener('dragend', ()=>{ row.classList.remove('dragging'); clearDropVisual(); dragSrc=null; });
   row.addEventListener('dragover', e=>{
     if(!dragSrc || dragSrc.path===it.path) return;
-    if(it.type==='folder' && (it.path===dragSrc.path || it.path.startsWith(dragSrc.path+'/'))) return;
-    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
     const rect=row.getBoundingClientRect(); const y=e.clientY-rect.top, h=rect.height;
     const canDropInto = it.type==='folder' && !isAttach;
     const mode = (canDropInto && y>h*0.25 && y<h*0.75) ? 'into' : (y<h/2 ? 'before' : 'after');
+    // La carpeta destino EFECTIVA es esta misma (modo "into") o su padre (before/after,
+    // reordenar como hermano). Si arrastramos una carpeta, ninguna de las dos puede ser
+    // ella misma ni un descendiente suyo — si no, se movería dentro de sí misma. Comprobar
+    // solo `it.path` (como en un primer intento) se queda corto: soltar sobre una NOTA que
+    // vive dentro de una subcarpeta de la carpeta arrastrada también sería un ciclo, porque
+    // el padre de esa nota (el targetParent real) sigue siendo un descendiente.
+    const targetParent = mode==='into' ? it.path : parentPath;
+    if(dragSrc.type==='folder' && (targetParent===dragSrc.path || targetParent.startsWith(dragSrc.path+'/'))) return;
+    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
     setDropVisual(row, mode);
   });
   row.addEventListener('drop', e=>{
@@ -371,7 +383,7 @@ function wireRowDrag(row, it, parentPath, isAttach){
 function wireRowDrop(kids, folderPath){
   kids.addEventListener('dragover', e=>{
     if(!dragSrc || e.target!==kids) return;
-    if(folderPath===dragSrc.path || folderPath.startsWith(dragSrc.path+'/')) return;
+    if(dragSrc.type==='folder' && (folderPath===dragSrc.path || folderPath.startsWith(dragSrc.path+'/'))) return;
     e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
     setDropVisual(kids, 'into');
   });
@@ -415,6 +427,14 @@ async function dropItem(src, targetParent, anchorName, anchorSide){
     revealPath(finalPath);
   }
   await loadTree(); renderTabs();
+  // Confirmación visual de dónde quedó (mismo patrón que el clic en una miga de pan):
+  // útil sobre todo tras un move a una carpeta lejana/colapsada.
+  setTimeout(()=>{
+    const row=document.querySelector('.tree-row[data-path="'+cssEsc(finalPath)+'"]');
+    if(!row) return;
+    row.scrollIntoView({behavior:'smooth', block:'nearest'});
+    row.classList.remove('flash-locate'); void row.offsetWidth; row.classList.add('flash-locate');
+  }, 60);
 }
 // Mueve un elemento a otra carpeta y recoloca pestañas/historial/expandidos que
 // referenciaran su ruta antigua (misma lógica que ya usa renameItem, extendida

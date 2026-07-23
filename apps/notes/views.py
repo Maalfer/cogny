@@ -292,6 +292,13 @@ def move(request):
         return _err(str(e))
     if not src.exists() or src == root:
         return _err("No existe", 404)
+    if src == root / "Adjuntos":
+        # upload() cuelga SIEMPRE de esta ruta fija (root/"Adjuntos"): moverla de
+        # sitio no rompe nada (los embeds resuelven por basename en todo el vault),
+        # pero el próximo subir crearía una "Adjuntos" nueva y vacía en la raíz,
+        # duplicando la carpeta. El frontend ya no permite arrastrarla; esto es el
+        # cierre server-side para quien llame al endpoint directamente.
+        return _err("La carpeta de adjuntos no se puede mover")
     if not dst_dir.exists() or not dst_dir.is_dir():
         return _err("Carpeta destino no encontrada", 404)
     if src.is_dir():
