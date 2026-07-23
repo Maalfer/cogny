@@ -31,7 +31,7 @@
       <button id="btn-expand-all" title="Expandir todas las carpetas">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z"/></svg>
       </button>
-      <button id="btn-shared-links" title="Enlaces compartidos" aria-label="Ver enlaces compartidos">
+      <button id="btn-shared-links" class="js-open-settings" title="Enlaces compartidos" aria-label="Ver enlaces compartidos">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
       </button>
       <div class="vault-settings-wrap" id="vault-settings-wrap">
@@ -367,24 +367,6 @@
   </div>
 </div>
 
-<!-- Enlaces compartidos (todas las notas con enlace público activo) -->
-<div class="modal-back" id="shared-links-modal" role="dialog" aria-modal="true" aria-labelledby="shared-links-title">
-  <div class="modal" style="max-width:480px">
-    <h3 id="shared-links-title">Enlaces compartidos</h3>
-    <p>Notas que tienes publicadas ahora mismo con un enlace público.</p>
-    <div id="shared-links-loading" style="text-align:center;padding:1.6rem 0">
-      <div class="spinner" style="width:28px;height:28px;border-width:3px;margin:0 auto"></div>
-    </div>
-    <div id="shared-links-empty" class="imgdir-info" style="display:none">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
-      <span>Todavía no has compartido ninguna nota.</span>
-    </div>
-    <div id="shared-links-list" class="shared-links-list"></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="shared-links-cancel">Cerrar</button>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}

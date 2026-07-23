@@ -62,11 +62,6 @@ def profile(request):
 
 
 @login_required
-def settings_view(request):
-    return render(request, "accounts/settings.html", {})
-
-
-@login_required
 @require_POST
 def upload_picture(request):
     f = request.FILES.get("file")

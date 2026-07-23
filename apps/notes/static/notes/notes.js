@@ -1169,69 +1169,9 @@ $('share-stop').addEventListener('click', async ()=>{
 $('share-cancel').addEventListener('click', closeShareModal);
 $('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
 
-/* ════════════ Panel "Enlaces compartidos" (todas las notas publicadas) ════════ */
-const iconOpenTab='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
-const iconCopyLink=COPY_ICON;
-const iconLock='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 10 0v2h1zM12 3a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3z"/></svg>';
-const iconGlobe='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14a7.97 7.97 0 0 1 0-4h3.38a16.6 16.6 0 0 0 0 4H4.26zm.81 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.99 7.99 0 0 1 5.07 16zm2.95-8H5.07a7.99 7.99 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.02 8zM12 19.96a15.7 15.7 0 0 1-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66a14.5 14.5 0 0 1 0-4h4.68a14.5 14.5 0 0 1 0 4zm.29 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a7.99 7.99 0 0 1-4.33 3.56zM16.36 14a16.6 16.6 0 0 0 0-4h3.38a7.97 7.97 0 0 1 0 4h-3.38z"/></svg>';
-
-function renderSharedLinksList(shares){
-  const list=$('shared-links-list');
-  if(!shares.length){
-    list.innerHTML=''; $('shared-links-empty').style.display='flex'; return;
-  }
-  $('shared-links-empty').style.display='none';
-  list.innerHTML = shares.map(s=>`
-    <div class="shared-link-item" data-path="${esc(s.path)}" data-url="${esc(s.url)}">
-      <div class="sli-info">
-        <div class="sli-name">${esc(s.name)}</div>
-        <div class="sli-meta">${s.has_password?iconLock:iconGlobe}<span>${s.has_password?'Con contraseña':'Público'} · ${esc(s.path)}</span></div>
-      </div>
-      <div class="sli-actions">
-        <button class="sli-open" title="Abrir esta nota">${iconOpenTab}</button>
-        <button class="sli-copy" title="Copiar enlace">${iconCopyLink}</button>
-        <button class="sli-revoke" title="Dejar de compartir">${iconTrash}</button>
-      </div>
-    </div>`).join('');
-}
-
-async function openSharedLinksModal(){
-  $('shared-links-modal').classList.add('show');
-  $('shared-links-loading').style.display=''; $('shared-links-list').innerHTML=''; $('shared-links-empty').style.display='none';
-  try{
-    const res = await fetch('/api/notes/share/list').then(r=>r.json());
-    renderSharedLinksList(res.shares||[]);
-  }catch(e){
-    $('shared-links-empty').style.display='flex';
-  }
-  $('shared-links-loading').style.display='none';
-}
-function closeSharedLinksModal(){ $('shared-links-modal').classList.remove('show'); }
-
-$('btn-shared-links').addEventListener('click', openSharedLinksModal);
-$('shared-links-cancel').addEventListener('click', closeSharedLinksModal);
-$('shared-links-modal').addEventListener('click', e=>{ if(e.target===$('shared-links-modal')) closeSharedLinksModal(); });
-
-$('shared-links-list').addEventListener('click', async e=>{
-  const item=e.target.closest('.shared-link-item'); if(!item) return;
-  const path=item.dataset.path, url=item.dataset.url;
-  if(e.target.closest('.sli-open')){
-    closeSharedLinksModal();
-    openInNewTab(path);
-  } else if(e.target.closest('.sli-copy')){
-    const btn=e.target.closest('.sli-copy');
-    try{ await navigator.clipboard.writeText(url); }
-    catch(_){ const ta=document.createElement('textarea'); ta.value=url; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(__){} ta.remove(); }
-    const orig=btn.innerHTML; btn.innerHTML=CHECK_ICON; btn.classList.add('copied');
-    setTimeout(()=>{ btn.innerHTML=orig; btn.classList.remove('copied'); }, 1400);
-  } else if(e.target.closest('.sli-revoke')){
-    if(!confirm('¿Dejar de compartir esta nota? El enlace actual dejará de funcionar.')) return;
-    const res = await api('/api/notes/share/revoke', {path});
-    if(res.error){ alert(res.error); return; }
-    item.remove();
-    if(!$('shared-links-list').children.length) $('shared-links-empty').style.display='flex';
-  }
-});
+/* Nota: el panel "Enlaces compartidos" vive ahora en el modal global de Ajustes
+   (templates/base.html), accesible desde el icono de la cabecera en cualquier
+   página — btn-shared-links solo necesita la clase js-open-settings (ver notes.html). */
 
 /* ════════════ Imágenes: clic derecho → Eliminar (borra el archivo y la referencia) ════════════ */
 const iconTrash='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
@@ -1529,7 +1469,6 @@ document.addEventListener('keydown', e=>{
   if($('storage-modal').classList.contains('show')){ $('storage-modal').classList.remove('show'); return; }
   if($('imgdir-modal').classList.contains('show')){ $('imgdir-modal').classList.remove('show'); return; }
   if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
-  if($('shared-links-modal').classList.contains('show')){ closeSharedLinksModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
 });
@@ -1809,7 +1748,16 @@ $('vault-title').addEventListener('click',e=>{
   if(window.innerWidth<760)$('vault').classList.remove('side-hidden');
   setTimeout(()=>{const row=document.querySelector('.tree-row[data-path="'+cssEsc(fp)+'"]');if(!row)return;row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.remove('flash-locate');void row.offsetWidth;row.classList.add('flash-locate');},60);
 });
-(async ()=>{ await loadTree(); await restoreTabsState(); })();
+(async ()=>{
+  await loadTree(); await restoreTabsState();
+  // Deep-link desde fuera del vault (p.ej. "Abrir esta nota" en el modal de
+  // Ajustes de otra página): /?open=<ruta> abre la nota y limpia la URL.
+  const openParam=new URLSearchParams(location.search).get('open');
+  if(openParam){
+    await openInNewTab(openParam);
+    history.replaceState(null, '', location.pathname);
+  }
+})();
 
 // Rastreador de eventos de puntero: usado por el aislador de foco del editor
 // para distinguir "el usuario clicó fuera" (permitido) de "el teclado movió el foco" (revertir).
