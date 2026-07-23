@@ -1169,9 +1169,9 @@ $('share-stop').addEventListener('click', async ()=>{
 $('share-cancel').addEventListener('click', closeShareModal);
 $('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
 
-/* Nota: el panel "Enlaces compartidos" vive ahora en el modal global de Ajustes
-   (templates/base.html), accesible desde el icono de la cabecera en cualquier
-   página — btn-shared-links solo necesita la clase js-open-settings (ver notes.html). */
+/* Nota: el panel "Enlaces compartidos" vive en el modal global de Ajustes
+   (templates/base.html), accesible desde el icono de la cabecera — el botón
+   de la barra lateral se quitó por quedar duplicado con ese icono. */
 
 /* ════════════ Imágenes: clic derecho → Eliminar (borra el archivo y la referencia) ════════════ */
 const iconTrash='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
