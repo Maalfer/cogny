@@ -20,6 +20,8 @@ const expanded = new Set(JSON.parse(localStorage.getItem('vault-expanded') || '[
 let BY_PATH = new Map();   // ruta(minúsculas) -> archivo  (búsqueda O(1) de embeds/imágenes)
 let BY_BASE = new Map();   // nombre(+/- extensión) -> archivo
 let searchTimer = null;
+let dragSrc = null;         // {path, type} del elemento del árbol que se está arrastrando
+let dropTargetEl = null;    // elemento con el resaltado de "voy a soltar aquí" activo
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['png','jpg','jpeg','gif','webp','svg','bmp','ico'];
 
@@ -260,23 +262,25 @@ function persistExpanded(){ localStorage.setItem('vault-expanded', JSON.stringif
 function buildChildren(kids){
   if(kids.dataset.built) return;
   const frag=document.createDocumentFragment();
-  buildTreeDOM(kids._items||[], frag, kids._depth||0);
+  buildTreeDOM(kids._items||[], frag, kids._depth||0, kids._parentPath||'');
   kids.appendChild(frag); kids.dataset.built='1';
 }
-function buildTreeDOM(items, container, depth){
+function buildTreeDOM(items, container, depth, parentPath){
   items.forEach(it=>{
     const row=document.createElement('div');
     row.className='tree-row'+(it.type==='file'?' is-file':'');
     row.dataset.path=it.path; row.dataset.type=it.type;
+    // La carpeta de adjuntos concentra cientos de imágenes subidas por el backend
+    // (upload() la fuerza siempre en la raíz): no se puede arrastrar ni recibir
+    // sueltas "dentro" o se rompería esa ruta fija y el propósito de la carpeta.
+    const isAttach=(it.type==='folder' && it.name==='Adjuntos');
     if(it.type==='folder'){
-      // La carpeta de adjuntos puede contener cientos de imagenes: se deja
-      // NO expandible para no generar un DOM enorme que ralentiza la web.
-      const isAttach=(it.name==='Adjuntos');
+      // No expandible por click, para no generar un DOM enorme que ralentiza la web.
       const isOpen=!isAttach && expanded.has(it.path); if(!isOpen && !isAttach) row.classList.add('collapsed');
       row.innerHTML=`<span class="twirl">${isAttach?'':iconChev}</span>${iconFolder(isOpen)}<span class="label">${esc(it.name)}</span><button class="row-menu" aria-label="Opciones de ${esc(it.name)}">${iconDots}</button>`;
       container.appendChild(row);
       const kids=document.createElement('div'); kids.className='tree-children'+(isOpen?'':' hidden');
-      kids._items=it.children||[]; kids._depth=depth+1;
+      kids._items=it.children||[]; kids._depth=depth+1; kids._parentPath=it.path;
       container.appendChild(kids);
       if(isOpen) buildChildren(kids);
       row.setAttribute('tabindex','0');
@@ -295,6 +299,7 @@ function buildTreeDOM(items, container, depth){
         if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();
           const rows=[...document.querySelectorAll('#vault-tree .tree-row')].filter(r=>!r.closest('.tree-children.hidden'));
           const i=rows.indexOf(row);const next=rows[i+(e.key==='ArrowDown'?1:-1)];if(next)next.focus();}});
+      if(!isAttach) wireRowDrop(kids, it.path);
     } else {
       const ico=it.type==='note'?iconNote:(IMG_EXT.includes(it.ext)?iconImg:iconFile);
       row.innerHTML=`<span style="width:16px"></span>${ico}<span class="label">${esc(it.name)}</span><button class="row-menu" aria-label="Opciones de ${esc(it.name)}">${iconDots}</button>`;
@@ -309,7 +314,123 @@ function buildTreeDOM(items, container, depth){
           const i=rows.indexOf(row);const next=rows[i+(e.key==='ArrowDown'?1:-1)];if(next)next.focus();}});
     }
     row.querySelector('.row-menu').addEventListener('click', e=>{e.stopPropagation(); showCtxMenu(e, it);});
+    wireRowDrag(row, it, parentPath, isAttach);
   });
+}
+
+/* ════════════ Arrastrar y soltar en el árbol (reordenar / mover de carpeta) ════════════ */
+function fsName(path){ return path.split('/').pop(); }
+function parentPathOf(path){ const p=path.split('/'); p.pop(); return p.join('/'); }
+function findNode(items, path){
+  for(const n of items){
+    if(n.path===path) return n;
+    if(n.type==='folder'){ const f=findNode(n.children||[], path); if(f) return f; }
+  }
+  return null;
+}
+function setDropVisual(el, mode){
+  if(dropTargetEl && (dropTargetEl!==el || dropTargetEl.dataset.dropMode!==mode)) clearDropVisual();
+  el.classList.add('drop-'+mode); el.dataset.dropMode=mode; dropTargetEl=el;
+}
+function clearDropVisual(){
+  if(dropTargetEl){ dropTargetEl.classList.remove('drop-before','drop-after','drop-into'); delete dropTargetEl.dataset.dropMode; }
+  dropTargetEl=null;
+}
+// Cablea dragstart/dragover/drop de UNA fila (nota, archivo o carpeta) del árbol.
+function wireRowDrag(row, it, parentPath, isAttach){
+  if(isAttach) return;   // Adjuntos no se puede arrastrar (ruta fija en el backend)
+  row.draggable=true;
+  row.addEventListener('dragstart', e=>{
+    e.stopPropagation();
+    dragSrc={path:it.path, type:it.type};
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain', it.path);   // Firefox exige setData para permitir el drag
+    requestAnimationFrame(()=>row.classList.add('dragging'));
+  });
+  row.addEventListener('dragend', ()=>{ row.classList.remove('dragging'); clearDropVisual(); dragSrc=null; });
+  row.addEventListener('dragover', e=>{
+    if(!dragSrc || dragSrc.path===it.path) return;
+    if(it.type==='folder' && (it.path===dragSrc.path || it.path.startsWith(dragSrc.path+'/'))) return;
+    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
+    const rect=row.getBoundingClientRect(); const y=e.clientY-rect.top, h=rect.height;
+    const canDropInto = it.type==='folder' && !isAttach;
+    const mode = (canDropInto && y>h*0.25 && y<h*0.75) ? 'into' : (y<h/2 ? 'before' : 'after');
+    setDropVisual(row, mode);
+  });
+  row.addEventListener('drop', e=>{
+    if(!dragSrc || dragSrc.path===it.path) return;
+    e.preventDefault(); e.stopPropagation();
+    const mode=row.dataset.dropMode; const src=dragSrc; dragSrc=null; clearDropVisual();
+    if(!mode) return;
+    if(mode==='into') dropItem(src, it.path, null, null);
+    else dropItem(src, parentPath, fsName(it.path), mode);
+  });
+}
+// Cablea el contenedor de hijos de una carpeta, para poder soltar "dentro" cuando
+// está vacía o cuando se apunta al hueco bajo el último elemento visible.
+function wireRowDrop(kids, folderPath){
+  kids.addEventListener('dragover', e=>{
+    if(!dragSrc || e.target!==kids) return;
+    if(folderPath===dragSrc.path || folderPath.startsWith(dragSrc.path+'/')) return;
+    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
+    setDropVisual(kids, 'into');
+  });
+  kids.addEventListener('drop', e=>{
+    if(!dragSrc || e.target!==kids) return;
+    e.preventDefault(); e.stopPropagation();
+    const src=dragSrc; dragSrc=null; clearDropVisual();
+    dropItem(src, folderPath, null, null);
+  });
+}
+// Mueve (si hace falta) y/o fija el nuevo orden tras soltar. `anchorName` es el
+// nombre del hermano de referencia en la carpeta destino ('before'/'after'), o
+// null para soltar al final (incluido el caso "dentro de esta carpeta").
+async function dropItem(src, targetParent, anchorName, anchorSide){
+  const sourceParent=parentPathOf(src.path);
+  const sameParent=sourceParent===targetParent;
+  const workingName=fsName(src.path);
+
+  const destArr = targetParent ? ((findNode(TREE, targetParent)||{}).children||[]) : TREE;
+  const originalNames = destArr.map(n=>fsName(n.path));
+  const destNames = originalNames.filter(n=>n!==workingName);
+  let idx=destNames.length;
+  if(anchorName){
+    const ai=destNames.indexOf(anchorName);
+    if(ai>=0) idx = anchorSide==='after' ? ai+1 : ai;
+  }
+  destNames.splice(idx, 0, workingName);
+  if(sameParent && destNames.every((n,i)=>n===originalNames[i])) return; // sin cambio real
+
+  let finalPath=src.path;
+  if(!sameParent){
+    const moved=await moveItem(src, targetParent);
+    if(!moved) return;
+    finalPath=moved;
+  }
+  await api('/api/notes/reorder', {folder:targetParent, order:destNames});
+  if(!sameParent){
+    const srcArr = sourceParent ? ((findNode(TREE, sourceParent)||{}).children||[]) : TREE;
+    const srcNames = srcArr.map(n=>fsName(n.path)).filter(n=>n!==workingName);
+    await api('/api/notes/reorder', {folder:sourceParent, order:srcNames});
+    revealPath(finalPath);
+  }
+  await loadTree(); renderTabs();
+}
+// Mueve un elemento a otra carpeta y recoloca pestañas/historial/expandidos que
+// referenciaran su ruta antigua (misma lógica que ya usa renameItem, extendida
+// a subrutas completas porque mover una carpeta arrastra también a sus hijos).
+async function moveItem(it, targetParent){
+  if(dirty) await saveNow();   // evita reescribir la ruta antigua si se autoguarda después de moverla
+  const res=await api('/api/notes/move', {path:it.path, target:targetParent});
+  if(res.error){ alert(res.error); return null; }
+  const oldPath=it.path, newPath=res.path;
+  const remap = p => (p===oldPath || p.startsWith(oldPath+'/')) ? newPath + p.slice(oldPath.length) : p;
+  const reopenPath = (current && (current.path===oldPath || current.path.startsWith(oldPath+'/'))) ? remap(current.path) : null;
+  tabs.forEach(t=>{ t.path=remap(t.path); t.history=t.history.map(remap); });
+  const remappedExpanded=new Set([...expanded].map(remap));
+  expanded.clear(); remappedExpanded.forEach(p=>expanded.add(p)); persistExpanded();
+  if(reopenPath) await openNote(reopenPath, undefined, {_fromTab:true});
+  return newPath;
 }
 
 async function loadTree(){
@@ -325,7 +446,7 @@ function renderTree(){
   if(q){ renderSearchResults(tree, q); return; }
   if(!TREE.length){ tree.innerHTML='<div class="tree-empty">Bóveda vacía.<br>Crea tu primera nota<br>o importa una bóveda.</div>'; return; }
   const frag=document.createDocumentFragment();
-  buildTreeDOM(TREE, frag, 0);
+  buildTreeDOM(TREE, frag, 0, '');
   tree.appendChild(frag);
 }
 // Una fila de resultado (opcionalmente con fragmento de texto resaltado).
@@ -1626,6 +1747,22 @@ $('btn-expand-all').addEventListener('click', expandAll);
 $('vault-search-input').addEventListener('input', ()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(renderTree, 140); syncSearchClear(); });
 $('vault-search-input').addEventListener('keydown', e=>{ if(e.key==='Escape') toggleSearch(false); });
 $('vault-search-clear').addEventListener('click', ()=>{ const inp=$('vault-search-input'); inp.value=''; syncSearchClear(); inp.focus(); renderTree(); });
+// Soltar en el hueco vacío bajo el último elemento (o en una bóveda vacía) → mueve a la raíz.
+$('vault-tree').addEventListener('dragover', e=>{
+  if(!dragSrc || e.target!==$('vault-tree')) return;
+  e.preventDefault(); e.dataTransfer.dropEffect='move';
+  setDropVisual($('vault-tree'), 'into');
+});
+$('vault-tree').addEventListener('drop', e=>{
+  if(!dragSrc || e.target!==$('vault-tree')) return;
+  e.preventDefault();
+  const src=dragSrc; dragSrc=null; clearDropVisual();
+  dropItem(src, '', null, null);
+});
+// Si el puntero abandona toda la barra lateral durante el arrastre, quita cualquier resaltado.
+$('vault-side').addEventListener('dragleave', e=>{
+  if(dragSrc && !$('vault-side').contains(e.relatedTarget)) clearDropVisual();
+});
 $('btn-toggle-sidebar').addEventListener('click', ()=>{
   const hidden=$('vault').classList.toggle('side-hidden');
   $('btn-toggle-sidebar').setAttribute('aria-expanded',(!hidden).toString());

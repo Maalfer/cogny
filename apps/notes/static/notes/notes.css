@@ -45,8 +45,16 @@
 .tree-row:hover .row-menu{opacity:.65}
 .tree-row .row-menu:hover{opacity:1;background:rgba(255,255,255,.15)}
 @media(hover:none){.tree-row .row-menu{opacity:.65}}   /* siempre visible en táctil (sin :hover) */
-.tree-children{margin-left:.7rem;border-left:1px solid var(--vault-line);padding-left:.15rem}
+.tree-children{margin-left:.7rem;border-left:1px solid var(--vault-line);padding-left:.15rem;min-height:10px}
 .tree-children.hidden{display:none}
+/* Arrastrar y soltar en el árbol */
+.tree-row.dragging{opacity:.4}
+.tree-row.drop-into{outline:2px dashed var(--vault-accent);outline-offset:-2px;background:rgba(6,182,212,.14)}
+.tree-row.drop-before::before,.tree-row.drop-after::after{content:"";position:absolute;left:.35rem;right:.35rem;height:2px;border-radius:2px;background:var(--vault-accent);pointer-events:none}
+.tree-row.drop-before::before{top:-1px}
+.tree-row.drop-after::after{bottom:-1px}
+.tree-children.drop-into{outline:2px dashed var(--vault-accent);outline-offset:-2px;border-radius:7px}
+.vault-tree.drop-into{box-shadow:inset 0 0 0 2px var(--vault-accent)}
 .tree-empty{color:rgba(255,255,255,.3);font-size:.82rem;text-align:center;padding:2rem .5rem;line-height:1.6}
 /* Main editor */
 .vault-main{flex:1;display:flex;flex-direction:column;min-width:0}

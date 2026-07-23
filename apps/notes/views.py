@@ -66,15 +66,56 @@ def _rel_of(root: Path, p: Path) -> str:
     return p.resolve().relative_to(root).as_posix()
 
 
+# ────────── Orden manual de carpetas (drag & drop en el árbol) ──────────
+# Cada carpeta puede llevar un `.vaultorder` (oculto, fuera del árbol/export)
+# con la lista de nombres de sus hijos directos en el orden elegido por el
+# usuario. Los hijos que no aparezcan ahí (recién creados, importados...) se
+# añaden al final, ordenados alfabéticamente como hasta ahora.
+_ORDER_FILE = ".vaultorder"
+
+
+def _read_order(directory: Path) -> list:
+    f = directory / _ORDER_FILE
+    if not f.exists():
+        return []
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return [n for n in (data.get("order") or []) if isinstance(n, str)]
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return []
+
+
+def _write_order(directory: Path, order: list) -> None:
+    try:
+        (directory / _ORDER_FILE).write_text(
+            json.dumps({"order": order}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _rename_in_order(directory: Path, old_name: str, new_name: str) -> None:
+    order = _read_order(directory)
+    if old_name in order:
+        _write_order(directory, [new_name if n == old_name else n for n in order])
+
+
+def _remove_from_order(directory: Path, name: str) -> None:
+    order = _read_order(directory)
+    if name in order:
+        _write_order(directory, [n for n in order if n != name])
+
+
 def _build_tree(root: Path, directory: Path) -> list:
     items = []
     try:
-        entries = sorted(directory.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
+        entries = [e for e in directory.iterdir() if not e.name.startswith(".")]
     except OSError:
         return items
-    for entry in entries:
-        if entry.name.startswith("."):
-            continue
+    order = _read_order(directory)
+    rank = {name: i for i, name in enumerate(order)}
+    ordered = sorted((e for e in entries if e.name in rank), key=lambda e: rank[e.name])
+    rest = sorted((e for e in entries if e.name not in rank), key=lambda e: (not e.is_dir(), e.name.lower()))
+    for entry in ordered + rest:
         # `stat()` puede fallar si el archivo desapareció entre iterdir y
         # aquí (race condition durante una operación bulk). Lo saltamos.
         try:
@@ -224,7 +265,75 @@ def rename(request):
     if dst.exists() and dst != src:
         return _err("Ya existe con ese nombre")
     src.rename(dst)
+    _rename_in_order(src.parent, src.name, dst.name)
     return JsonResponse({"success": True, "path": _rel_of(root, dst)})
+
+
+@login_required
+@require_POST
+def move(request):
+    """Mueve una nota/carpeta/archivo a otra carpeta (drag & drop del árbol).
+
+    Solo reubica en el filesystem; el orden dentro de la carpeta destino lo
+    fija el frontend con una llamada aparte a `reorder` (conoce la posición
+    exacta donde se soltó, cosa que este endpoint no necesita saber).
+    """
+    root = _user_root(request)
+    try:
+        data = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _err("JSON inválido")
+    rel = (data.get("path") or "").strip()
+    target_rel = (data.get("target") or "").strip()
+    try:
+        src = _safe(root, rel)
+        dst_dir = _safe(root, target_rel)
+    except ValueError as e:
+        return _err(str(e))
+    if not src.exists() or src == root:
+        return _err("No existe", 404)
+    if not dst_dir.exists() or not dst_dir.is_dir():
+        return _err("Carpeta destino no encontrada", 404)
+    if src.is_dir():
+        try:
+            dst_dir.relative_to(src)
+            return _err("No se puede mover una carpeta dentro de sí misma")
+        except ValueError:
+            pass  # dst_dir no es src ni un descendiente: ok
+    if dst_dir == src.parent:
+        return JsonResponse({"success": True, "path": _rel_of(root, src)})
+    dst = dst_dir / src.name
+    if dst.exists():
+        return _err("Ya existe un elemento con ese nombre en el destino")
+    shutil.move(str(src), str(dst))
+    _remove_from_order(src.parent, src.name)
+    return JsonResponse({"success": True, "path": _rel_of(root, dst)})
+
+
+@login_required
+@require_POST
+def reorder(request):
+    """Fija el orden manual de los hijos directos de una carpeta."""
+    root = _user_root(request)
+    try:
+        data = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _err("JSON inválido")
+    folder_rel = (data.get("folder") or "").strip()
+    order = data.get("order")
+    if not isinstance(order, list) or not all(isinstance(n, str) for n in order):
+        return _err("Orden inválido")
+    try:
+        folder = _safe(root, folder_rel)
+    except ValueError as e:
+        return _err(str(e))
+    if not folder.exists() or not folder.is_dir():
+        return _err("Carpeta no encontrada", 404)
+    # Solo se admiten nombres que existan de verdad en la carpeta (evita que
+    # un cliente manipulado escriba basura arbitraria en el .vaultorder).
+    existing = {e.name for e in folder.iterdir() if not e.name.startswith(".")}
+    _write_order(folder, [n for n in order if n in existing])
+    return JsonResponse({"success": True})
 
 
 @login_required
@@ -242,10 +351,12 @@ def delete(request):
         return _err(str(e))
     if not target.exists() or target == root:
         return _err("No existe", 404)
+    parent, name = target.parent, target.name
     if target.is_dir():
         shutil.rmtree(target)
     else:
         target.unlink()
+    _remove_from_order(parent, name)
     return JsonResponse({"success": True})
 
 
