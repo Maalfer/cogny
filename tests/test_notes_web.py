@@ -57,7 +57,7 @@ class NotesCrudTests(VaultTestCase):
     def test_no_se_puede_salir_de_la_boveda(self):
         resp = self.json_post("/api/notes/save", {"path": "../fuera.md", "content": "x"})
         self.assertEqual(resp.status_code, 400)
-        self.assertFalse((self.vault_dir.parent / "fuera.md").exists())
+        self.assertFalse((self.tmp_root / "fuera.md").exists())
 
     def test_solo_se_guardan_ficheros_md(self):
         resp = self.json_post("/api/notes/save", {"path": "script.py", "content": "x"})
@@ -112,7 +112,7 @@ class UploadTests(VaultTestCase):
         resp = self.client.post("/api/notes/upload", {"file": f})
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["path"].startswith("Adjuntos/"))
-        self.assertFalse((self.vault_dir.parent / "fuera.txt").exists())
+        self.assertFalse((self.tmp_root / "fuera.txt").exists())
 
 
 class ExportImportTests(VaultTestCase):

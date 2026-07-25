@@ -131,7 +131,7 @@ class NotesTests(ApiTestCase):
         for payload in ({"path": "../fuera.md", "content": "x"},
                         {"parent": "..", "name": "fuera"}):
             self.assertEqual(self.api("post", "/api/v1/notes", payload).status_code, 400)
-        self.assertFalse((self.vault_dir.parent / "fuera.md").exists())
+        self.assertFalse((self.tmp_root / "fuera.md").exists())
 
     def test_listado_y_busqueda(self):
         self.write_note("Carpeta/uno.md", "aguja")

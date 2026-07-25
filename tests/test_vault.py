@@ -143,12 +143,12 @@ class ExportImportTests(VaultTestCase):
 
     def test_rechaza_un_zip_con_rutas_que_escapan(self):
         root = vault.root()
-        evil = self.vault_dir.parent / "evil.zip"
+        evil = self.tmp_root / "malicioso.zip"
         with zipfile.ZipFile(evil, "w") as zf:
             zf.writestr("../fuera.md", "boom")
         with open(evil, "rb") as fh, self.assertRaises(VaultError):
             vault.import_zip(root, fh)
-        self.assertFalse((self.vault_dir.parent / "fuera.md").exists())
+        self.assertFalse((self.tmp_root / "fuera.md").exists())
 
     def test_rechaza_algo_que_no_es_un_zip(self):
         with self.assertRaises(VaultError):

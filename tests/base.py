@@ -13,12 +13,22 @@ from apps.accounts.models import User
 
 
 class VaultTestCase(TestCase):
-    """Test con una bóveda vacía en disco, borrada al terminar."""
+    """Test con una bóveda vacía en disco, borrada al terminar.
+
+    La bóveda cuelga de un directorio temporal propio en vez de ir directa a
+    `/tmp`, para que `vault_dir.parent` —donde varios tests comprueban que NADA
+    se ha escrito fuera de la bóveda— sea un sitio privado de este test. Con la
+    bóveda colgando de `/tmp` esas comprobaciones miraban un directorio
+    compartido: un fichero ajeno con el nombre equivocado las hacía fallar, y
+    los restos de una ejecución anterior (con otro usuario) rompían el test.
+    """
 
     def setUp(self):
         super().setUp()
-        self.vault_dir = Path(tempfile.mkdtemp(prefix="cogny-test-"))
-        self.addCleanup(shutil.rmtree, self.vault_dir, True)
+        self.tmp_root = Path(tempfile.mkdtemp(prefix="cogny-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp_root, True)
+        self.vault_dir = self.tmp_root / "vault"
+        self.vault_dir.mkdir()
         patcher = override_settings(VAULT_ROOT=self.vault_dir)
         patcher.enable()
         self.addCleanup(patcher.disable)
