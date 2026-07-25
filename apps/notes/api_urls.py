@@ -14,8 +14,6 @@ urlpatterns = [
     path("delete", views.delete, name="delete"),
     path("search", views.search, name="search"),
     path("upload", views.upload, name="upload"),
-    # Alias histórico que usa el frontend; misma view.
-    path("upload-asset", views.upload, name="upload_asset"),
     path("asset", views.asset, name="asset"),
     path("export", views.export_vault, name="export"),
     path("import", views.import_vault, name="import"),

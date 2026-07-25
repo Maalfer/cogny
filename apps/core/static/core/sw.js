@@ -1,5 +1,5 @@
 /* cogny Service Worker (app-shell precaching + stale-while-revalidate) */
-const CACHE = 'cogny-v2';
+const CACHE = 'cogny-v3';
 const AV = '__ASSET_VERSION__'; // inyectado por Django service_worker view
 
 // App shell: activos críticos precacheados en install.
@@ -7,6 +7,8 @@ const AV = '__ASSET_VERSION__'; // inyectado por Django service_worker view
 const APP_SHELL = [
   '/manifest.json',
   `/static/css/app.css?v=${AV}`,
+  `/static/js/csrf.js?v=${AV}`,
+  `/static/js/app.js?v=${AV}`,
   `/static/notes/marked.min.js?v=${AV}`,
   `/static/notes/md-ctxmenu.js?v=${AV}`,
   `/static/vendor/codemirror/balucm.js?v=${AV}`,
@@ -34,6 +36,17 @@ self.addEventListener('activate', e => {
   );
 });
 
+/* Guarda una copia en caché SIN romper la respuesta que se le entrega a la página.
+   El clonado tiene que hacerse AQUÍ, de forma síncrona: si se hace dentro del
+   `then` de `caches.open()`, para entonces la página ya ha empezado a leer el
+   cuerpo y `clone()` revienta con "Response body is already used" — un error que
+   además aborta el manejador y deja la petición sin responder. */
+function cachePut(request, response) {
+  if (!response.ok) return;
+  const copy = response.clone();
+  caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {});
+}
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
@@ -51,7 +64,7 @@ self.addEventListener('fetch', e => {
     // el POST daría 403. La caché sólo se usa como respaldo si no hay red.
     e.respondWith(
       fetch(e.request, { cache: 'no-store' })
-        .then(res => { if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone())); return res; })
+        .then(res => { cachePut(e.request, res); return res; })
         .catch(() => caches.match(e.request))
     );
     return;
@@ -61,10 +74,7 @@ self.addEventListener('fetch', e => {
   // URLs versionadas → inmutables; precacheados en install, siempre instantáneos.
   e.respondWith(
     caches.match(e.request).then(cached =>
-      cached || fetch(e.request).then(res => {
-        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
-        return res;
-      })
+      cached || fetch(e.request).then(res => { cachePut(e.request, res); return res; })
     )
   );
 });

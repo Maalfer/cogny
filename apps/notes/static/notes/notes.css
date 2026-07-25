@@ -125,6 +125,12 @@
 .vault-resizer.rz-hide{display:none}
 /* Editor Live Preview (CodeMirror) — una sola vista que se renderiza al escribir */
 .vault-cm{flex:1;min-width:0;min-height:0;display:flex;overflow:hidden}
+/* Modo lectura: nota renderizada, sin edición, con el mismo aspecto que la vista pública. */
+.vault-reader{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;font-size:calc(var(--note-fs,1) * 1rem)}
+/* Botón lectura/edición: por defecto (editando) muestra el ojo; en lectura muestra el lápiz. */
+#btn-view-toggle .ico-edit{display:none}
+#btn-view-toggle.reading .ico-read{display:none}
+#btn-view-toggle.reading .ico-edit{display:inline-block}
 .vault-cm.drag{outline:2px dashed var(--vault-accent);outline-offset:-6px}
 .cm-editor{flex:1;height:100%;background:transparent;color:#dcdce6;font-size:1rem;line-height:1.7}
 .cm-editor.cm-focused{outline:none}

@@ -357,6 +357,48 @@ body.subapp-body{ padding-left: env(safe-area-inset-left, 0); padding-right: env
 .sli-actions button:hover{ background: var(--border); }
 .sli-actions button.sli-revoke:hover{ background: rgba(226,33,52,.25); color: var(--red); }
 .sli-actions button.copied{ background: #16a34a; color: #fff; }
+
+/* ── Acceso de sólo lectura: se esconden las acciones que escriben ──
+   Es sólo cosmética — el permiso real lo aplica @require_write en el servidor.
+   Se listan por id porque son botones sueltos de la barra del vault, sin una
+   clase común que los agrupe. */
+body.role-readonly #btn-new-note,
+body.role-readonly #btn-new-folder,
+body.role-readonly #btn-insert-img,
+body.role-readonly #btn-format,
+body.role-readonly #btn-view-toggle,
+body.role-readonly #vsm-import,
+body.role-readonly #empty-new,
+body.role-readonly #empty-import,
+body.role-readonly .sli-revoke{ display: none !important; }
+.ro-badge{ display: inline-flex; align-items: center; gap: .3rem; background: var(--bg3); color: var(--text2); border: 1px solid var(--border); border-radius: 999px; padding: .12rem .55rem; font-size: .72rem; font-weight: 700; vertical-align: middle; }
+.ro-badge svg{ width: 13px; height: 13px; }
+
+/* ---- Sección "Clave de API" del modal de Ajustes ---- */
+.settings-title-row{ display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.settings-title-link{ display: inline-flex; align-items: center; gap: .3rem; color: var(--cyan); text-decoration: none; font-size: .74rem; font-weight: 700; text-transform: none; letter-spacing: 0; background: rgba(6,182,212,.1); border: 1px solid rgba(6,182,212,.45); border-radius: 999px; padding: .2rem .55rem; }
+.settings-title-link:hover{ background: rgba(6,182,212,.2); }
+.settings-title-link svg{ width: 13px; height: 13px; }
+.apikey-new{ background: rgba(6,182,212,.1); border: 1px solid var(--cyan); border-radius: 10px; padding: .65rem .75rem; margin-bottom: .7rem; }
+.apikey-new-label{ color: var(--cyan); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-bottom: .4rem; }
+.apikey-new-row{ display: flex; align-items: center; gap: .5rem; }
+.apikey-new-row code{ flex: 1; min-width: 0; background: var(--bg1, #0f0f0f); border: 1px solid var(--border); border-radius: 8px; padding: .45rem .55rem; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; overflow-x: auto; white-space: nowrap; }
+.apikey-new-row button{ background: var(--bg4); border: none; border-radius: 8px; width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text); cursor: pointer; }
+.apikey-new-row button svg{ width: 16px; height: 16px; }
+.apikey-new-row button:hover{ background: var(--border); }
+.apikey-new-row button.copied{ background: #16a34a; color: #fff; }
+.apikey-tag{ background: var(--bg4); color: var(--text2); border-radius: 5px; padding: .05rem .3rem; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; vertical-align: middle; }
+.apikey-form{ display: flex; align-items: center; gap: .5rem; margin-top: .6rem; flex-wrap: wrap; }
+.apikey-form input[type=text]{ flex: 1; min-width: 130px; background: var(--bg3); border: 1px solid var(--border); border-radius: 9px; padding: .5rem .65rem; color: var(--text); font-size: .85rem; }
+.apikey-form input[type=text]:focus{ outline: none; border-color: var(--cyan); }
+.apikey-form button{ border: none; border-radius: 9px; padding: .5rem 1rem; font-weight: 700; font-size: .85rem; cursor: pointer; }
+.apikey-form button:disabled{ opacity: .6; cursor: default; }
+.apikey-check{ display: flex; align-items: center; gap: .35rem; color: var(--text2); font-size: .8rem; cursor: pointer; white-space: nowrap; }
+.apikey-check input{ accent-color: var(--cyan); cursor: pointer; }
+@media (max-width: 420px) {
+  .apikey-form input[type=text]{ flex-basis: 100%; }
+  .apikey-form button{ flex: 1; }
+}
 @media (max-width: 480px){
   .modal-actions{ flex-direction: column-reverse; gap: .5rem; margin-top: .6rem; }
   .modal-actions button{ width: 100%; padding: .85rem; font-size: .95rem; }
@@ -719,6 +761,44 @@ oculto por defecto hasta el hover (gesto fino) */
 .pf-card-icon svg{ width: 18px; height: 18px; }
 .pf-icon-user{ background: rgba(6,182,212,.15); color: var(--cyan); }
 .pf-icon-lock{ background: rgba(167,139,250,.15); color: #a78bfa; }
+.pf-icon-access{ background: rgba(34,197,94,.15); color: #22c55e; }
+
+/* ── Accesos invitados (perfil del propietario) ── */
+.pf-role-badge{ border-radius: 999px; padding: .1rem .55rem; font-size: .72rem; font-weight: 700; }
+.pf-role-owner{ background: rgba(6,182,212,.15); color: var(--cyan); }
+.pf-role-editor{ background: rgba(34,197,94,.15); color: #22c55e; }
+.pf-role-viewer{ background: var(--bg3); color: var(--text2); }
+.pf-card-sub{ display: block; font-size: .76rem; font-weight: 400; color: var(--text3); margin-top: .1rem; }
+.pf-hint{ font-size: .82rem; color: var(--text2); line-height: 1.5; margin: 0 0 .8rem; }
+.acc-list{ display: flex; flex-direction: column; gap: .5rem; margin-bottom: .9rem; }
+.acc-item{ display: flex; align-items: center; gap: .65rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: .55rem .65rem; }
+.acc-avatar{ width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--bg4); color: var(--text); font-weight: 700; font-size: .85rem; }
+.acc-info{ flex: 1; min-width: 0; }
+.acc-name{ font-size: .9rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-meta{ font-size: .74rem; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-controls{ display: flex; align-items: center; gap: .3rem; flex-shrink: 0; }
+.acc-role{ background: var(--bg4); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: .3rem .4rem; font-size: .76rem; cursor: pointer; max-width: 8.5rem; }
+.acc-role:focus{ outline: none; border-color: var(--cyan); }
+.acc-btn{ background: var(--bg4); border: none; border-radius: 8px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--text); cursor: pointer; }
+.acc-btn svg{ width: 15px; height: 15px; }
+.acc-btn:hover{ background: var(--border); }
+.acc-btn.acc-del:hover{ background: rgba(226,33,52,.25); color: var(--red); }
+.acc-new{ border-top: 1px solid var(--border); padding-top: .9rem; display: flex; flex-direction: column; gap: .55rem; }
+.acc-new-title{ font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text3); }
+.acc-perm{ display: flex; gap: .5rem; }
+.acc-perm-btn{ flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: .6rem .65rem; cursor: pointer; text-align: left; color: var(--text2); }
+.acc-perm-btn svg{ width: 17px; height: 17px; margin-bottom: .15rem; }
+.acc-perm-btn:hover{ border-color: var(--text3); }
+.acc-perm-btn.active{ border-color: var(--cyan); background: rgba(6,182,212,.1); color: var(--cyan); }
+.acc-perm-name{ font-size: .82rem; font-weight: 700; color: var(--text); }
+.acc-perm-btn.active .acc-perm-name{ color: var(--cyan); }
+.acc-perm-desc{ font-size: .72rem; color: var(--text3); line-height: 1.3; }
+@media (max-width: 460px) {
+  .acc-perm{ flex-direction: column; }
+  .acc-item{ flex-wrap: wrap; }
+  .acc-controls{ width: 100%; justify-content: flex-end; }
+  .acc-role{ max-width: none; flex: 1; }
+}
 .pf-card-label{
   flex: 1;
   font-size: .95rem;
@@ -1060,13 +1140,6 @@ a{ touch-action: manipulation; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.hb-user-role{
-  font-size: .72rem;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  margin-top: .15rem;
 }
 .hb-close{
   background: none;
@@ -1808,6 +1881,10 @@ html{ overflow-x: hidden; }
 .bh-desk-btn:hover{ background: var(--bg3); color: var(--text2); }
 /* Botón de logout con color de peligro al hacer hover */
 .bh-desk-logout:hover{ background: rgba(239,68,68,.1); color: #ef4444; }
+/* El logout va en un <form> (la vista es @require_POST). `display:contents`
+   saca al form del layout: el botón sigue siendo hijo directo del flex y se
+   coloca igual que cuando era un <a>. */
+.bh-logout-form{ display: contents; }
 /* Separador vertical */
 .bh-desk-sep{
   width: 1px;

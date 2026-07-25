@@ -1,0 +1,730 @@
+/* =====================================================================
+   PERFIL — hoja dedicada (se carga sólo en /profile/)
+   Depende de las variables de tema de app.css (--bg, --cyan, --border…).
+   Las clases van con prefijo .pfx- para no chocar con nada global.
+   ===================================================================== */
+
+/* El wrapper genérico limita a 680px; aquí queremos toda la pantalla. */
+.subapp-wrapper.pfx-wrapper{
+  max-width: none;
+  display: block;
+}
+
+.pfx{
+  --pfx-gap: 1.25rem;
+  --pfx-radius: 16px;
+  --pfx-shadow: 0 1px 2px rgba(0,0,0,.05), 0 18px 40px -32px rgba(0,0,0,.55);
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pfx-gap);
+}
+.pfx *,
+.pfx *::before,
+.pfx *::after{ box-sizing: border-box; }
+
+/* Foco de teclado visible y homogéneo en toda la página */
+.pfx :focus-visible{
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────── Cabecera ─────────────────────────── */
+.pfx-hero{
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--bg2);
+  box-shadow: var(--pfx-shadow);
+}
+.pfx-hero::before{           /* halo de acento, decorativo */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 160% at 0% -40%, var(--cyan-dim) 0%, transparent 60%),
+    linear-gradient(120deg, var(--cyan-dim) 0%, transparent 45%);
+  pointer-events: none;
+  z-index: 0;
+}
+.pfx-hero > *{ position: relative; z-index: 1; }
+
+.pfx-hero-id{
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+/* Avatar */
+.pfx-avatar-wrap{
+  position: relative;
+  flex-shrink: 0;
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  -webkit-tap-highlight-color: transparent;
+}
+.pfx-avatar{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(140deg, var(--cyan), var(--bg4));
+  color: #06121a;
+  font-size: 2.6rem;
+  font-weight: 900;
+  line-height: 1;
+  user-select: none;
+  border: 3px solid var(--bg2);
+  box-shadow: 0 0 0 1px var(--cyan-border), 0 10px 30px -14px rgba(0,0,0,.7);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.pfx-avatar img{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  z-index: 2;
+}
+.pfx-avatar-wrap:hover .pfx-avatar{
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 2px var(--cyan), 0 14px 34px -14px rgba(0,0,0,.75);
+}
+.pfx-avatar-wrap:active .pfx-avatar{ transform: scale(.97); }
+
+.pfx-avatar-ring{
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  pointer-events: none;
+}
+.pfx-avatar-ring.uploading{
+  border-top-color: var(--cyan);
+  animation: pfx-spin .7s linear infinite;
+}
+@keyframes pfx-spin { to { transform: rotate(360deg); } }
+
+.pfx-avatar-cam{
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cyan);
+  color: #06121a;
+  border: 3px solid var(--bg2);
+  transition: transform .18s ease;
+}
+.pfx-avatar-cam svg{ width: 15px; height: 15px; }
+.pfx-avatar-wrap:hover .pfx-avatar-cam{ transform: scale(1.08); }
+
+/* Nombre y distintivos */
+.pfx-hero-text{ min-width: 0; }
+.pfx-hero-name{
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 900;
+  letter-spacing: -.6px;
+  line-height: 1.15;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.pfx-hero-sub{
+  margin: .25rem 0 0;
+  font-size: .9rem;
+  color: var(--text2);
+}
+.pfx-hero-badges{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .75rem;
+}
+.pfx-badge{
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  border-radius: 999px;
+  padding: .28rem .7rem;
+  font-size: .76rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.pfx-badge svg{ width: 14px; height: 14px; }
+.pfx-badge-owner{ background: var(--cyan-dim); color: var(--cyan); box-shadow: inset 0 0 0 1px var(--cyan-border); }
+.pfx-badge-editor{ background: rgba(34,197,94,.15); color: #22c55e; box-shadow: inset 0 0 0 1px rgba(34,197,94,.3); }
+.pfx-badge-viewer{ background: var(--bg3); color: var(--text2); box-shadow: inset 0 0 0 1px var(--border); }
+.pfx-badge-soft{
+  background: transparent;
+  color: var(--text2);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* Tira de datos */
+.pfx-stats{
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.pfx-stat{
+  padding: .7rem 1.15rem;
+  min-width: 8.5rem;
+  border-left: 1px solid var(--border);
+}
+.pfx-stat:first-child{ border-left: none; }
+.pfx-stat dt{
+  margin: 0;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+}
+.pfx-stat dd{
+  margin: .2rem 0 0;
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ──────────────────────────── Rejilla ──────────────────────────── */
+.pfx-grid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--pfx-gap);
+  align-items: start;
+}
+.pfx-col{
+  display: flex;
+  flex-direction: column;
+  gap: var(--pfx-gap);
+  min-width: 0;
+}
+
+/* ───────────────────────────── Tarjetas ───────────────────────────── */
+.pfx-card{
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--pfx-radius);
+  box-shadow: var(--pfx-shadow);
+  overflow: hidden;
+}
+.pfx-card-head{
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  width: 100%;
+  padding: 1.05rem 1.25rem;
+  margin: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: none;
+}
+.pfx-fold-head{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s ease;
+}
+.pfx-fold-head:hover{ background: var(--bg3); }
+.pfx-ico{
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pfx-ico svg{ width: 20px; height: 20px; }
+.pfx-ico-user{ background: var(--cyan-dim); color: var(--cyan); }
+.pfx-ico-lock{ background: rgba(167,139,250,.16); color: #8b5cf6; }
+.pfx-ico-access{ background: rgba(34,197,94,.16); color: #22c55e; }
+.pfx-ico-settings{ background: rgba(148,163,184,.2); color: var(--text2); }
+
+.pfx-card-titles{ flex: 1; min-width: 0; display: block; }
+.pfx-card-title{
+  display: block;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.2px;
+}
+.pfx-card-desc{
+  display: block;
+  margin: .15rem 0 0;
+  font-size: .8rem;
+  font-weight: 400;
+  color: var(--text2);
+  line-height: 1.35;
+}
+
+/* Banda a todo lo ancho (Ajustes): icono + texto a la izquierda, acción a la derecha */
+.pfx-card-wide{ grid-column: 1 / -1; }
+.pfx-card-wide .pfx-card-head{ flex-wrap: wrap; gap: 1rem; }
+.pfx-card-wide .pfx-btn{ margin-left: auto; }
+.pfx-chevron{
+  flex-shrink: 0;
+  display: flex;
+  color: var(--text3);
+  transition: transform .2s ease;
+}
+.pfx-chevron svg{ width: 20px; height: 20px; }
+.pfx-fold.is-open .pfx-chevron{ transform: rotate(90deg); }
+
+.pfx-card-body{
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+/* Plegado: cerrado en pantallas estrechas, abierto en escritorio (más abajo) */
+.pfx-fold-body{ display: none; }
+.pfx-fold.is-open > .pfx-fold-body{ display: flex; }
+
+.pfx-card-actions{
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+
+/* ──────────────────────── Campos de formulario ──────────────────────── */
+.pfx-field{
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  min-width: 0;
+}
+.pfx-label{
+  font-size: .74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text2);
+}
+.pfx-duo{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: .9rem;
+}
+.pfx-inline{
+  display: flex;
+  align-items: stretch;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.pfx-inline .pfx-input{ flex: 1 1 12rem; }
+
+.pfx-input{
+  width: 100%;
+  min-width: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: .95rem;
+  padding: .7rem .9rem;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.pfx-input::placeholder{ color: var(--text3); opacity: 1; }
+.pfx-input:hover{ border-color: var(--text3); }
+.pfx-input:focus{
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+}
+.pfx-input:focus-visible{ outline: none; }
+
+.pfx-pw-field{
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pfx-pw-field .pfx-input{ padding-right: 2.9rem; }
+.pfx-eye{
+  position: absolute;
+  right: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text3);
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.pfx-eye:hover{ color: var(--text); background: var(--bg4); }
+.pfx-eye.on{ color: var(--cyan); }
+.pfx-eye svg{ width: 19px; height: 19px; }
+
+/* ──────────────────────────── Botones ──────────────────────────── */
+.pfx-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  padding: .7rem 1.1rem;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease, transform .1s ease, opacity .15s ease;
+}
+.pfx-btn svg{ width: 18px; height: 18px; flex-shrink: 0; }
+.pfx-btn:active{ transform: scale(.98); }
+.pfx-btn[disabled]{ opacity: .55; cursor: not-allowed; }
+.pfx-btn.saving{ opacity: .5; pointer-events: none; }
+.pfx-btn-block{ width: 100%; }
+
+.pfx-btn-primary{
+  background: var(--cyan);
+  color: #06121a;
+}
+.pfx-btn-primary:hover{ background: var(--cyan-hover, var(--cyan)); }
+
+.pfx-btn-ghost{
+  background: var(--bg3);
+  color: var(--text);
+  border-color: var(--border);
+}
+.pfx-btn-ghost:hover{ background: var(--bg4); border-color: var(--cyan-border); }
+
+/* ──────────────────────────── Mensajes ──────────────────────────── */
+.pfx-msg{
+  display: none;
+  font-size: .84rem;
+  font-weight: 600;
+  padding: .5rem .75rem;
+  border-radius: 10px;
+}
+.pfx-msg.show{ display: block; }
+.pfx-msg.ok{ background: var(--cyan-dim); color: var(--cyan); }
+.pfx-msg.err{ background: rgba(239,68,68,.12); color: #ef4444; }
+
+.pfx-hint{
+  margin: 0;
+  font-size: .86rem;
+  line-height: 1.55;
+  color: var(--text2);
+}
+.pfx-hint strong{ color: var(--text); }
+.pfx-loading{ padding: .75rem 0; text-align: center; }
+.pfx-empty{
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: .86rem;
+  color: var(--text2);
+}
+.pfx-empty svg{ width: 20px; height: 20px; flex-shrink: 0; }
+
+/* ─────────────────────── Accesos invitados ─────────────────────── */
+.pfx .acc-list{
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin: 0;
+}
+.pfx .acc-list:empty{ display: none; }
+.pfx .acc-item{
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem .75rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.pfx .acc-item:hover{ border-color: var(--cyan-border); }
+.pfx .acc-avatar{
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg4);
+  color: var(--text);
+  font-weight: 800;
+  font-size: .9rem;
+}
+.pfx .acc-info{ flex: 1; min-width: 0; }
+.pfx .acc-name{
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pfx .acc-meta{
+  font-size: .75rem;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pfx .acc-controls{
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  flex-shrink: 0;
+}
+.pfx .acc-role{
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: .38rem .5rem;
+  font-family: inherit;
+  font-size: .78rem;
+  cursor: pointer;
+  max-width: 9.5rem;
+}
+.pfx .acc-role:hover{ border-color: var(--text3); }
+.pfx .acc-role:focus{ border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); outline: none; }
+.pfx .acc-btn{
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.pfx .acc-btn svg{ width: 16px; height: 16px; }
+.pfx .acc-btn:hover{ background: var(--bg4); color: var(--text); }
+.pfx .acc-btn.acc-del:hover{
+  background: rgba(239,68,68,.14);
+  border-color: rgba(239,68,68,.4);
+  color: #ef4444;
+}
+
+.pfx .acc-new{
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+  margin-top: .3rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+.pfx .acc-new-title{
+  font-size: .74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+}
+.pfx .acc-perm{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: .6rem;
+}
+.pfx .acc-perm-btn{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .12rem;
+  padding: .75rem .8rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: left;
+  color: var(--text2);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.pfx .acc-perm-btn svg{ width: 18px; height: 18px; margin-bottom: .25rem; }
+.pfx .acc-perm-btn:hover{ border-color: var(--text3); }
+.pfx .acc-perm-btn.active{
+  border-color: var(--cyan);
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  box-shadow: inset 0 0 0 1px var(--cyan-border);
+}
+.pfx .acc-perm-name{ font-size: .86rem; font-weight: 700; color: var(--text); }
+.pfx .acc-perm-btn.active .acc-perm-name{ color: var(--cyan); }
+.pfx .acc-perm-desc{ font-size: .74rem; line-height: 1.35; color: var(--text2); }
+
+/* ───────────────────────────── Toast ───────────────────────────── */
+.pfx-toast{
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(2rem);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .65rem 1.3rem;
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 300;
+  box-shadow: 0 10px 34px -12px rgba(0,0,0,.65);
+  transition: opacity .2s ease, transform .25s ease;
+}
+.pfx-toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+.pfx-toast.ok{ border-color: var(--cyan-border); color: var(--cyan); }
+.pfx-toast.err{ border-color: rgba(239,68,68,.4); color: #ef4444; }
+
+/* ═══════════════════════════ Responsive ═══════════════════════════ */
+
+/* Tabletas: la cabecera respira más */
+@media (min-width: 700px){
+  .pfx{ padding: 2rem 1.75rem 4rem; }
+  .pfx-hero{ padding: 2rem 2.25rem; }
+}
+
+/* Escritorio: dos columnas y todo desplegado */
+@media (min-width: 1000px){
+  .pfx{ --pfx-gap: 1.5rem; padding: 2.25rem 2.5rem 4.5rem; }
+  .pfx-grid{ grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); }
+  .pfx-grid-solo{ grid-template-columns: minmax(0, 720px); justify-content: center; }
+
+  .pfx-hero{ padding: 2.25rem 2.5rem; }
+  .pfx-avatar{ width: 118px; height: 118px; font-size: 3rem; }
+  .pfx-hero-name{ font-size: 2.15rem; }
+
+  /* Sin plegado: hay sitio de sobra para verlo todo a la vez */
+  .pfx-fold-body{ display: flex; }
+  .pfx-fold-head{ cursor: default; }
+  .pfx-fold-head:hover{ background: none; }
+  .pfx-chevron{ display: none; }
+
+  .pfx-card-head{ padding: 1.15rem 1.5rem; }
+  .pfx-card-body{ padding: 1.25rem 1.5rem 1.5rem; }
+}
+
+@media (min-width: 1400px){
+  .pfx-stat{ min-width: 9.5rem; }
+}
+
+/* Móvil */
+@media (max-width: 699px){
+  .pfx{ padding: 1rem .85rem 3rem; }
+  .pfx-hero{
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 1.75rem 1.25rem;
+    border-radius: 18px;
+  }
+  .pfx-hero-id{
+    flex-direction: column;
+    align-items: center;
+    gap: .9rem;
+    text-align: center;
+  }
+  .pfx-hero-badges{ justify-content: center; }
+  .pfx-hero-name{ font-size: 1.6rem; }
+  .pfx-stats{ width: 100%; }
+  .pfx-stat{
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    padding: .65rem .5rem;
+  }
+  .pfx-stat dd{ white-space: normal; }
+  .pfx-card-head{ padding: .95rem 1rem; }
+  .pfx-card-body{ padding: 1rem; }
+  .pfx-btn{ padding: .75rem 1rem; }
+  .pfx-inline .pfx-btn{ flex: 1 1 100%; }
+  /* La banda de Ajustes apila el botón debajo del texto */
+  .pfx-card-wide .pfx-btn{ flex: 1 1 100%; margin-left: 0; }
+}
+
+@media (max-width: 460px){
+  .pfx .acc-item{ flex-wrap: wrap; }
+  .pfx .acc-controls{ width: 100%; justify-content: flex-end; }
+  .pfx .acc-role{ max-width: none; flex: 1; }
+}
+
+/* Menos movimiento si el sistema lo pide */
+@media (prefers-reduced-motion: reduce){
+  .pfx *{ transition: none !important; animation-duration: .001ms !important; }
+}
+
+/* ─────────────── Ajustes finos por tema ─────────────── */
+/* En claro las sombras negras ensucian: se suavizan y se sube el contraste. */
+:root[data-theme="light"] .pfx,
+:root[data-theme="pink"] .pfx,
+:root[data-theme="aqua"] .pfx{
+  --pfx-shadow: 0 1px 2px rgba(20,30,60,.05), 0 14px 34px -26px rgba(20,30,60,.35);
+}
+:root[data-theme="light"] .pfx-avatar,
+:root[data-theme="pink"] .pfx-avatar,
+:root[data-theme="aqua"] .pfx-avatar{
+  box-shadow: 0 0 0 1px var(--cyan-border), 0 10px 26px -16px rgba(20,30,60,.5);
+}
+:root[data-theme="light"] .pfx-toast,
+:root[data-theme="pink"] .pfx-toast,
+:root[data-theme="aqua"] .pfx-toast{
+  box-shadow: 0 10px 30px -14px rgba(20,30,60,.4);
+}
+:root[data-theme="light"] .pfx-ico-lock{ background: rgba(139,92,246,.12); color: #7c3aed; }
+:root[data-theme="light"] .pfx-badge-editor,
+:root[data-theme="light"] .pfx-ico-access{ color: #15803d; }
+/* Drácula: el acento es morado, el verde chirría menos apagado */
+:root[data-theme="dracula"] .pfx-ico-lock{ background: rgba(255,121,198,.16); color: #ff79c6; }
+:root[data-theme="dracula"] .pfx-ico-access{ background: rgba(80,250,123,.14); color: #50fa7b; }
+:root[data-theme="dracula"] .pfx-badge-editor{ color: #50fa7b; }
+/* Rosa: el icono de accesos combina mejor en violeta que en verde */
+:root[data-theme="pink"] .pfx-ico-lock{ background: rgba(168,85,247,.14); color: #9333ea; }

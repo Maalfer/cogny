@@ -11,9 +11,10 @@ env/
 
 # Django
 *.sqlite3
+db.sqlite3
 /data/
 /media/
-/static_collected/
+static_collected/
 staticfiles/
 
 # Variables de entorno
@@ -21,9 +22,14 @@ staticfiles/
 .env.*
 !.env.example
 
+# Herramientas
+.claude/
+
 # Sistema operativo / editores
 .DS_Store
 Thumbs.db
+__MACOSX/
 .idea/
 .vscode/
 *.swp
+*~

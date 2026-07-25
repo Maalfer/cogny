@@ -3,96 +3,251 @@
 
 {% block header_title %}Mi perfil{% endblock %}
 
-{% block content %}
-<div class="pf-body">
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/profile.css?v={{ ASSET_VERSION }}">
+{% endblock %}
 
-  <!-- Hero -->
-  <div class="pf-hero">
-    <div class="pf-hero-bg"></div>
-    <div class="pf-avatar-wrap" id="avatar-wrap">
-      <div class="pf-avatar" id="avatar-display">
-        {% with av=user.id|avatar_url %}
+{# El wrapper genérico está limitado a 680px: en el perfil queremos todo el ancho. #}
+{% block wrapper_class %}subapp-wrapper pfx-wrapper{% endblock %}
+
+{% block content %}
+<div class="pfx">
+
+  <!-- ════════ Cabecera ════════ -->
+  <header class="pfx-hero">
+    <div class="pfx-hero-id">
+      <button type="button" class="pfx-avatar-wrap" id="avatar-wrap"
+              aria-label="Cambiar foto de perfil" title="Cambiar foto de perfil">
+        <span class="pfx-avatar" id="avatar-display">
+          {% avatar_url as av %}
           {% if av %}<img src="{{ av }}" alt="" id="avatar-img" decoding="async">{% endif %}
           <span id="avatar-letter"{% if av %} style="display:none"{% endif %}>{{ user.username|slice:":1"|upper }}</span>
-        {% endwith %}
-      </div>
-      <div class="pf-avatar-ring" id="avatar-ring"></div>
-      <div class="pf-avatar-cam">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0-8.4a5.2 5.2 0 1 1 0 10.4 5.2 5.2 0 0 1 0-10.4zM3 4V1h2v3h3v2H5v3H3V6H0V4h3zm4 4V5h7l1.83 2H21c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8h4z"/></svg>
-      </div>
-      <input type="file" id="avatar-file-input" accept="image/*">
-    </div>
-    <div class="pf-hero-name" id="hero-name">{{ user.username }}</div>
-    <div class="pf-hero-meta">
-      <span class="pf-hero-since">Miembro desde {{ user.created_at|slice:":10" }}</span>
-    </div>
-    <div id="avatar-upload-msg" class="pf-upload-msg"></div>
-  </div>
+        </span>
+        <span class="pfx-avatar-ring" id="avatar-ring" aria-hidden="true"></span>
+        <span class="pfx-avatar-cam" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0-8.4a5.2 5.2 0 1 1 0 10.4 5.2 5.2 0 0 1 0-10.4zM3 4V1h2v3h3v2H5v3H3V6H0V4h3zm4 4V5h7l1.83 2H21c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8h4z"/></svg>
+        </span>
+      </button>
+      <input type="file" id="avatar-file-input" accept="image/*" hidden>
 
-  <div class="pf-sections">
-
-    <!-- Nombre -->
-    <div class="pf-card">
-      <div class="pf-card-header">
-        <div class="pf-card-icon pf-icon-user">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+      <div class="pfx-hero-text">
+        <h1 class="pfx-hero-name" id="hero-name">{{ user.username }}</h1>
+        <p class="pfx-hero-sub">{% if is_owner %}Tu cuenta y los accesos a esta bóveda{% else %}Tu cuenta en esta bóveda{% endif %}</p>
+        <div class="pfx-hero-badges">
+          <span class="pfx-badge pfx-badge-{{ user.role }}">{{ user.get_role_display }}</span>
+          <span class="pfx-badge pfx-badge-soft">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0-8.4a5.2 5.2 0 1 1 0 10.4 5.2 5.2 0 0 1 0-10.4zM3 4V1h2v3h3v2H5v3H3V6H0V4h3zm4 4V5h7l1.83 2H21c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8h4z"/></svg>
+            Pulsa la foto para cambiarla
+          </span>
         </div>
-        <div class="pf-card-label">Nombre de usuario</div>
-      </div>
-      <div class="pf-card-body">
-        <div class="pf-input-row">
-          <input type="text" id="new-username" value="{{ user.username }}" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" class="pf-input">
-          <button class="pf-save-btn" id="btn-save-username">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-          </button>
-        </div>
-        <div id="username-msg" class="pf-msg"></div>
       </div>
     </div>
 
-    <!-- Contraseña -->
-    <div class="pf-card">
-      <div class="pf-card-header pf-card-toggle" id="pw-toggle">
-        <div class="pf-card-icon pf-icon-lock">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-        </div>
-        <div class="pf-card-label">Contraseña</div>
-        <div class="pf-chevron" id="pw-chevron"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></div>
+    <dl class="pfx-stats">
+      <div class="pfx-stat">
+        <dt>Miembro desde</dt>
+        <dd>{{ user.date_joined|date:"j M Y" }}</dd>
       </div>
-      <div class="pf-card-body pf-pw-body" id="pw-body" style="display:none">
-        <div class="pf-pw-field">
-          <input type="password" id="current-pw" placeholder="Contraseña actual" autocomplete="current-password" class="pf-input">
-          <button class="pf-eye" data-target="current-pw" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;opacity:.4"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
-        </div>
-        <div class="pf-pw-field">
-          <input type="password" id="new-pw" placeholder="Nueva contraseña (mín. 4)" autocomplete="new-password" class="pf-input">
-          <button class="pf-eye" data-target="new-pw" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;opacity:.4"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg></button>
-        </div>
-        <div class="pf-pw-field">
-          <input type="password" id="new-pw2" placeholder="Repite la nueva contraseña" autocomplete="new-password" class="pf-input">
-          <button class="pf-eye" data-target="new-pw2" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;opacity:.4"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg></button>
-        </div>
-        <button class="btn btn-secondary btn-full" id="btn-save-password">Cambiar contraseña</button>
-        <div id="password-msg" class="pf-msg"></div>
+      <div class="pfx-stat">
+        <dt>Última entrada</dt>
+        <dd>{% if user.last_login %}{{ user.last_login|date:"j M Y" }}{% else %}—{% endif %}</dd>
       </div>
+      {% if is_owner %}
+      <div class="pfx-stat">
+        <dt>Accesos creados</dt>
+        <dd id="stat-access-count">—</dd>
+      </div>
+      {% endif %}
+    </dl>
+  </header>
+
+  <!-- ════════ Rejilla de tarjetas ════════ -->
+  <div class="pfx-grid{% if not is_owner %} pfx-grid-solo{% endif %}">
+
+    <div class="pfx-col">
+
+      <!-- ── Nombre de usuario ── -->
+      <article class="pfx-card">
+        <div class="pfx-card-head">
+          <span class="pfx-ico pfx-ico-user" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+          </span>
+          <div class="pfx-card-titles">
+            <h2 class="pfx-card-title">Nombre de usuario</h2>
+            <p class="pfx-card-desc">Con el que entras y como apareces en la app.</p>
+          </div>
+        </div>
+        <div class="pfx-card-body">
+          <div class="pfx-field">
+            <label class="pfx-label" for="new-username">Usuario</label>
+            <div class="pfx-inline">
+              <input type="text" id="new-username" value="{{ user.username }}" maxlength="30"
+                     autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                     class="pfx-input">
+              <button type="button" class="pfx-btn pfx-btn-primary" id="btn-save-username">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                <span>Guardar</span>
+              </button>
+            </div>
+          </div>
+          <div id="username-msg" class="pfx-msg"></div>
+        </div>
+      </article>
+
+      <!-- ── Contraseña ── -->
+      <article class="pfx-card pfx-fold" id="pw-card">
+        <button type="button" class="pfx-card-head pfx-fold-head" id="pw-toggle"
+                aria-expanded="false" aria-controls="pw-body">
+          <span class="pfx-ico pfx-ico-lock" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          </span>
+          <span class="pfx-card-titles">
+            <span class="pfx-card-title">Contraseña</span>
+            <span class="pfx-card-desc">Cámbiala cuando quieras; necesitas la actual.</span>
+          </span>
+          <span class="pfx-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+          </span>
+        </button>
+        <div class="pfx-card-body pfx-fold-body" id="pw-body">
+          <div class="pfx-field">
+            <label class="pfx-label" for="current-pw">Contraseña actual</label>
+            <div class="pfx-pw-field">
+              <input type="password" id="current-pw" placeholder="La que usas ahora" autocomplete="current-password" class="pfx-input">
+              <button class="pfx-eye" data-target="current-pw" type="button" aria-label="Mostrar u ocultar la contraseña">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="pfx-duo">
+            <div class="pfx-field">
+              <label class="pfx-label" for="new-pw">Nueva contraseña</label>
+              <div class="pfx-pw-field">
+                <input type="password" id="new-pw" placeholder="Mínimo 6 caracteres" autocomplete="new-password" class="pfx-input">
+                <button class="pfx-eye" data-target="new-pw" type="button" aria-label="Mostrar u ocultar la contraseña">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="pfx-field">
+              <label class="pfx-label" for="new-pw2">Repite la nueva</label>
+              <div class="pfx-pw-field">
+                <input type="password" id="new-pw2" placeholder="Otra vez" autocomplete="new-password" class="pfx-input">
+                <button class="pfx-eye" data-target="new-pw2" type="button" aria-label="Mostrar u ocultar la contraseña">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="pfx-card-actions">
+            <button type="button" class="pfx-btn pfx-btn-ghost" id="btn-save-password">Cambiar contraseña</button>
+          </div>
+          <div id="password-msg" class="pfx-msg"></div>
+        </div>
+      </article>
+
     </div>
 
-    <!-- Ajustes -->
-    <button type="button" class="pf-card pf-card-toggle js-open-settings" style="width:100%;text-decoration:none;color:inherit;display:flex;align-items:center;padding:0;font:inherit;text-align:left">
-      <div class="pf-card-header" style="flex:1">
-        <div class="pf-card-icon pf-icon-settings">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        </div>
-        <div class="pf-card-label">Ajustes</div>
-        <div class="pf-chevron"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></div>
-      </div>
-    </button>
+    {% if is_owner %}
+    <div class="pfx-col">
 
+      <!-- ── Accesos ── -->
+      <article class="pfx-card pfx-fold pfx-card-access" id="acc-card">
+        <button type="button" class="pfx-card-head pfx-fold-head" id="acc-toggle"
+                aria-expanded="false" aria-controls="acc-body">
+          <span class="pfx-ico pfx-ico-access" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </span>
+          <span class="pfx-card-titles">
+            <span class="pfx-card-title">Accesos</span>
+            <span class="pfx-card-desc">Invita a otras personas a tu bóveda.</span>
+          </span>
+          <span class="pfx-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+          </span>
+        </button>
+
+        <div class="pfx-card-body pfx-fold-body" id="acc-body">
+          <p class="pfx-hint">Cada acceso entra en <strong>esta misma bóveda</strong> con su propio
+             usuario y contraseña. Tú decides si además de leer puede escribir.</p>
+
+          <div id="acc-loading" class="pfx-loading">
+            <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:0 auto"></div>
+          </div>
+          <div id="acc-list" class="acc-list"></div>
+          <div id="acc-empty" class="pfx-empty" style="display:none">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <span>Todavía no has creado ningún acceso.</span>
+          </div>
+
+          <div class="acc-new">
+            <div class="acc-new-title">Nuevo acceso</div>
+            <div class="pfx-duo">
+              <div class="pfx-field">
+                <label class="pfx-label" for="acc-username">Nombre de usuario</label>
+                <input type="text" id="acc-username" class="pfx-input" placeholder="p. ej. fatima"
+                       autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="30">
+              </div>
+              <div class="pfx-field">
+                <label class="pfx-label" for="acc-password">Contraseña</label>
+                <div class="pfx-pw-field">
+                  <input type="password" id="acc-password" class="pfx-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                  <button class="pfx-eye" data-target="acc-password" type="button" aria-label="Mostrar u ocultar la contraseña">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="pfx-field">
+              <span class="pfx-label">Permisos</span>
+              <div class="acc-perm" id="acc-perm" role="radiogroup" aria-label="Permisos del nuevo acceso">
+                <button type="button" class="acc-perm-btn active" data-role="viewer" role="radio" aria-checked="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                  <span class="acc-perm-name">Sólo lectura</span>
+                  <span class="acc-perm-desc">Puede leer, buscar y exportar</span>
+                </button>
+                <button type="button" class="acc-perm-btn" data-role="editor" role="radio" aria-checked="false">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                  <span class="acc-perm-name">Lectura y escritura</span>
+                  <span class="acc-perm-desc">Además puede crear y editar notas</span>
+                </button>
+              </div>
+            </div>
+            <div class="pfx-card-actions">
+              <button type="button" class="pfx-btn pfx-btn-primary" id="btn-create-access">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                <span>Crear acceso</span>
+              </button>
+            </div>
+            <div id="acc-msg" class="pfx-msg"></div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+    {% endif %}
+
+    <!-- ── Ajustes (banda a todo lo ancho) ── -->
+    <article class="pfx-card pfx-card-wide">
+      <div class="pfx-card-head">
+        <span class="pfx-ico pfx-ico-settings" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </span>
+        <div class="pfx-card-titles">
+          <h2 class="pfx-card-title">Ajustes de la app</h2>
+          <p class="pfx-card-desc">Tema de color, enlaces compartidos{% if is_owner %} y claves de API{% endif %}.</p>
+        </div>
+        <button type="button" class="pfx-btn pfx-btn-ghost js-open-settings">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-7-7V3z"/><path d="M13 3h8v8h-2V6.41l-7.29 7.3-1.42-1.42L17.59 5H13V3z"/></svg>
+          <span>Abrir ajustes</span>
+        </button>
+      </div>
+    </article>
 
   </div>
 </div>
 
-<div class="pf-toast" id="pf-toast"></div>
+<div class="pfx-toast" id="pf-toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
 {% block scripts %}
@@ -108,14 +263,32 @@ let toastTimer;
 function toast(text, ok = true) {
   const t = document.getElementById('pf-toast');
   t.textContent = text;
-  t.className = 'pf-toast show ' + (ok ? 'ok' : 'err');
+  t.className = 'pfx-toast show ' + (ok ? 'ok' : 'err');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 function showMsg(el, text, ok) {
   el.textContent = text;
-  el.className = 'pf-msg show ' + (ok ? 'ok' : 'err');
+  el.className = 'pfx-msg show ' + (ok ? 'ok' : 'err');
   setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+/* Plegables: en escritorio las tarjetas van siempre abiertas (hay sitio de
+   sobra), así que el encabezado sólo pliega en pantallas estrechas. */
+const pfxWide = window.matchMedia('(min-width: 1000px)');
+function fold(headId, cardId) {
+  const head = document.getElementById(headId), card = document.getElementById(cardId);
+  if (!head || !card) return () => {};
+  const sync = () => head.setAttribute('aria-expanded',
+    (pfxWide.matches || card.classList.contains('is-open')) ? 'true' : 'false');
+  head.addEventListener('click', () => {
+    if (pfxWide.matches) return;
+    card.classList.toggle('is-open');
+    sync();
+  });
+  pfxWide.addEventListener('change', sync);
+  sync();
+  return sync;
 }
 
 document.getElementById('avatar-wrap').addEventListener('click', () => {
@@ -161,12 +334,9 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
 });
 document.getElementById('new-username').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-save-username').click(); });
 
-let pwOpen = false;
+fold('pw-toggle', 'pw-card');
 document.getElementById('pw-toggle').addEventListener('click', () => {
-  pwOpen = !pwOpen;
-  document.getElementById('pw-body').style.display = pwOpen ? '' : 'none';
-  document.getElementById('pw-chevron').style.transform = pwOpen ? 'rotate(90deg)' : '';
-  if (pwOpen) document.getElementById('current-pw').focus();
+  if (document.getElementById('pw-card').classList.contains('is-open')) document.getElementById('current-pw').focus();
 });
 document.getElementById('btn-save-password').addEventListener('click', async () => {
   const cp = document.getElementById('current-pw').value;
@@ -182,12 +352,125 @@ document.getElementById('btn-save-password').addEventListener('click', async () 
   } else { showMsg(msg, res.error || 'Error', false); }
 });
 
-document.querySelectorAll('.pf-eye').forEach(btn => {
+document.querySelectorAll('.pfx-eye').forEach(btn => {
   btn.addEventListener('click', () => {
     const input = document.getElementById(btn.dataset.target);
     input.type = input.type === 'text' ? 'password' : 'text';
-    btn.querySelector('svg').style.opacity = input.type === 'text' ? '1' : '0.4';
+    btn.classList.toggle('on', input.type === 'text');
   });
 });
 </script>
+
+{% if is_owner %}
+<script>
+/* ════════════ Accesos invitados (sólo lo ve el propietario) ════════════ */
+(function() {
+  const $ = id => document.getElementById(id);
+  const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  let newRole = 'viewer';
+
+  function fmtDate(iso) {
+    if (!iso) return 'nunca ha entrado';
+    return 'última entrada ' + new Date(iso).toLocaleDateString('es-ES',
+      { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function render(users) {
+    const guests = users.filter(u => !u.is_owner);
+    const counter = $('stat-access-count');
+    if (counter) counter.textContent = guests.length;
+    $('acc-empty').style.display = guests.length ? 'none' : '';
+    $('acc-list').innerHTML = guests.map(u => `
+      <div class="acc-item" data-id="${u.id}">
+        <div class="acc-avatar">${esc(u.username.slice(0,1).toUpperCase())}</div>
+        <div class="acc-info">
+          <div class="acc-name">${esc(u.username)}</div>
+          <div class="acc-meta">${fmtDate(u.last_login)}</div>
+        </div>
+        <div class="acc-controls">
+          <select class="acc-role" aria-label="Permiso de ${esc(u.username)}">
+            <option value="viewer"${u.role === 'viewer' ? ' selected' : ''}>Sólo lectura</option>
+            <option value="editor"${u.role === 'editor' ? ' selected' : ''}>Lectura y escritura</option>
+          </select>
+          <button class="acc-btn acc-pw" title="Cambiar su contraseña" aria-label="Cambiar la contraseña de ${esc(u.username)}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.65 10A5.99 5.99 0 0 0 7 6a6 6 0 1 0 5.65 8H17v4h4v-4h2v-4H12.65zM7 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+          </button>
+          <button class="acc-btn acc-del" title="Eliminar este acceso" aria-label="Eliminar el acceso de ${esc(u.username)}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function load() {
+    $('acc-loading').style.display = '';
+    try {
+      const res = await fetch('/api/users/list').then(r => r.json());
+      render(res.users || []);
+    } catch (_) { toast('No se pudieron cargar los accesos', false); }
+    $('acc-loading').style.display = 'none';
+  }
+
+  fold('acc-toggle', 'acc-card');
+  /* La lista se carga siempre: en escritorio la tarjeta nace desplegada. */
+  load();
+
+  $('acc-perm').addEventListener('click', e => {
+    const btn = e.target.closest('.acc-perm-btn'); if (!btn) return;
+    newRole = btn.dataset.role;
+    $('acc-perm').querySelectorAll('.acc-perm-btn').forEach(b => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
+    });
+  });
+
+  $('btn-create-access').addEventListener('click', async () => {
+    const username = $('acc-username').value.trim();
+    const password = $('acc-password').value;
+    const msg = $('acc-msg'), btn = $('btn-create-access');
+    if (!username || !password) { showMsg(msg, 'Rellena usuario y contraseña', false); return; }
+    btn.disabled = true;
+    const res = await api('/api/users/create', { username, password, role: newRole });
+    btn.disabled = false;
+    if (res.error) { showMsg(msg, res.error, false); return; }
+    $('acc-username').value = ''; $('acc-password').value = '';
+    showMsg(msg, '✓ Acceso creado', true);
+    toast('Acceso creado para ' + res.user.username);
+    load();
+  });
+  $('acc-password').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-create-access').click(); });
+
+  $('acc-list').addEventListener('change', async e => {
+    const sel = e.target.closest('.acc-role'); if (!sel) return;
+    const item = sel.closest('.acc-item');
+    const res = await api('/api/users/set-role', { id: Number(item.dataset.id), role: sel.value });
+    if (res.error) { toast(res.error, false); load(); return; }
+    toast(res.user.username + ': ' + res.user.role_label.toLowerCase());
+  });
+
+  $('acc-list').addEventListener('click', async e => {
+    const item = e.target.closest('.acc-item'); if (!item) return;
+    const id = Number(item.dataset.id);
+    const name = item.querySelector('.acc-name').textContent;
+    if (e.target.closest('.acc-del')) {
+      if (!confirm(`¿Eliminar el acceso de "${name}"? Dejará de poder entrar. Tus notas no se tocan.`)) return;
+      const res = await api('/api/users/delete', { id });
+      if (res.error) { toast(res.error, false); return; }
+      item.remove();
+      const left = $('acc-list').children.length;
+      if (!left) $('acc-empty').style.display = '';
+      const counter = $('stat-access-count');
+      if (counter) counter.textContent = left;
+      toast('Acceso eliminado');
+    } else if (e.target.closest('.acc-pw')) {
+      const password = prompt(`Nueva contraseña para "${name}":`);
+      if (!password) return;
+      const res = await api('/api/users/set-password', { id, password });
+      if (res.error) { toast(res.error, false); return; }
+      toast('Contraseña actualizada — sus sesiones abiertas se han cerrado');
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

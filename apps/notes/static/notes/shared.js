@@ -144,7 +144,7 @@
     if (!mermaidLoaded) {
       await new Promise((res, rej) => {
         const s = document.createElement('script');
-        s.src = '/static/vendor/mermaid.min.js?v=' + ((window.COGNY && window.COGNY.assetVersion) || 'v1');
+        s.src = '/static/vendor/mermaid.min.js?v=' + window.COGNY.assetVersion;
         s.onload = res; s.onerror = rej; document.head.appendChild(s);
       }).catch(() => {});
       if (window.mermaid) { mermaid.initialize({ startOnLoad: false, theme: 'dark' }); mermaidLoaded = true; }

@@ -25,6 +25,16 @@ let dropTargetEl = null;    // elemento con el resaltado de "voy a soltar aquí"
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['png','jpg','jpeg','gif','webp','svg','bmp','ico'];
 
+/* Permiso de escritura del acceso en curso. La UI se apaga en consecuencia
+   (botones ocultos por CSS con .role-readonly, acciones cortadas aquí), pero
+   quien manda es el servidor: cada endpoint que muta lleva @require_write. */
+const CAN_WRITE = window.COGNY.canWrite !== false;
+function guardWrite(){
+  if(CAN_WRITE) return true;
+  alert('Tu acceso a esta bóveda es de sólo lectura.');
+  return false;
+}
+
 function api(url, body) {
   return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(body)}).then(r => r.json());
@@ -343,6 +353,7 @@ function clearDropVisual(){
 }
 // Cablea dragstart/dragover/drop de UNA fila (nota, archivo o carpeta) del árbol.
 function wireRowDrag(row, it, parentPath, isAttach){
+  if(!CAN_WRITE) return;
   if(isAttach) return;   // Adjuntos no se puede arrastrar (ruta fija en el backend)
   row.draggable=true;
   row.addEventListener('dragstart', e=>{
@@ -398,6 +409,7 @@ function wireRowDrop(kids, folderPath){
 // nombre del hermano de referencia en la carpeta destino ('before'/'after'), o
 // null para soltar al final (incluido el caso "dentro de esta carpeta").
 async function dropItem(src, targetParent, anchorName, anchorSide){
+  if(!guardWrite()) return;
   const sourceParent=parentPathOf(src.path);
   const sameParent=sourceParent===targetParent;
   const workingName=fsName(src.path);
@@ -440,6 +452,7 @@ async function dropItem(src, targetParent, anchorName, anchorSide){
 // referenciaran su ruta antigua (misma lógica que ya usa renameItem, extendida
 // a subrutas completas porque mover una carpeta arrastra también a sus hijos).
 async function moveItem(it, targetParent){
+  if(!guardWrite()) return;
   if(dirty) await saveNow();   // evita reescribir la ruta antigua si se autoguarda después de moverla
   const res=await api('/api/notes/move', {path:it.path, target:targetParent});
   if(res.error){ alert(res.error); return null; }
@@ -565,6 +578,7 @@ async function openNote(path, terms, opts){
   // de foco que provoca pérdida del primer carácter al escribir rápido tras cambiar de nota.
   if(ED) try { ED.view.focus(); } catch(_){}
   setStatus('Guardado', true);
+  applyViewMode();   // respeta el modo elegido (lectura por defecto) al abrir la nota
   document.querySelectorAll('.tree-row.active').forEach(r=>r.classList.remove('active'));
   const row=document.querySelector(`.tree-row[data-path="${cssEsc(path)}"]`); if(row) row.classList.add('active');
   if(window.innerWidth<760) $('vault').classList.add('side-hidden');
@@ -770,17 +784,47 @@ function openLightbox(src){ const lb=$('img-lightbox'); lb.querySelector('img').
 function closeLightbox(){ const lb=$('img-lightbox'); lb.classList.remove('show'); lb.setAttribute('aria-hidden','true'); lb.querySelector('img').removeAttribute('src'); }
 // Zoom de la nota completa (texto + imágenes) con Ctrl + / Ctrl - / Ctrl 0.
 let noteFs = parseFloat(localStorage.getItem('note-fs')||'1') || 1;
-function applyNoteFs(){ if(ED) ED.dom.style.setProperty('--note-fs', noteFs.toFixed(2)); updateZoomLabel(); }
+function applyNoteFs(){ if(ED) ED.dom.style.setProperty('--note-fs', noteFs.toFixed(2)); const rd=$('cm-reader'); if(rd) rd.style.setProperty('--note-fs', noteFs.toFixed(2)); updateZoomLabel(); }
 function updateZoomLabel(){ const el=document.getElementById('zoom-val'); if(el) el.textContent=Math.round(noteFs*100)+'%'; }
 function setNoteFs(v){ noteFs=Math.max(0.7, Math.min(2.4, +v.toFixed(2))); localStorage.setItem('note-fs', noteFs); applyNoteFs(); }
 function setStatus(t,saved){const el=$('vault-status'); el.textContent=t; el.classList.toggle('saved',!!saved);}
 function onEdit(){ dirty=true; setStatus('Editando…',false);
   clearTimeout(saveTimer); saveTimer=setTimeout(saveNow,900); }
 async function saveNow(){
+  if(!CAN_WRITE){ dirty=false; return; }
   if(!current||!dirty) return; clearTimeout(saveTimer);
   const content=(ED?ED.getValue():current.content).replace(/\n+$/, ''); current.content=content; dirty=false; setStatus('Guardando…',false);
   const res=await api('/api/notes/save',{path:current.path, content});
   if(res.success) setStatus('Guardado', true); else { setStatus('Error al guardar',false); dirty=true; }
+}
+
+/* ════════════ Modo lectura / edición ════════════ */
+/* 'read' = nota renderizada (bonita, sin editar) · 'edit' = editor CodeMirror.
+   Por defecto las notas se abren en lectura; la preferencia se recuerda. */
+let viewMode = CAN_WRITE ? (localStorage.getItem('cogny-view-mode') || 'read') : 'read';
+function renderReader(){
+  const rd=$('cm-reader'); if(!rd) return;
+  const md=(current&&current.content)||'';
+  rd.innerHTML=renderMarkdown(md); postProcess(rd,0);
+  rd.scrollTop=0;
+}
+function applyViewMode(){
+  const btn=$('btn-view-toggle'), host=$('cm-host'), rd=$('cm-reader');
+  const reading = viewMode==='read';
+  if(btn){ btn.classList.toggle('reading', reading);
+    btn.title = reading ? 'Editar nota' : 'Modo lectura'; }
+  if(host) host.style.display = reading ? 'none' : 'flex';
+  if(rd) rd.style.display = reading ? 'block' : 'none';
+  if(reading) renderReader();
+  else if(ED) try { ED.view.focus(); } catch(_){}
+}
+function toggleViewMode(){
+  if(!CAN_WRITE) return;   // sin escritura no hay modo edición
+  // Al salir de edición, sincroniza el contenido más reciente del editor antes de renderizar.
+  if(viewMode==='edit' && ED && current) current.content = ED.getValue().replace(/\n+$/, '');
+  viewMode = viewMode==='read' ? 'edit' : 'read';
+  localStorage.setItem('cogny-view-mode', viewMode);
+  applyViewMode();
 }
 
 /* ════════════ Editor Live Preview (CodeMirror) ════════════ */
@@ -993,18 +1037,21 @@ function currentFolderContext(){
 function revealPath(path){ const parts=path.split('/'); let acc='';
   for(let i=0;i<parts.length-1;i++){ acc=acc?acc+'/'+parts[i]:parts[i]; expanded.add(acc); } persistExpanded(); }
 async function newNote(parent){
+  if(!guardWrite()) return;
   showInputDialog('Nueva nota','',async name=>{
     const res=await api('/api/notes/create',{parent: parent ?? currentFolderContext(), name, type:'note'});
     if(res.error){alert(res.error);return;} revealPath(res.path); await loadTree(); openNote(res.path);
   },{placeholder:'Nombre de la nota',okLabel:'Crear'});
 }
 async function newFolder(parent){
+  if(!guardWrite()) return;
   showInputDialog('Nueva carpeta','',async name=>{
     const res=await api('/api/notes/create',{parent: parent ?? currentFolderContext(), name, type:'folder'});
     if(res.error){alert(res.error);return;} revealPath(res.path); expanded.add(res.path); persistExpanded(); await loadTree();
   },{placeholder:'Nombre de la carpeta',okLabel:'Crear'});
 }
 async function renameItem(it){
+  if(!guardWrite()) return;
   showInputDialog('Renombrar',it.name,async name=>{
     if(name===it.name) return;
     const res=await api('/api/notes/rename',{path:it.path, name}); if(res.error){alert(res.error);return;}
@@ -1016,6 +1063,7 @@ async function renameItem(it){
   },{okLabel:'Renombrar'});
 }
 async function deleteItem(it){
+  if(!guardWrite()) return;
   const what=it.type==='folder'?'la carpeta y todo su contenido':(it.type==='note'?'la nota':'el archivo');
   showConfirmDialog('Borrar',`¿Borrar ${what} «${it.name}»?`,'Sí, borrar',async ()=>{
     const res=await api('/api/notes/delete',{path:it.path}); if(res.error){alert(res.error);return;}
@@ -1042,7 +1090,7 @@ async function deleteItem(it){
 /* ════════════ Context menu ════════════ */
 function showCtxMenu(e,it){
   const m=$('ctx-menu'); let html='';
-  if(it.type==='folder'){
+  if(it.type==='folder' && CAN_WRITE){
     html+=`<button data-act="new-note">${iconNote.replace('ico','')}Nueva nota aquí</button>`;
     html+=`<button data-act="new-folder">${iconFolder(false).replace('ico','')}Nueva subcarpeta</button><div class="ctx-sep"></div>`;
   }
@@ -1051,10 +1099,15 @@ function showCtxMenu(e,it){
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF</button>`;
     html+=`<button data-act="pdf-dark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-5.4-5.4c0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>Exportar a PDF (oscuro)</button>
-    <button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button><div class="ctx-sep"></div>`;
+    ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}<div class="ctx-sep"></div>`;
   }
+  if(CAN_WRITE){
   html+=`<button data-act="rename"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>Renombrar</button>`;
   html+=`<button data-act="delete" class="danger"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>Borrar</button>`;
+  }
+  // Con acceso de sólo lectura sobre un adjunto no queda ninguna acción:
+  // mejor no abrir el menú que enseñar un recuadro vacío.
+  if(!html.trim()){ hideCtx(); return; }
   m.setAttribute('role','menu');
   m.innerHTML=html; m.style.display='block';
   m.style.left=Math.min(e.clientX, window.innerWidth-190)+'px';
@@ -1195,6 +1248,7 @@ function imageInfoFromEl(img){
   return path ? {path, name:path.split('/').pop()} : null;
 }
 function showImageCtxMenu(e, info){
+  if(!CAN_WRITE) return;
   const m=$('ctx-menu');
   // Dos pasos DENTRO del propio menú (sin confirm() del navegador, que no es
   // fiable en PWA/algunos navegadores): "Borrar imagen" → "¿Seguro? Sí, borrar".
@@ -1209,6 +1263,7 @@ function showImageCtxMenu(e, info){
   };
 }
 async function deleteImage(info){
+  if(!guardWrite()) return;
   if(!info || !current) return;
   setStatus('Borrando imagen…', false);
   const res=await api('/api/notes/delete',{path:info.path});
@@ -1225,7 +1280,7 @@ function insertIntoEditor(text){ if(ED){ ED.insert(text); onEdit(); } }
 function uploadAsset(file){
   const fd=new FormData(); fd.append('file', file, file.name||'image.png'); fd.append('csrfmiddlewaretoken', CSRF);
   fd.append('dir', localStorage.getItem('vault-img-dir')||'');   // carpeta elegida (vacío = automático)
-  return fetch('/api/notes/upload-asset',{method:'POST', body:fd}).then(r=>r.json());
+  return fetch('/api/notes/upload',{method:'POST', body:fd}).then(r=>r.json());
 }
 /* ════════════ Selector de carpeta para imágenes ════════════ */
 function collectFolders(items, acc){ (items||[]).forEach(it=>{ if(it.type==='folder'){ acc.push(it.path); collectFolders(it.children, acc); } }); return acc; }
@@ -1241,6 +1296,7 @@ function openImgDirModal(){
 }
 let imgBusy=false;
 async function handleImageFile(file){
+  if(!guardWrite()) return;
   if(!file || !file.type.startsWith('image/')) return;
   if(!current){ alert('Abre o crea una nota antes de añadir una imagen.'); return; }
   if(imgBusy){ return; }            // sube de una en una para no entrelazar inserciones
@@ -1262,6 +1318,21 @@ async function handleImageFiles(files){
 // Botón de la barra + selector (esencial en móvil)
 $('btn-insert-img').addEventListener('click', ()=>$('asset-file').click());
 $('asset-file').addEventListener('change', e=>{ handleImageFiles([...e.target.files]); e.target.value=''; });
+
+// Alternar lectura / edición (botón ojo/lápiz junto a «Guardado»).
+$('btn-view-toggle').addEventListener('click', toggleViewMode);
+// Navegación desde la nota renderizada en modo lectura (wikilinks, etiquetas, embeds, imágenes).
+$('cm-reader').addEventListener('click', async e=>{
+  const im=e.target.closest('img');
+  if(im){ e.preventDefault(); openLightbox(im.src); return; }
+  const wl=e.target.closest('.wikilink');
+  if(wl){ const name=(wl.dataset.target||'').split('#')[0].split('|')[0].trim();
+    const f=findFileByName(name); if(f) openNote(f.path); return; }
+  const tg=e.target.closest('.tag-pill');
+  if(tg){ toggleSearch(true); $('vault-search-input').value='#'+tg.dataset.tag; syncSearchClear(); renderTree(); return; }
+  const op=e.target.closest('.embed-title[data-open]');
+  if(op){ openNote(op.dataset.open); }
+});
 
 // Flechas atrás/adelante: navegan por el historial de notas abiertas.
 $('btn-nav-back').addEventListener('click', ()=>navStep(-1));
@@ -1396,7 +1467,7 @@ const FMT_ACTIONS={
 /* ════════════ Export / Import ════════════ */
 $('btn-export').addEventListener('click', ()=>{ if(dirty) saveNow(); window.location='/api/notes/export'; });
 let importFile=null;
-function openImport(){ importFile=null; $('import-fname').style.display='none'; $('import-go').disabled=true;
+function openImport(){ if(!guardWrite()) return; importFile=null; $('import-fname').style.display='none'; $('import-go').disabled=true;
   $('import-file').value=''; $('import-modal').classList.add('show'); }
 function closeImport(){ $('import-modal').classList.remove('show'); }
 $('btn-import').addEventListener('click', openImport);

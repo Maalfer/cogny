@@ -18,35 +18,24 @@
 <link rel="preconnect" href="//{{ request.get_host }}">
 <script>(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
 <link rel="stylesheet" href="/static/css/app.css?v={{ ASSET_VERSION }}">
+{% comment %}
+  Único puente plantilla → JS estático: todo lo que el servidor tiene que
+  contarle al cliente viaja en este objeto, y nada más.
+  (Ojo: {# #} NO admite varias líneas — se colaría como texto en la página.)
+{% endcomment %}
+<script>window.COGNY = {
+  csrf: "{{ csrf_token|default:'' }}",
+  assetVersion: "{{ ASSET_VERSION }}",
+  uploadHost: "{{ UPLOAD_HOST|default:'' }}",
+  userId: {{ user_id|default:'null' }},
+  canWrite: {{ can_write|yesno:"true,false" }},
+  isOwner: {{ is_owner|yesno:"true,false" }},
+  role: "{{ user_role }}"
+};</script>
+<script src="/static/js/csrf.js?v={{ ASSET_VERSION }}"></script>
 {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}subapp-body{% endblock %}">
-<div id="bh-loading-bar" aria-hidden="true"></div>
-<div id="bh-nav-overlay" aria-hidden="true"><div class="bh-nav-spinner"></div></div>
-<script>
-/* CSRF global: añade X-CSRFToken a todas las llamadas fetch() same-origin no seguras.
-   Evita repetir el header en cada template y arregla los 403 de fetch JSON/FormData. */
-(function() {
-  var CSRF = "{{ csrf_token|default:'' }}";
-  window.BH_CSRF = CSRF;
-  if (!CSRF || !window.fetch) return;
-  var origFetch = window.fetch.bind(window);
-  window.fetch = function(input, init) {
-    init = init || {};
-    var url = (typeof input === 'string') ? input : (input && input.url) || '';
-    var method = (init.method || (typeof input === 'object' && input.method) || 'GET').toUpperCase();
-    var isSameOrigin = url.startsWith('/') || url.startsWith(location.origin);
-    if (isSameOrigin && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-      var h = new Headers(init.headers || {});
-      if (!h.has('X-CSRFToken')) h.set('X-CSRFToken', CSRF);
-      init.headers = h;
-      if (!init.credentials) init.credentials = 'same-origin';
-    }
-    return origFetch(input, init);
-  };
-})();
-</script>
-
+<body class="{% block body_class %}subapp-body{% endblock %}{% if user_id and not can_write %} role-readonly{% endif %}">
 {% block header %}
 <header class="bh-header">
   <div class="bh-header-left">
@@ -68,12 +57,19 @@
       <div class="bh-desk-sep"></div>
       <a href="/profile" class="bh-desk-user" title="Mi perfil">
         <div class="bh-desk-avatar">
-          {% with av=user_id|avatar_url %}{% if av %}<img src="{{ av }}" alt="" loading="lazy" decoding="async">{% endif %}{% endwith %}
+          {% avatar_url as av %}{% if av %}<img src="{{ av }}" alt="" loading="lazy" decoding="async">{% endif %}
           <span>{% if username %}{{ username|slice:":1"|upper }}{% else %}?{% endif %}</span>
         </div>
         <span class="bh-desk-username">{{ username }}</span>
       </a>
-      <a href="/logout" class="bh-desk-btn bh-desk-logout" title="Cerrar sesión" onclick="return confirm('¿Cerrar sesión?')"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg></a>
+      {% comment %}
+        `logout_view` es @require_POST: un GET permitiría cerrar la sesión desde
+        una etiqueta de imagen de otra web. Por eso va como formulario, no como
+        enlace. (Ojo: {# #} no admite varias líneas y se colaría como texto.)
+      {% endcomment %}
+      <form method="post" action="/logout" class="bh-logout-form" onsubmit="return confirm('¿Cerrar sesión?')">{% csrf_token %}
+        <button type="submit" class="bh-desk-btn bh-desk-logout" title="Cerrar sesión"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg></button>
+      </form>
     </nav>
     <button class="hb-toggle" id="hb-toggle" aria-label="Menú" aria-expanded="false">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
@@ -94,12 +90,11 @@
   <header class="hb-drawer-header">
     <a href="/profile" class="hb-user">
       <div class="hb-user-avatar">
-        {% with av=user_id|avatar_url %}{% if av %}<img src="{{ av }}" alt="" loading="lazy" decoding="async">{% endif %}{% endwith %}
+        {% avatar_url as av %}{% if av %}<img src="{{ av }}" alt="" loading="lazy" decoding="async">{% endif %}
         <span>{% if username %}{{ username|slice:":1"|upper }}{% else %}?{% endif %}</span>
       </div>
       <div class="hb-user-info">
         <div class="hb-user-name">{{ username }}</div>
-        <div class="hb-user-role">{{ user_role }}</div>
       </div>
     </a>
     <button class="hb-close" id="hb-close" aria-label="Cerrar menú">
@@ -116,10 +111,12 @@
       <span>Ajustes</span>
     </button>
     <div class="hb-sep"></div>
-    <a href="/logout" class="hb-item hb-danger" onclick="return confirm('¿Cerrar sesión?')">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
-      <span>Cerrar sesión</span>
-    </a>
+    <form method="post" action="/logout" class="bh-logout-form" onsubmit="return confirm('¿Cerrar sesión?')">{% csrf_token %}
+      <button type="submit" class="hb-item hb-danger">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+        <span>Cerrar sesión</span>
+      </button>
+    </form>
   </nav>
 </aside>
 
@@ -182,211 +179,60 @@
       <div id="shared-links-list" class="shared-links-list"></div>
     </div>
 
+    {% if is_owner %}
+    <div class="settings-section">
+      <div class="settings-section-title settings-title-row">
+        <span>Clave de API</span>
+        <a href="/api/docs/" class="settings-title-link" target="_blank" rel="noopener noreferrer"
+           title="Documentación de la API (Swagger)">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+          <span>Swagger</span>
+        </a>
+      </div>
+      <p>Controla toda la web desde fuera —curl, un script o una IA como Claude—: notas,
+         carpetas, adjuntos, enlaces compartidos y copias de seguridad. El secreto se
+         muestra <strong>una sola vez</strong>: cópialo al generarlo.</p>
+
+      <div id="apikey-new" class="apikey-new" style="display:none">
+        <div class="apikey-new-label">Copia esta clave ahora — no volverá a mostrarse</div>
+        <div class="apikey-new-row">
+          <code id="apikey-new-secret"></code>
+          <button type="button" id="apikey-new-copy" title="Copiar clave"></button>
+        </div>
+      </div>
+
+      <div id="apikeys-loading" style="text-align:center;padding:1.2rem 0">
+        <div class="spinner" style="width:26px;height:26px;border-width:3px;margin:0 auto"></div>
+      </div>
+      <div id="apikeys-empty" class="imgdir-info" style="display:none">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.65 10A5.99 5.99 0 0 0 7 6a6 6 0 1 0 5.65 8H17v4h4v-4h2v-4H12.65zM7 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+        <span>Todavía no has generado ninguna clave.</span>
+      </div>
+      <div id="apikeys-list" class="shared-links-list"></div>
+
+      <div class="apikey-form">
+        <input type="text" id="apikey-name" maxlength="80" placeholder="Nombre (p. ej. Claude)" autocomplete="off">
+        <label class="apikey-check" title="Las claves de sólo lectura no pueden crear, editar ni borrar nada">
+          <input type="checkbox" id="apikey-readonly"><span>Sólo lectura</span>
+        </label>
+        <button type="button" id="apikey-create" class="btn-primary">Generar clave</button>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="modal-actions">
       <button class="btn-cancel" id="settings-modal-close">Cerrar</button>
     </div>
   </div>
 </div>
 
-<script>window.APP = window.APP || { csrf: "{{ csrf_token|default:'' }}", userId: {{ user_id|default:'null' }} };</script>
-<script>
-/* Modal global de Ajustes (tema + enlaces compartidos): funciona en cualquier
-   página, no solo dentro del vault, por eso vive aquí y no en notes.js. */
-(function() {
-  const $ = id => document.getElementById(id);
-  function api(url, body) {
-    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(r => r.json());
-  }
-  function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-
-  const iconOpenTab = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
-  const iconCopyLink = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  const iconCheck = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-  const iconLock = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 10 0v2h1zM12 3a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3z"/></svg>';
-  const iconGlobe = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14a7.97 7.97 0 0 1 0-4h3.38a16.6 16.6 0 0 0 0 4H4.26zm.81 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.99 7.99 0 0 1 5.07 16zm2.95-8H5.07a7.99 7.99 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.02 8zM12 19.96a15.7 15.7 0 0 1-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66a14.5 14.5 0 0 1 0-4h4.68a14.5 14.5 0 0 1 0 4zm.29 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a7.99 7.99 0 0 1-4.33 3.56zM16.36 14a16.6 16.6 0 0 0 0-4h3.38a7.97 7.97 0 0 1 0 4h-3.38z"/></svg>';
-  const iconTrash = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
-
-  /* ---- Tema ---- */
-  const themePicker = $('settings-theme-picker');
-  if (themePicker) {
-    themePicker.addEventListener('click', async e => {
-      const btn = e.target.closest('.pf-theme-btn');
-      if (!btn || btn.classList.contains('active')) return;
-      const theme = btn.dataset.theme;
-      themePicker.querySelectorAll('.pf-theme-btn').forEach(b => b.classList.toggle('active', b === btn));
-      document.documentElement.dataset.theme = theme;
-      document.cookie = 'bh_theme=' + theme + '; max-age=' + (2 * 365 * 86400) + '; path=/; samesite=lax';
-      try { await api('/api/profile/set-theme', { theme }); } catch (_) {}
-    });
-  }
-
-  /* ---- Enlaces compartidos ---- */
-  function renderSharedLinksList(shares) {
-    const list = $('shared-links-list'); if (!list) return;
-    if (!shares.length) { list.innerHTML = ''; $('shared-links-empty').style.display = 'flex'; return; }
-    $('shared-links-empty').style.display = 'none';
-    list.innerHTML = shares.map(s => `
-      <div class="shared-link-item" data-path="${esc(s.path)}" data-url="${esc(s.url)}">
-        <div class="sli-info">
-          <div class="sli-name">${esc(s.name)}</div>
-          <div class="sli-meta">${s.has_password ? iconLock : iconGlobe}<span>${s.has_password ? 'Con contraseña' : 'Público'} · ${esc(s.path)}</span></div>
-        </div>
-        <div class="sli-actions">
-          <button class="sli-open" title="Abrir esta nota">${iconOpenTab}</button>
-          <button class="sli-copy" title="Copiar enlace">${iconCopyLink}</button>
-          <button class="sli-revoke" title="Dejar de compartir">${iconTrash}</button>
-        </div>
-      </div>`).join('');
-  }
-
-  async function loadSharedLinks() {
-    const loading = $('shared-links-loading'), empty = $('shared-links-empty'), list = $('shared-links-list');
-    if (!list) return;
-    loading.style.display = ''; list.innerHTML = ''; empty.style.display = 'none';
-    try {
-      const res = await fetch('/api/notes/share/list').then(r => r.json());
-      renderSharedLinksList(res.shares || []);
-    } catch (e) { empty.style.display = 'flex'; }
-    loading.style.display = 'none';
-  }
-
-  const sharedList = $('shared-links-list');
-  if (sharedList) {
-    sharedList.addEventListener('click', async e => {
-      const item = e.target.closest('.shared-link-item'); if (!item) return;
-      const path = item.dataset.path, url = item.dataset.url;
-      if (e.target.closest('.sli-open')) {
-        closeSettingsModal();
-        if (typeof window.openInNewTab === 'function') window.openInNewTab(path);
-        else location.href = '/?open=' + encodeURIComponent(path);
-      } else if (e.target.closest('.sli-copy')) {
-        const btn = e.target.closest('.sli-copy');
-        try { await navigator.clipboard.writeText(url); }
-        catch (_) {
-          const ta = document.createElement('textarea'); ta.value = url; ta.style.cssText = 'position:fixed;opacity:0';
-          document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (__) {} ta.remove();
-        }
-        const orig = btn.innerHTML; btn.innerHTML = iconCheck; btn.classList.add('copied');
-        setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 1400);
-      } else if (e.target.closest('.sli-revoke')) {
-        if (!confirm('¿Dejar de compartir esta nota? El enlace actual dejará de funcionar.')) return;
-        const res = await api('/api/notes/share/revoke', { path });
-        if (res.error) { alert(res.error); return; }
-        item.remove();
-        if (!sharedList.children.length) $('shared-links-empty').style.display = 'flex';
-      }
-    });
-  }
-
-  /* ---- Abrir / cerrar modal ---- */
-  function openSettingsModal() {
-    $('settings-modal').classList.add('show');
-    loadSharedLinks();
-    const drawer = $('hb-drawer'), overlay = $('hb-overlay'), toggle = $('hb-toggle');
-    if (drawer && drawer.classList.contains('open')) {
-      drawer.classList.remove('open');
-      if (overlay) overlay.classList.remove('show');
-      if (toggle) toggle.setAttribute('aria-expanded', 'false');
-      document.body.style.overflow = '';
-    }
-  }
-  function closeSettingsModal() { $('settings-modal').classList.remove('show'); }
-  window.openSettingsModal = openSettingsModal;
-
-  document.addEventListener('click', e => {
-    if (e.target.closest('.js-open-settings')) { e.preventDefault(); openSettingsModal(); }
-  });
-  const closeBtn = $('settings-modal-close'); if (closeBtn) closeBtn.addEventListener('click', closeSettingsModal);
-  const backdrop = $('settings-modal');
-  if (backdrop) backdrop.addEventListener('click', e => { if (e.target === backdrop) closeSettingsModal(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && backdrop && backdrop.classList.contains('show')) closeSettingsModal(); });
-})();
-</script>
+<script src="/static/js/settings-modal.js?v={{ ASSET_VERSION }}" defer></script>
 {% endif %}
 
 {% block body_end %}{% endblock %}
 
-<script>
-/* Hamburger drawer */
-(function() {
-  const tog = document.getElementById('hb-toggle');
-  if (!tog) return;
-  const drw = document.getElementById('hb-drawer');
-  const ovr = document.getElementById('hb-overlay');
-  const cls = document.getElementById('hb-close');
-  function open() {
-    drw.classList.add('open');
-    ovr.classList.add('show');
-    tog.setAttribute('aria-expanded', 'true');
-    document.body.style.overflow = 'hidden';
-  }
-  function close() {
-    drw.classList.remove('open');
-    ovr.classList.remove('show');
-    tog.setAttribute('aria-expanded', 'false');
-    document.body.style.overflow = '';
-  }
-  tog.addEventListener('click', open);
-  cls.addEventListener('click', close);
-  ovr.addEventListener('click', close);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-})();
+<script src="/static/js/app.js?v={{ ASSET_VERSION }}" defer></script>
 
-/* Last-page memory */
-(function() {
-  const skip = ['/', '/logout', '/register'];
-  if (!skip.includes(location.pathname)) {
-    localStorage.setItem('bh-last-page', location.pathname + location.search);
-  }
-})();
-
-/* Service worker registration */
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-  /* Cuando un SW nuevo toma control (p.ej. tras purgar una caché vieja con un
-     login CSRF caduco), recargar UNA vez para que la página venga ya fresca. */
-  let _swReloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (_swReloaded) return;
-    _swReloaded = true;
-    location.reload();
-  });
-}
-</script>
-
-<script>
-/* Animación de carga al navegar */
-(function () {
-  var bar = document.getElementById('bh-loading-bar');
-  var overlay = document.getElementById('bh-nav-overlay');
-  var hasVT = CSS && CSS.supports('selector(::view-transition-new(*))');
-
-  function resetNav() {
-    if (overlay) overlay.classList.remove('bh-nav-overlay-active');
-    document.querySelectorAll('.app-card.bh-loading').forEach(function (c) { c.classList.remove('bh-loading'); });
-    if (bar) bar.classList.remove('bh-bar-active');
-  }
-
-  document.addEventListener('click', function (e) {
-    var card = e.target.closest('.app-card');
-    if (!card || card.classList.contains('bh-loading')) return;
-    card.classList.add('bh-loading');
-    if (bar) {
-      bar.classList.remove('bh-bar-active');
-      void bar.offsetWidth;
-      bar.classList.add('bh-bar-active');
-    }
-    if (!hasVT && overlay) overlay.classList.add('bh-nav-overlay-active');
-  });
-
-  /* BFCache: al volver atrás la página se restaura sin reload */
-  window.addEventListener('pageshow', function (e) {
-    if (e.persisted) resetNav();
-  });
-  /* Fallback para navegadores que recargan al volver */
-  window.addEventListener('DOMContentLoaded', resetNav);
-})();
-</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
