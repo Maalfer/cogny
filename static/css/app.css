@@ -599,83 +599,6 @@ oculto por defecto hasta el hover (gesto fino) */
 @keyframes pwa-fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes pwa-slide-up { from { transform: translateY(100%) } to { transform: translateY(0) } }
 @keyframes toast-pop { from { transform: translateX(-50%) scale(.9); opacity: 0 } to { transform: translateX(-50%) scale(1); opacity: 1 } }
-/* =============================================
-   PROFILE PAGE — redesigned
-   ============================================= */
-
-/* Layout */
-.pf-body{
-  display: flex;
-  flex-direction: column;
-  min-height: calc(100vh - 57px);
-  background: var(--bg);
-}
-/* ── Hero ── */
-.pf-hero{
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2.5rem 1.5rem 2rem;
-  overflow: hidden;
-  gap: .5rem;
-}
-.pf-hero-bg{
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 120% at 50% -10%, rgba(6,182,212,.18) 0%, transparent 65%);
-  pointer-events: none;
-}
-/* Avatar */
-.pf-avatar-wrap{
-  position: relative;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  margin-bottom: .25rem;
-}
-.pf-avatar-wrap input[type=file]{
-  display: none;
-}
-.pf-avatar{
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--cyan), #0891b2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.8rem;
-  font-weight: 900;
-  color: #000;
-  position: relative;
-  overflow: hidden;
-  border: 3px solid var(--bg2);
-  transition: transform .15s;
-  user-select: none;
-}
-.pf-avatar-wrap:active .pf-avatar{ transform: scale(.96); }
-.pf-avatar img{
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-  z-index: 2;
-}
-.pf-avatar span{
-  position: relative;
-  z-index: 1;
-}
-.pf-avatar:has(img) span{ display: none; }
-/* Uploading ring */
-.pf-avatar-ring{
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 3px solid transparent;
-  pointer-events: none;
-}
 
 @keyframes spin-ring {
   to { transform: rotate(360deg); }
@@ -684,92 +607,8 @@ oculto por defecto hasta el hover (gesto fino) */
   border-color: var(--cyan) transparent transparent transparent;
   animation: spin-ring .7s linear infinite;
 }
-/* Camera badge */
-.pf-avatar-cam{
-  position: absolute;
-  bottom: 3px;
-  right: 3px;
-  width: 30px;
-  height: 30px;
-  background: var(--cyan);
-  border: 2.5px solid var(--bg);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #000;
-}
-.pf-avatar-cam svg{ width: 15px; height: 15px; }
-.pf-hero-name{
-  font-size: 1.35rem;
-  font-weight: 900;
-  letter-spacing: -.4px;
-  margin-top: .25rem;
-}
-.pf-hero-meta{
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  font-size: .8rem;
-  color: var(--text2);
-}
-.pf-hero-since{ color: var(--text2); }
-.pf-upload-msg{
-  font-size: .8rem;
-  min-height: 1.2rem;
-  text-align: center;
-  color: var(--text2);
-  transition: color .2s;
-}
 .pf-upload-msg.ok{ color: var(--cyan); }
 .pf-upload-msg.err{ color: #ff6b6b; }
-/* ── Sections ── */
-.pf-sections{
-  display: flex;
-  flex-direction: column;
-  gap: .75rem;
-  padding: 0 1rem 2rem;
-}
-.pf-card{
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.pf-card-header{
-  display: flex;
-  align-items: center;
-  gap: .875rem;
-  padding: .875rem 1rem;
-}
-.pf-card-toggle{
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.pf-card-toggle:hover{ background: var(--bg3); }
-.pf-card-toggle:active{ background: var(--bg3); }
-.pf-card-icon{
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.pf-card-icon svg{ width: 18px; height: 18px; }
-.pf-icon-user{ background: rgba(6,182,212,.15); color: var(--cyan); }
-.pf-icon-lock{ background: rgba(167,139,250,.15); color: #a78bfa; }
-.pf-icon-access{ background: rgba(34,197,94,.15); color: #22c55e; }
-
-/* ── Accesos invitados (perfil del propietario) ── */
-.pf-role-badge{ border-radius: 999px; padding: .1rem .55rem; font-size: .72rem; font-weight: 700; }
-.pf-role-owner{ background: rgba(6,182,212,.15); color: var(--cyan); }
-.pf-role-editor{ background: rgba(34,197,94,.15); color: #22c55e; }
-.pf-role-viewer{ background: var(--bg3); color: var(--text2); }
-.pf-card-sub{ display: block; font-size: .76rem; font-weight: 400; color: var(--text3); margin-top: .1rem; }
-.pf-hint{ font-size: .82rem; color: var(--text2); line-height: 1.5; margin: 0 0 .8rem; }
 .acc-list{ display: flex; flex-direction: column; gap: .5rem; margin-bottom: .9rem; }
 .acc-item{ display: flex; align-items: center; gap: .65rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: .55rem .65rem; }
 .acc-avatar{ width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--bg4); color: var(--text); font-weight: 700; font-size: .85rem; }
@@ -799,97 +638,7 @@ oculto por defecto hasta el hover (gesto fino) */
   .acc-controls{ width: 100%; justify-content: flex-end; }
   .acc-role{ max-width: none; flex: 1; }
 }
-.pf-card-label{
-  flex: 1;
-  font-size: .95rem;
-  font-weight: 600;
-}
-.pf-chevron{
-  color: var(--text3);
-  transition: transform .2s;
-  display: flex;
-}
-.pf-chevron svg{ width: 20px; height: 20px; }
-.pf-card-body{
-  padding: 0 1rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: .625rem;
-}
-/* Separator between header and body */
-.pf-card-header + .pf-card-body{
-  border-top: 1px solid var(--border);
-  padding-top: .875rem;
-}
-/* Username row */
-.pf-input-row{
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-}
-.pf-input{
-  flex: 1;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: .95rem;
-  padding: .625rem .875rem;
-  outline: none;
-  transition: border-color .15s, box-shadow .15s;
-  min-width: 0;
-}
-.pf-input:focus{
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 3px var(--cyan-dim);
-}
-.pf-save-btn{
-  width: 38px;
-  height: 38px;
-  background: var(--cyan);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: opacity .15s, transform .1s;
-}
-.pf-save-btn:hover{ opacity: .85; }
-.pf-save-btn:active{ transform: scale(.94); }
 .pf-save-btn.saving{ opacity: .5; pointer-events: none; }
-.pf-save-btn svg{ width: 20px; height: 20px; }
-/* Password fields */
-.pf-pw-body{ gap: .5rem; }
-.pf-pw-field{
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.pf-pw-field .pf-input{ padding-right: 2.75rem; }
-.pf-eye{
-  position: absolute;
-  right: .625rem;
-  background: none;
-  border: none;
-  color: var(--text3);
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  transition: color .15s;
-}
-.pf-eye:hover{ color: var(--text2); }
-.pf-eye svg{ width: 20px; height: 20px; }
-/* Messages */
-.pf-msg{
-  font-size: .82rem;
-  padding: .4rem .625rem;
-  border-radius: var(--radius-sm);
-  display: none;
-}
 .pf-msg.show{ display: block; }
 .pf-msg.ok{ background: rgba(6,182,212,.12); color: var(--cyan); }
 .pf-msg.err{ background: rgba(239,68,68,.12); color: #ff6b6b; }
@@ -968,7 +717,6 @@ a{ touch-action: manipulation; }
    PROFILE — THEME PICKER
    ============================================= */
 .pf-icon-theme{ background: rgba(168,139,250,.15); color: #a78bfa; }
-.pf-icon-settings{ background: rgba(148,163,184,.18); color: #94a3b8; }
 /* =============================================
    UNIFIED HEADER (.bh-header)
    ============================================= */
@@ -1313,8 +1061,7 @@ a{ touch-action: manipulation; }
 /* Inputs */
 :root[data-theme="light"] input,
 :root[data-theme="light"] textarea,
-:root[data-theme="light"] select,
-:root[data-theme="light"] .pf-input{
+:root[data-theme="light"] select{
   background: var(--bg2);
   color: var(--text);
   border-color: var(--border);
@@ -1329,25 +1076,13 @@ a{ touch-action: manipulation; }
   border: 1px solid var(--border);
 }
 :root[data-theme="light"] .btn-secondary:hover{ background: var(--bg3); }
-/* Pf cards */
-:root[data-theme="light"] .pf-card{
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 3px rgba(20,30,60,.04);
-}
 :root[data-theme="light"] .pf-theme-dark{
   background: #161824;
   color: #c5cbe3;
 }
 /* Cyan keep good contrast */
 :root[data-theme="light"] .btn-primary{ color: #fff; }
-/* Chevron arrows,
-dots remain visible */
-:root[data-theme="light"] .pf-chevron{ color: var(--text3); }
-/* Pf hero */
-:root[data-theme="light"] .pf-hero-bg{
-  background: linear-gradient(180deg, #e8efff 0%, var(--bg) 100%);
-}
+/* Chevron arrows{ color: var(--text3); }
 /* Chat */
 :root[data-theme="light"] .chat-bubble.me{ background: var(--cyan); color: #fff; }
 :root[data-theme="light"] .chat-bubble.them{ background: var(--bg3); color: var(--text); }
@@ -1405,8 +1140,7 @@ dots remain visible */
 /* Inputs */
 :root[data-theme="dracula"] input,
 :root[data-theme="dracula"] textarea,
-:root[data-theme="dracula"] select,
-:root[data-theme="dracula"] .pf-input{
+:root[data-theme="dracula"] select{
   background: var(--bg3);
   color: var(--text);
   border-color: var(--border);
@@ -1425,17 +1159,6 @@ dots remain visible */
   border: 1px solid var(--border);
 }
 :root[data-theme="dracula"] .btn-secondary:hover{ background: var(--bg4); }
-/* Profile cards */
-:root[data-theme="dracula"] .pf-card{
-  background: var(--bg2);
-  border: 1px solid var(--border);
-}
-/* Chevrons / arrows */
-:root[data-theme="dracula"] .pf-chevron{ color: var(--text3); }
-/* Pf hero */
-:root[data-theme="dracula"] .pf-hero-bg{
-  background: linear-gradient(180deg, #2f2b46 0%, var(--bg) 100%);
-}
 /* Chat */
 :root[data-theme="dracula"] .chat-bubble.me{ background: var(--cyan); color: #282a36; }
 :root[data-theme="dracula"] .chat-bubble.them{ background: var(--bg3); color: var(--text); }
@@ -1495,8 +1218,7 @@ dots remain visible */
 }
 :root[data-theme="pink"] input,
 :root[data-theme="pink"] textarea,
-:root[data-theme="pink"] select,
-:root[data-theme="pink"] .pf-input{
+:root[data-theme="pink"] select{
   background: var(--bg2);
   color: var(--text);
   border-color: var(--border);
@@ -1511,15 +1233,6 @@ dots remain visible */
   border: 1px solid var(--border);
 }
 :root[data-theme="pink"] .btn-secondary:hover{ background: var(--bg3); }
-:root[data-theme="pink"] .pf-card{
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 3px rgba(220,80,140,.06);
-}
-:root[data-theme="pink"] .pf-chevron{ color: var(--text3); }
-:root[data-theme="pink"] .pf-hero-bg{
-  background: linear-gradient(180deg, #ffd9e8 0%, var(--bg) 100%);
-}
 :root[data-theme="pink"] .chat-bubble.me{ background: var(--cyan); color: #fff; }
 :root[data-theme="pink"] .chat-bubble.them{ background: var(--bg3); color: var(--text); }
 :root[data-theme="pink"] .pf-toast{
@@ -1581,8 +1294,7 @@ vibrant cyan accent.
 }
 :root[data-theme="aqua"] input,
 :root[data-theme="aqua"] textarea,
-:root[data-theme="aqua"] select,
-:root[data-theme="aqua"] .pf-input{
+:root[data-theme="aqua"] select{
   background: var(--bg2);
   color: var(--text);
   border-color: var(--border);
@@ -1597,15 +1309,6 @@ vibrant cyan accent.
   border: 1px solid var(--border);
 }
 :root[data-theme="aqua"] .btn-secondary:hover{ background: var(--bg3); }
-:root[data-theme="aqua"] .pf-card{
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 3px rgba(6,140,170,.06);
-}
-:root[data-theme="aqua"] .pf-chevron{ color: var(--text3); }
-:root[data-theme="aqua"] .pf-hero-bg{
-  background: linear-gradient(180deg, #c4f2fb 0%, var(--bg) 100%);
-}
 :root[data-theme="aqua"] .chat-bubble.me{ background: var(--cyan); color: #fff; }
 :root[data-theme="aqua"] .chat-bubble.them{ background: var(--bg3); color: var(--text); }
 :root[data-theme="aqua"] .pf-toast{
@@ -1633,13 +1336,11 @@ vibrant cyan accent.
   }
 }
 /* Cards: softer cyan border for a more integrated look */
-:root[data-theme="aqua"] .app-card,
-:root[data-theme="aqua"] .pf-card{ border-color: #cdeef5; }
+:root[data-theme="aqua"] .app-card{ border-color: #cdeef5; }
 /* Inputs: cyan focus ring */
 :root[data-theme="aqua"] input:focus,
 :root[data-theme="aqua"] textarea:focus,
-:root[data-theme="aqua"] select:focus,
-:root[data-theme="aqua"] .pf-input:focus{
+:root[data-theme="aqua"] select:focus{
   border-color: var(--cyan);
   box-shadow: 0 0 0 3px var(--cyan-dim);
   outline: none;
