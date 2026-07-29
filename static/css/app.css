@@ -1249,109 +1249,103 @@ a{ touch-action: manipulation; }
 }
 :root[data-theme="pink"] .pf-theme-dark{ background: #161824; color: #c5cbe3; }
 /* =============================================
-   AQUA THEME
-   Light & cyan: airy white-cyan surfaces,
-deep
-   teal text,
-vibrant cyan accent.
+   GOLD THEME — oscuro (negro/gris) con acento
+   amarillo claro. Cálido, minimalista y elegante.
    ============================================= */
-:root[data-theme="aqua"]{
-  --bg:  #ecfdff;
-  --bg2: #ffffff;
-  --bg3: #d6f5fb;
-  --bg4: #bbecf5;
-  --text:  #093842;
-  --text2: #2c6571;
-  --text3: #6aa3af;
-  --border: #b3e5ef;
-  --cyan: #06b6d4;
-  --cyan-hover: #0891b2;
-  --cyan-dim: rgba(6,182,212,0.12);
-  --cyan-border: rgba(6,182,212,0.38);
-  --red: #e11d48;
+:root[data-theme="gold"]{
+  --bg:  #0f0f11;
+  --bg2: #16161a;
+  --bg3: #1e1e23;
+  --bg4: #292930;
+  --text:  #f2f1ec;
+  --text2: #b3b2ab;
+  --text3: #78766e;
+  --border: #2a2a31;
+  --cyan: #f4d772;          /* acento amarillo claro (nombre heredado del sistema) */
+  --cyan-hover: #ffe79a;
+  --cyan-dim: rgba(244,215,114,0.14);
+  --cyan-border: rgba(244,215,114,0.38);
+  --red: #ff6b6b;
 }
-:root[data-theme="aqua"] body{ background: var(--bg); color: var(--text); }
-:root[data-theme="aqua"] ::-webkit-scrollbar-thumb{ background: #9bd9e6; }
-:root[data-theme="aqua"] ::-webkit-scrollbar-thumb:hover{ background: #6fc7d9; }
-:root[data-theme="aqua"] body.subapp-body{ background: var(--bg); }
-:root[data-theme="aqua"] #sidebar{
-  background: linear-gradient(180deg, #c4f2fb 0%, var(--bg) 300px);
+:root[data-theme="gold"] body{ background: var(--bg); color: var(--text); }
+:root[data-theme="gold"] ::-webkit-scrollbar-thumb{ background: #33333b; }
+:root[data-theme="gold"] ::-webkit-scrollbar-thumb:hover{ background: #45454f; }
+:root[data-theme="gold"] body.subapp-body{ background: var(--bg); }
+:root[data-theme="gold"] ::selection{ background: rgba(244,215,114,.28); color: #17150c; }
+/* Music app: sidebar con un leve degradado cálido hacia el negro */
+:root[data-theme="gold"] #sidebar{
+  background: linear-gradient(180deg, #1c1a12 0%, var(--bg) 300px);
   border-right: 1px solid var(--border);
 }
-:root[data-theme="aqua"] .app-card{
+/* App cards (home grid) */
+:root[data-theme="gold"] .app-card{
   background: var(--bg2);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 3px rgba(6,140,170,.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
 }
-:root[data-theme="aqua"] .app-card:hover{
-  background: var(--bg2);
-  box-shadow: 0 4px 18px rgba(6,140,170,.18);
+:root[data-theme="gold"] .app-card:hover{
+  background: var(--bg3);
   border-color: var(--cyan-border);
+  box-shadow: 0 8px 26px -14px rgba(244,215,114,.18);
 }
-:root[data-theme="aqua"] #bottom-nav{
+:root[data-theme="gold"] #bottom-nav{
   background: var(--bg2);
   border-top: 1px solid var(--border);
 }
-:root[data-theme="aqua"] input,
-:root[data-theme="aqua"] textarea,
-:root[data-theme="aqua"] select{
-  background: var(--bg2);
+/* Inputs */
+:root[data-theme="gold"] input,
+:root[data-theme="gold"] textarea,
+:root[data-theme="gold"] select{
+  background: var(--bg3);
   color: var(--text);
   border-color: var(--border);
 }
-:root[data-theme="aqua"] input::placeholder,
-:root[data-theme="aqua"] textarea::placeholder{ color: var(--text3); }
-:root[data-theme="aqua"] .cal-day.today{ color: #fff; }
-:root[data-theme="aqua"] .btn-primary{ color: #fff; }
-:root[data-theme="aqua"] .btn-secondary{
-  background: var(--bg2);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-:root[data-theme="aqua"] .btn-secondary:hover{ background: var(--bg3); }
-:root[data-theme="aqua"] .chat-bubble.me{ background: var(--cyan); color: #fff; }
-:root[data-theme="aqua"] .chat-bubble.them{ background: var(--bg3); color: var(--text); }
-:root[data-theme="aqua"] .pf-toast{
-  background: var(--bg2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(6,140,170,.16);
-}
-/* ---- Aqua polish: cohesive cyan accents across the whole app ---- */
-:root[data-theme="aqua"] ::selection{ background: rgba(6,182,212,.22); color: var(--text); }
-/* Airy cyan background with a soft glow at the top */
-:root[data-theme="aqua"] body.subapp-body{
-  background: linear-gradient(180deg, #e0faff 0%, var(--bg) 280px);
-}
-/* Header: subtle cyan-tinted glass with gentle depth */
-:root[data-theme="aqua"] .bh-header{
-  background: linear-gradient(180deg, #f2feff 0%, #ffffff 100%);
-  border-bottom-color: #c8edf4;
-  box-shadow: 0 6px 20px -14px rgba(6,140,170,.45);
-}
-@media (min-width: 768px) {:root[data-theme="aqua"] .home-wrapper > .bh-header::before,
-:root[data-theme="aqua"] .subapp-wrapper > .bh-header::before{
-    background: linear-gradient(180deg, #f2feff 0%, #ffffff 100%);
-    border-bottom-color: #c8edf4;
-  }
-}
-/* Cards: softer cyan border for a more integrated look */
-:root[data-theme="aqua"] .app-card{ border-color: #cdeef5; }
-/* Inputs: cyan focus ring */
-:root[data-theme="aqua"] input:focus,
-:root[data-theme="aqua"] textarea:focus,
-:root[data-theme="aqua"] select:focus{
+:root[data-theme="gold"] input::placeholder,
+:root[data-theme="gold"] textarea::placeholder{ color: var(--text3); }
+:root[data-theme="gold"] input:focus,
+:root[data-theme="gold"] textarea:focus,
+:root[data-theme="gold"] select:focus{
   border-color: var(--cyan);
   box-shadow: 0 0 0 3px var(--cyan-dim);
   outline: none;
 }
-/* Theme picker preview swatch */
-.pf-theme-aqua{
-  background: linear-gradient(135deg, #d6f7fd 0%, #06b6d4 100%);
-  color: #fff;
-  border: 1px solid #b3e5ef;
+:root[data-theme="gold"] .cal-day.today{ color: #17150c; }
+:root[data-theme="gold"] .cal-day.today.selected{
+  box-shadow: 0 0 0 3px var(--bg2), 0 0 0 5px var(--cyan);
 }
-:root[data-theme="aqua"] .pf-theme-dark{ background: #161824; color: #c5cbe3; }
+/* Buttons: texto oscuro sobre el amarillo para máximo contraste */
+:root[data-theme="gold"] .btn-primary{ color: #17150c; font-weight: 700; }
+:root[data-theme="gold"] .btn-secondary{
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+:root[data-theme="gold"] .btn-secondary:hover{ background: var(--bg4); }
+/* Chat */
+:root[data-theme="gold"] .chat-bubble.me{ background: var(--cyan); color: #17150c; }
+:root[data-theme="gold"] .chat-bubble.them{ background: var(--bg3); color: var(--text); }
+/* Toast */
+:root[data-theme="gold"] .pf-toast{
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+}
+/* Header: superficie oscura limpia; el acento (icono/insignia de versión)
+   se vuelve amarillo automáticamente al heredar de --cyan. */
+:root[data-theme="gold"] .bh-header{ border-bottom-color: var(--border); }
+:root[data-theme="gold"] .bh-brand:hover{ background: rgba(244,215,114,.10); }
+:root[data-theme="gold"] .bh-version{
+  color: var(--cyan);
+  background: rgba(244,215,114,0.12);
+  border-color: rgba(244,215,114,0.32);
+}
+/* Theme picker preview swatch (mitad negro / mitad amarillo) */
+.pf-theme-gold{
+  background: linear-gradient(135deg, #16161a 50%, #f4d772 50%);
+  color: #17150c;
+  border: 1px solid #2a2a31;
+}
 /* Picker grid: 5 themes — 2 cols on phones,
 3 on wider screens */
 .pf-theme-row{ grid-template-columns: repeat(2, 1fr); }
@@ -1704,18 +1698,14 @@ ocultar hamburguesa ── */
   margin: .25rem 0;
 }
 /* Tema claro */
-:root[data-theme="light"] .vault-settings-menu,
-:root[data-theme="aqua"] .vault-settings-menu{
+:root[data-theme="light"] .vault-settings-menu{
   background: #fff;
   border-color: rgba(0,0,0,.12);
   box-shadow: 0 8px 24px rgba(0,0,0,.15);
 }
-:root[data-theme="light"] .vsm-item,
-:root[data-theme="aqua"] .vsm-item{ color: #333; }
-:root[data-theme="light"] .vsm-item:hover,
-:root[data-theme="aqua"] .vsm-item:hover{ background: rgba(0,0,0,.06); }
-:root[data-theme="light"] .vsm-sep,
-:root[data-theme="aqua"] .vsm-sep{ background: rgba(0,0,0,.1); }
+:root[data-theme="light"] .vsm-item{ color: #333; }
+:root[data-theme="light"] .vsm-item:hover{ background: rgba(0,0,0,.06); }
+:root[data-theme="light"] .vsm-sep{ background: rgba(0,0,0,.1); }
 .upload-tray.hidden{ display: none; }
 /* Mini-player de música: solo visible en /music/*. El <audio> sigue activo
    en cualquier página{
@@ -1805,12 +1795,11 @@ body.subapp-body:not(.subapp-body-shop):not(.chat-app-body) .subapp-content{
 .md-ctxmenu-danger:hover,
 .md-ctxmenu-danger:focus-visible{ background: rgba(239,68,68,.1); color: #ef4444; }
 /* ============================================================
-   Tema claro/aqua/rosa: arreglar contraste en /notes/
+   Tema claro/rosa: arreglar contraste en /notes/
    ── Tablas,
 separadores y bordes de bloques renderizados
    ============================================================ */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]){
   --note-line-strong: #1f2933;   /* casi negro para tablas / hr */
   --note-line-soft: #c8d0d8;     /* gris medio para bordes suaves */
@@ -1820,36 +1809,29 @@ separadores y bordes de bloques renderizados
 }
 /* Tablas Markdown dentro del editor Live Preview */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body table{
   border-collapse: collapse;
 }
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body table,
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body th,
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body td{
   border: 1px solid var(--note-line-strong) !important;
 }
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body th{
   background: #eef1f4;
   color: var(--note-line-strong);
   font-weight: 700;
 }
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body td{
   color: #1f2933;
 }
 /* Línea separadora <hr> */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body hr{
   border: 0;
   border-top: 2px solid var(--note-line-strong);
@@ -1857,7 +1839,6 @@ separadores y bordes de bloques renderizados
 }
 /* Bloques de código inline y multilínea */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body code{
   background: var(--note-code-bg);
   border: 1px solid var(--note-code-border);
@@ -1866,21 +1847,18 @@ separadores y bordes de bloques renderizados
   border-radius: 4px;
 }
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body pre{
   background: var(--note-code-bg);
   border: 1px solid var(--note-code-border);
   border-radius: 6px;
 }
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body pre code{
   background: transparent;
   border: 0;
 }
 /* Blockquote / cita */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body blockquote{
   border-left: 4px solid var(--note-line-strong);
   background: var(--note-quote-bg);
@@ -1889,17 +1867,14 @@ separadores y bordes de bloques renderizados
 }
 /* Headings: bordes inferiores para H1/H2 (legibilidad) */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body h1,
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .cm-lp-block.markdown-body h2{
   border-bottom: 1px solid var(--note-line-soft);
   padding-bottom: .2em;
 }
 /* kbd en tema claro: contraste */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .md-ctxmenu kbd{
   background: #fff;
   color: #111827;
@@ -2106,14 +2081,12 @@ separadores y bordes de bloques renderizados
   .storage-hero-val { font-size: 1.75rem; }
   .storage-action-btn { align-self: stretch; justify-content: center; }
 }
-/* Tema claro / aqua / pink */
+/* Tema claro / pink */
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .storage-stack{
   background: rgba(0,0,0,.08);
 }
 :root:is([data-theme="light"],
-[data-theme="aqua"],
 [data-theme="pink"]) .storage-card-icon{
   background: rgba(0,0,0,.04);
 }

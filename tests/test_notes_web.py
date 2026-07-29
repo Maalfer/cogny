@@ -230,9 +230,9 @@ class AccountTests(VaultTestCase):
         self.client.force_login(self.user)
 
     def test_cambiar_tema(self):
-        self.assertEqual(self.json_post("/api/profile/set-theme", {"theme": "aqua"}).status_code, 200)
+        self.assertEqual(self.json_post("/api/profile/set-theme", {"theme": "gold"}).status_code, 200)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.theme, "aqua")
+        self.assertEqual(self.user.theme, "gold")
         self.assertEqual(self.json_post("/api/profile/set-theme",
                                         {"theme": "inventado"}).status_code, 400)
 

@@ -27,7 +27,7 @@ class User(AbstractUser):
         ("light", "Claro"),
         ("dracula", "Drácula"),
         ("pink", "Rosa"),
-        ("aqua", "Aqua"),
+        ("gold", "Dorado"),
     )
 
     ROLE_OWNER = "owner"

@@ -1,3 +1,11 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cogny — qué NO va al repositorio.
+#
+# Regla de oro: aquí sólo vive el CÓDIGO. El contenido de la bóveda (las notas
+# y sus adjuntos), la base de datos, los avatares y las credenciales son datos
+# de cada instalación y nunca deben acabar en git.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Python
 __pycache__/
 *.py[cod]
@@ -9,27 +17,59 @@ venv/
 .venv/
 env/
 
-# Django
+# ── Datos de la instalación ──────────────────────────────────────────────────
+# La bóveda de notas: en producción cuelga de DATA_ROOT/VAULT_ROOT (fuera del
+# repo), pero se ignora por nombre para que una copia local nunca se cuele.
+data/
+vault/
+avatars/
+media/
+uploads/
+
+# Base de datos
 *.sqlite3
-db.sqlite3
-/data/
-/media/
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+
+# Exports/imports de bóvedas
+*.zip
+*.tar
+*.tar.gz
+
+# ── Django ───────────────────────────────────────────────────────────────────
+# Generado por `collectstatic`; el estático fuente sí se versiona (static/).
 static_collected/
 staticfiles/
 
-# Variables de entorno
+# ── Credenciales ─────────────────────────────────────────────────────────────
 .env
 .env.*
 !.env.example
 
-# Herramientas
+# ── Copias de seguridad y temporales de edición ───────────────────────────────
+*.bak
+*.bak-*
+*.bak_*
+*.orig
+*.rej
+*~
+
+# ── Registros y caché de herramientas ────────────────────────────────────────
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+node_modules/
 .claude/
 
-# Sistema operativo / editores
+# ── Sistema operativo / editores ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 __MACOSX/
 .idea/
 .vscode/
 *.swp
-*~
