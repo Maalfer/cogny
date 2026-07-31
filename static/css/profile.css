@@ -1,5 +1,7 @@
 /* =====================================================================
-   PERFIL — hoja dedicada (se carga sólo en /profile/)
+   PANEL DE CUENTA — sistema de tarjetas .pfx-
+   La cargan las dos páginas de cuenta: /profile/ (perfil) y /settings/
+   (ajustes, que además añade settings.css encima).
    Depende de las variables de tema de app.css (--bg, --cyan, --border…).
    Las clases van con prefijo .pfx- para no chocar con nada global.
    ===================================================================== */
@@ -294,10 +296,12 @@
   line-height: 1.35;
 }
 
-/* Banda a todo lo ancho (Ajustes): icono + texto a la izquierda, acción a la derecha */
+/* Banda a todo lo ancho: icono + texto a la izquierda, acción a la derecha.
+   El `margin-left:auto` va acotado a la CABECERA; suelto, empujaba también
+   los botones del cuerpo de la tarjeta. */
 .pfx-card-wide{ grid-column: 1 / -1; }
 .pfx-card-wide .pfx-card-head{ flex-wrap: wrap; gap: 1rem; }
-.pfx-card-wide .pfx-btn{ margin-left: auto; }
+.pfx-card-wide .pfx-card-head .pfx-btn{ margin-left: auto; }
 .pfx-chevron{
   flex-shrink: 0;
   display: flex;
@@ -407,6 +411,7 @@
   padding: .7rem 1.1rem;
   border-radius: 11px;
   border: 1px solid transparent;
+  text-decoration: none;   /* también se usa en <a> (ir a Ajustes, volver…) */
   font-family: inherit;
   font-size: .9rem;
   font-weight: 700;

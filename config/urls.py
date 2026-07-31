@@ -16,8 +16,12 @@ urlpatterns = [
     path("s/<str:token>/", notes_views.shared_note_view, name="shared_note"),
     path("s/<str:token>/asset", notes_views.shared_note_asset, name="shared_note_asset"),
 
+    # Bóveda pública de sólo lectura (sin login; filtrada por dominio de origen).
+    path("", include("apps.knowledge.urls")),
+
     # APIs JSON internas (sesión + CSRF) — las consume el frontend.
     path("api/notes/", include("apps.notes.api_urls")),
+    path("api/knowledge/", include("apps.knowledge.api_urls")),
 
     # API pública v1 (clave de API) + Swagger en /api/docs/.
     path("api/", include("apps.api.urls")),

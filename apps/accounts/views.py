@@ -50,6 +50,17 @@ def profile(request):
     })
 
 
+@login_required
+def settings_page(request):
+    """Ajustes de la app (tema, enlaces compartidos, claves de API).
+
+    Todo el contenido lo carga el cliente contra las APIs de más abajo; aquí
+    sólo hace falta la plantilla. `bh_theme` e `is_owner` los pone el context
+    processor global.
+    """
+    return render(request, "accounts/settings.html")
+
+
 # ── Ajustes de la cuenta propia ──────────────────────────────────────────────
 
 @login_required

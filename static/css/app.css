@@ -326,11 +326,10 @@ body.subapp-body{ padding-left: env(safe-area-inset-left, 0); padding-right: env
 .modal.hidden{ display: none; }
 
 /* =============================================
-   SETTINGS MODAL (ajustes globales: tema + enlaces compartidos)
-   Usa nombres de clase compartidos con el vault (notes.css) — allí ya hay
-   una regla ".modal-back .modal" con más especificidad que la ".modal"
-   genérica de arriba, así que en esa página gana la de notes.css (se carga
-   después) y aquí, en el resto de páginas, esta es la única que aplica.
+   MODALES CON FONDO (import, imágenes, compartir, diálogos del vault)
+   El vault (notes.css) redefine ".modal-back .modal" con más especificidad y
+   se carga después, así que allí gana la suya; aquí, en el resto de páginas,
+   esta es la única que aplica.
    ============================================= */
 .modal-back{ position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 1300; display: none; align-items: center; justify-content: center; padding: 1rem; }
 .modal-back.show{ display: flex; }
@@ -340,23 +339,6 @@ body.subapp-body{ padding-left: env(safe-area-inset-left, 0); padding-right: env
 .modal-actions{ display: flex; justify-content: flex-end; gap: .6rem; margin-top: .4rem; }
 .modal-actions button{ border: none; border-radius: 9px; padding: .55rem 1.1rem; font-weight: 700; cursor: pointer; font-size: .9rem; }
 .btn-cancel{ background: var(--bg3); color: var(--text); }
-.settings-section{ margin-bottom: 1.2rem; }
-.settings-section:last-of-type{ margin-bottom: 0; }
-.settings-section-title{ font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text3); margin-bottom: .6rem; }
-.imgdir-info{ display: flex; align-items: center; gap: .6rem; background: rgba(6,182,212,.1); border: 1px solid var(--cyan); color: var(--text); border-radius: 9px; padding: .7rem .8rem; font-size: .9rem; line-height: 1.35; }
-.imgdir-info svg{ width: 20px; height: 20px; flex-shrink: 0; opacity: .85; }
-.shared-links-list{ display: flex; flex-direction: column; gap: .5rem; max-height: 40vh; overflow-y: auto; margin: 0; }
-.shared-link-item{ display: flex; align-items: center; gap: .6rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: .6rem .7rem; }
-.sli-info{ flex: 1; min-width: 0; }
-.sli-name{ color: var(--text); font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sli-meta{ display: flex; align-items: center; gap: .35rem; color: var(--text2); font-size: .76rem; margin-top: .15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sli-meta svg{ width: 12px; height: 12px; flex-shrink: 0; }
-.sli-actions{ display: flex; gap: .25rem; flex-shrink: 0; }
-.sli-actions button{ background: var(--bg4); border: none; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--text); cursor: pointer; flex-shrink: 0; }
-.sli-actions button svg{ width: 16px; height: 16px; }
-.sli-actions button:hover{ background: var(--border); }
-.sli-actions button.sli-revoke:hover{ background: rgba(226,33,52,.25); color: var(--red); }
-.sli-actions button.copied{ background: #16a34a; color: #fff; }
 
 /* ── Acceso de sólo lectura: se esconden las acciones que escriben ──
    Es sólo cosmética — el permiso real lo aplica @require_write en el servidor.
@@ -367,38 +349,10 @@ body.role-readonly #btn-new-folder,
 body.role-readonly #btn-insert-img,
 body.role-readonly #btn-format,
 body.role-readonly #btn-view-toggle,
-body.role-readonly #vsm-import,
-body.role-readonly #empty-new,
-body.role-readonly #empty-import,
-body.role-readonly .sli-revoke{ display: none !important; }
+body.role-readonly #vsm-import{ display: none !important; }
 .ro-badge{ display: inline-flex; align-items: center; gap: .3rem; background: var(--bg3); color: var(--text2); border: 1px solid var(--border); border-radius: 999px; padding: .12rem .55rem; font-size: .72rem; font-weight: 700; vertical-align: middle; }
 .ro-badge svg{ width: 13px; height: 13px; }
 
-/* ---- Sección "Clave de API" del modal de Ajustes ---- */
-.settings-title-row{ display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
-.settings-title-link{ display: inline-flex; align-items: center; gap: .3rem; color: var(--cyan); text-decoration: none; font-size: .74rem; font-weight: 700; text-transform: none; letter-spacing: 0; background: rgba(6,182,212,.1); border: 1px solid rgba(6,182,212,.45); border-radius: 999px; padding: .2rem .55rem; }
-.settings-title-link:hover{ background: rgba(6,182,212,.2); }
-.settings-title-link svg{ width: 13px; height: 13px; }
-.apikey-new{ background: rgba(6,182,212,.1); border: 1px solid var(--cyan); border-radius: 10px; padding: .65rem .75rem; margin-bottom: .7rem; }
-.apikey-new-label{ color: var(--cyan); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-bottom: .4rem; }
-.apikey-new-row{ display: flex; align-items: center; gap: .5rem; }
-.apikey-new-row code{ flex: 1; min-width: 0; background: var(--bg1, #0f0f0f); border: 1px solid var(--border); border-radius: 8px; padding: .45rem .55rem; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; overflow-x: auto; white-space: nowrap; }
-.apikey-new-row button{ background: var(--bg4); border: none; border-radius: 8px; width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text); cursor: pointer; }
-.apikey-new-row button svg{ width: 16px; height: 16px; }
-.apikey-new-row button:hover{ background: var(--border); }
-.apikey-new-row button.copied{ background: #16a34a; color: #fff; }
-.apikey-tag{ background: var(--bg4); color: var(--text2); border-radius: 5px; padding: .05rem .3rem; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; vertical-align: middle; }
-.apikey-form{ display: flex; align-items: center; gap: .5rem; margin-top: .6rem; flex-wrap: wrap; }
-.apikey-form input[type=text]{ flex: 1; min-width: 130px; background: var(--bg3); border: 1px solid var(--border); border-radius: 9px; padding: .5rem .65rem; color: var(--text); font-size: .85rem; }
-.apikey-form input[type=text]:focus{ outline: none; border-color: var(--cyan); }
-.apikey-form button{ border: none; border-radius: 9px; padding: .5rem 1rem; font-weight: 700; font-size: .85rem; cursor: pointer; }
-.apikey-form button:disabled{ opacity: .6; cursor: default; }
-.apikey-check{ display: flex; align-items: center; gap: .35rem; color: var(--text2); font-size: .8rem; cursor: pointer; white-space: nowrap; }
-.apikey-check input{ accent-color: var(--cyan); cursor: pointer; }
-@media (max-width: 420px) {
-  .apikey-form input[type=text]{ flex-basis: 100%; }
-  .apikey-form button{ flex: 1; }
-}
 @media (max-width: 480px){
   .modal-actions{ flex-direction: column-reverse; gap: .5rem; margin-top: .6rem; }
   .modal-actions button{ width: 100%; padding: .85rem; font-size: .95rem; }
@@ -932,6 +886,8 @@ a{ touch-action: manipulation; }
 .hb-item:active{ background: var(--bg3); }
 .hb-item svg{ width: 22px; height: 22px; color: var(--text2); flex-shrink: 0; }
 .hb-item:hover svg{ color: var(--cyan); }
+.hb-item[aria-current="page"]{ background: var(--cyan-dim); color: var(--cyan); }
+.hb-item[aria-current="page"] svg{ color: var(--cyan); }
 .hb-item.hb-danger{ color: #ef4444; }
 .hb-item.hb-danger svg{ color: #ef4444; }
 .hb-item.hb-danger:hover{ background: rgba(239,68,68,.08); }
@@ -1253,23 +1209,29 @@ a{ touch-action: manipulation; }
    amarillo claro. Cálido, minimalista y elegante.
    ============================================= */
 :root[data-theme="gold"]{
-  --bg:  #0f0f11;
-  --bg2: #16161a;
-  --bg3: #1e1e23;
-  --bg4: #292930;
+  --bg:  #110f0a;
+  --bg2: #18150e;
+  --bg3: #211d13;
+  --bg4: #2c2619;
   --text:  #f2f1ec;
   --text2: #b3b2ab;
   --text3: #78766e;
-  --border: #2a2a31;
+  --border: #362f1e;
   --cyan: #f4d772;          /* acento amarillo claro (nombre heredado del sistema) */
   --cyan-hover: #ffe79a;
   --cyan-dim: rgba(244,215,114,0.14);
   --cyan-border: rgba(244,215,114,0.38);
+  --gold-deep: #d9ad3f;     /* variante más profunda, para degradados con cuerpo */
   --red: #ff6b6b;
 }
-:root[data-theme="gold"] body{ background: var(--bg); color: var(--text); }
-:root[data-theme="gold"] ::-webkit-scrollbar-thumb{ background: #33333b; }
-:root[data-theme="gold"] ::-webkit-scrollbar-thumb:hover{ background: #45454f; }
+:root[data-theme="gold"] body{
+  background:
+    radial-gradient(ellipse 1000px 520px at 50% -12%, rgba(244,215,114,.07), transparent 62%),
+    var(--bg);
+  color: var(--text);
+}
+:root[data-theme="gold"] ::-webkit-scrollbar-thumb{ background: rgba(244,215,114,.16); }
+:root[data-theme="gold"] ::-webkit-scrollbar-thumb:hover{ background: rgba(244,215,114,.30); }
 :root[data-theme="gold"] body.subapp-body{ background: var(--bg); }
 :root[data-theme="gold"] ::selection{ background: rgba(244,215,114,.28); color: #17150c; }
 /* Music app: sidebar con un leve degradado cálido hacia el negro */
@@ -1277,16 +1239,17 @@ a{ touch-action: manipulation; }
   background: linear-gradient(180deg, #1c1a12 0%, var(--bg) 300px);
   border-right: 1px solid var(--border);
 }
-/* App cards (home grid) */
+/* App cards (home grid): borde con un leve tinte dorado permanente,
+   no sólo al pasar el ratón, para que el acento tenga presencia constante. */
 :root[data-theme="gold"] .app-card{
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(244,215,114,.14);
   box-shadow: 0 1px 3px rgba(0,0,0,.4);
 }
 :root[data-theme="gold"] .app-card:hover{
   background: var(--bg3);
   border-color: var(--cyan-border);
-  box-shadow: 0 8px 26px -14px rgba(244,215,114,.18);
+  box-shadow: 0 10px 30px -14px rgba(244,215,114,.30);
 }
 :root[data-theme="gold"] #bottom-nav{
   background: var(--bg2);
@@ -1313,8 +1276,19 @@ a{ touch-action: manipulation; }
 :root[data-theme="gold"] .cal-day.today.selected{
   box-shadow: 0 0 0 3px var(--bg2), 0 0 0 5px var(--cyan);
 }
-/* Buttons: texto oscuro sobre el amarillo para máximo contraste */
-:root[data-theme="gold"] .btn-primary{ color: #17150c; font-weight: 700; }
+/* Buttons: degradado con cuerpo (no plano) y texto oscuro sobre el
+   amarillo para máximo contraste; el resplandor le da presencia. */
+:root[data-theme="gold"] .btn-primary{
+  background: linear-gradient(135deg, var(--cyan) 0%, var(--gold-deep) 100%);
+  color: #17150c;
+  font-weight: 700;
+  box-shadow: 0 4px 16px -6px rgba(244,215,114,.45);
+}
+:root[data-theme="gold"] .btn-primary:hover{
+  background: linear-gradient(135deg, var(--cyan-hover) 0%, #e6bd52 100%);
+  box-shadow: 0 6px 22px -6px rgba(244,215,114,.6);
+  transform: scale(1.02);
+}
 :root[data-theme="gold"] .btn-secondary{
   background: var(--bg3);
   color: var(--text);
@@ -1333,18 +1307,19 @@ a{ touch-action: manipulation; }
 }
 /* Header: superficie oscura limpia; el acento (icono/insignia de versión)
    se vuelve amarillo automáticamente al heredar de --cyan. */
-:root[data-theme="gold"] .bh-header{ border-bottom-color: var(--border); }
+:root[data-theme="gold"] .bh-header{ border-bottom-color: rgba(244,215,114,.14); }
 :root[data-theme="gold"] .bh-brand:hover{ background: rgba(244,215,114,.10); }
 :root[data-theme="gold"] .bh-version{
   color: var(--cyan);
   background: rgba(244,215,114,0.12);
   border-color: rgba(244,215,114,0.32);
 }
-/* Theme picker preview swatch (mitad negro / mitad amarillo) */
+/* Theme picker preview swatch: degradado de tres tonos (negro cálido →
+   bronce → amarillo vivo) en vez del corte plano a 50/50, más rico. */
 .pf-theme-gold{
-  background: linear-gradient(135deg, #16161a 50%, #f4d772 50%);
+  background: linear-gradient(135deg, #110f0a 0%, #3a2f12 45%, #f4d772 100%);
   color: #17150c;
-  border: 1px solid #2a2a31;
+  border: 1px solid #3a2f12;
 }
 /* Picker grid: 5 themes — 2 cols on phones,
 3 on wider screens */
@@ -1574,6 +1549,10 @@ html{ overflow-x: hidden; }
 }
 .bh-desk-btn svg{ width: 20px; height: 20px; }
 .bh-desk-btn:hover{ background: var(--bg3); color: var(--text2); }
+/* Página en la que estás (perfil / ajustes): antes Ajustes era un modal y no
+   había nada que marcar; ahora son páginas y el nav lo señala. */
+.bh-desk-btn[aria-current="page"]{ background: var(--cyan-dim); color: var(--cyan); }
+.bh-desk-user[aria-current="page"]{ background: var(--cyan-dim); }
 /* Botón de logout con color de peligro al hacer hover */
 .bh-desk-logout:hover{ background: rgba(239,68,68,.1); color: #ef4444; }
 /* El logout va en un <form> (la vista es @require_POST). `display:contents`

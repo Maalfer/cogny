@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Acceso restringido — Cogny{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/knowledge/conocimiento.css?v={{ ASSET_VERSION }}">
+{% endblock %}
+{% block header_title %}Conocimiento{% endblock %}
+
+{% block content %}
+<div class="kn-gate">
+  <span class="kn-gate-ico" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+  </span>
+  <h1>Estos apuntes son de la comunidad</h1>
+  <p>
+    Esta bóveda sólo se abre a quien llega desde uno de los sitios de la
+    comunidad. {% if origin_host %}Has llegado desde <code>{{ origin_host }}</code>, que no
+    está en la lista.{% else %}Tu navegador no ha dicho de dónde vienes, así que no
+    se ha podido comprobar.{% endif %}
+  </p>
+  <p class="kn-gate-hint">
+    Vuelve a la web de la comunidad y entra desde el enlace de allí. Si alguien
+    te ha pasado esta dirección suelta, pídele que te mande el enlace bueno.
+  </p>
+</div>
+{% endblock %}

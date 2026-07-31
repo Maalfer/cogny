@@ -1,0 +1,399 @@
+/* =====================================================================
+   CONOCIMIENTO — lector público de la bóveda (/conocimiento)
+   Se carga sobre app.css (variables de tema) y notes.css (.markdown-body,
+   callouts, código, embeds…). Aquí sólo va el armazón del lector: índice
+   lateral, barra y contenedor de la nota. Prefijo .kn-.
+   ===================================================================== */
+
+/* El wrapper genérico (.subapp-wrapper) limita a 680px; el lector ocupa la
+   pantalla entera bajo la cabecera, igual que hace la bóveda con sesión.
+   Por eso la plantilla sustituye la clase del wrapper por ésta. */
+.kn-wrapper{
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+.kn-body{ overflow: hidden; }
+
+/* 56px es el min-height de .bh-header: el mismo número que usa .vault. */
+.kn{
+  display: flex;
+  height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.kn *,
+.kn *::before,
+.kn *::after{ box-sizing: border-box; }
+.kn :focus-visible{ outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* `hidden` es sólo `display:none` de la hoja del navegador, así que cualquier
+   `display` propio le gana. Aquí se esconde de verdad lo que lleve el atributo
+   (la aspa de la búsqueda, el panel de resultados, la bienvenida…). */
+.kn [hidden]{ display: none !important; }
+
+/* ─────────────────────────── Índice lateral ─────────────────────────── */
+.kn-side{
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 310px;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.kn-side-head{
+  padding: .75rem;
+  border-bottom: 1px solid var(--border);
+}
+.kn-search{
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.kn-search > svg{
+  position: absolute;
+  left: .6rem;
+  width: 17px;
+  height: 17px;
+  color: var(--text3);
+  pointer-events: none;
+}
+.kn-search input{
+  width: 100%;
+  min-width: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: .9rem;
+  padding: .55rem .6rem .55rem 2.1rem;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kn-search input::placeholder{ color: var(--text3); }
+.kn-search input:focus{ border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); }
+.kn-search input::-webkit-search-cancel-button{ display: none; }
+.kn-q-clear{
+  position: absolute;
+  right: .35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text3);
+  cursor: pointer;
+}
+.kn-q-clear svg{ width: 16px; height: 16px; }
+.kn-q-clear:hover{ background: var(--bg4); color: var(--text); }
+
+.kn-tree,
+.kn-results{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .5rem .4rem 2rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Filas del árbol: la sangría la marca --d (profundidad). */
+.kn-row{
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  width: 100%;
+  padding: .4rem .5rem;
+  padding-left: calc(.5rem + var(--d, 0) * .85rem);
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text2);
+  font: inherit;
+  font-size: .88rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+.kn-row span{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kn-row .ico{ width: 17px; height: 17px; flex-shrink: 0; opacity: .8; }
+.kn-row:hover{ background: var(--bg3); color: var(--text); }
+
+.kn-chev{
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--text3);
+  transition: transform .15s ease;
+}
+.kn-row-folder.is-open .kn-chev{ transform: rotate(90deg); }
+.kn-row-folder{ font-weight: 600; }
+
+.kn-row-note{ padding-left: calc(1.4rem + var(--d, 0) * .85rem); }
+.kn-row-note.is-active{
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.kn-row-note.is-active .ico{ opacity: 1; }
+
+.kn-empty{
+  margin: 1rem .6rem;
+  color: var(--text3);
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
+/* Resultados de búsqueda */
+.kn-hit{
+  display: block;
+  width: 100%;
+  margin-bottom: .35rem;
+  padding: .55rem .6rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--bg3);
+  color: var(--text2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .12s ease;
+}
+.kn-hit:hover{ border-color: var(--cyan-border); }
+.kn-hit-name{
+  display: block;
+  color: var(--text);
+  font-size: .88rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kn-hit-path{
+  display: block;
+  margin-top: .05rem;
+  color: var(--text3);
+  font-size: .7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kn-hit-snippet{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: .3rem;
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+/* ─────────────────────────── Contenido ─────────────────────────── */
+.kn-main{
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kn-bar{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+.kn-crumb{
+  flex: 1;
+  min-width: 0;
+  color: var(--text2);
+  font-size: .85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kn-crumb strong{ color: var(--text); }
+.kn-crumb-dir{ color: var(--text3); }
+
+.kn-ro{
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  flex-shrink: 0;
+  padding: .2rem .6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg3);
+  color: var(--text2);
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kn-ro svg{ width: 13px; height: 13px; }
+
+.kn-side-toggle{
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+}
+.kn-side-toggle svg{ width: 19px; height: 19px; }
+.kn-side-toggle:hover{ background: var(--bg4); color: var(--text); }
+
+.kn-note{ padding: 1.5rem 1.25rem 5rem; }
+.kn-note .markdown-body{
+  max-width: 860px;
+  margin: 0 auto;
+}
+.kn-note .markdown-body img{ cursor: zoom-in; }
+.kn-loading{ color: var(--text3); font-size: .9rem; }
+
+/* Bienvenida (sin nota abierta) */
+.kn-welcome{
+  max-width: 620px;
+  margin: 3.5rem auto 0;
+  text-align: center;
+}
+.kn-welcome-ico{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 78px;
+  margin-bottom: 1.25rem;
+  border-radius: 24px;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  box-shadow: inset 0 0 0 1px var(--cyan-border);
+}
+.kn-welcome-ico svg{ width: 38px; height: 38px; }
+.kn-welcome h1{
+  margin: 0 0 .6rem;
+  color: var(--text);
+  font-size: 1.75rem;
+  font-weight: 900;
+  letter-spacing: -.5px;
+}
+.kn-welcome p{
+  margin: 0 auto .7rem;
+  max-width: 46ch;
+  color: var(--text2);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.kn-welcome-note{ font-size: .88rem !important; color: var(--text3) !important; }
+
+/* ─────────────────────────── Página de bloqueo ─────────────────────────── */
+.kn-gate{
+  max-width: 560px;
+  margin: 3rem auto;
+  padding: 2.25rem 1.5rem;
+  text-align: center;
+}
+.kn-gate-ico{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 1.25rem;
+  border-radius: 50%;
+  background: var(--bg3);
+  color: var(--text3);
+  border: 1px solid var(--border);
+}
+.kn-gate-ico svg{ width: 32px; height: 32px; }
+.kn-gate h1{
+  margin: 0 0 .8rem;
+  color: var(--text);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -.3px;
+}
+.kn-gate p{
+  margin: 0 auto .8rem;
+  max-width: 46ch;
+  color: var(--text2);
+  font-size: .95rem;
+  line-height: 1.6;
+}
+.kn-gate code{
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .1rem .35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .85em;
+  color: var(--text);
+}
+.kn-gate-hint{ font-size: .87rem !important; color: var(--text3) !important; }
+
+/* ═══════════════════════════ Responsive ═══════════════════════════ */
+
+.kn-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0,0,0,.5);
+}
+
+@media (min-width: 1100px){
+  .kn-side{ width: 340px; }
+  .kn-note{ padding: 2rem 2.5rem 6rem; }
+  .kn-bar{ padding: .7rem 2.5rem; }
+}
+
+/* El índice pasa a ser un cajón que se abre desde la barra. */
+@media (max-width: 860px){
+  .kn-side{
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(86vw, 330px);
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    box-shadow: 0 0 40px rgba(0,0,0,.45);
+    padding-top: env(safe-area-inset-top);
+  }
+  .kn-side.is-open{ transform: none; }
+  .kn-side-toggle{ display: inline-flex; }
+  .kn-note{ padding: 1.1rem .9rem 4rem; }
+  .kn-bar{ padding: .55rem .9rem; }
+  .kn-welcome{ margin-top: 2rem; }
+  .kn-welcome h1{ font-size: 1.45rem; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .kn-side{ transition: none; }
+  .kn *{ transition: none !important; }
+}

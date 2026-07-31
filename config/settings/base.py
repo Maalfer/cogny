@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.accounts",
     "apps.notes",
+    "apps.knowledge",
     "apps.api",
 ]
 

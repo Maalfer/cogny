@@ -229,6 +229,32 @@ class AccountTests(VaultTestCase):
         self.user = self.make_user()
         self.client.force_login(self.user)
 
+    def test_la_pagina_de_ajustes_se_pinta(self):
+        """Ajustes dejó de ser un modal global y ahora es una página propia."""
+        resp = self.client.get("/settings/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "accounts/settings.html")
+        html = resp.content.decode()
+        # El propietario ve las tres secciones y el hueco donde el JS pinta.
+        self.assertIn('id="settings-theme-picker"', html)
+        self.assertIn('id="shared-links-list"', html)
+        self.assertIn('id="apikeys-list"', html)
+        # Y ya no queda rastro del modal en el layout común.
+        self.assertNotIn('id="settings-modal"', html)
+
+    def test_los_ajustes_piden_sesion(self):
+        self.client.logout()
+        resp = self.client.get("/settings/")
+        # La raíz es quien enseña el login al anónimo (ver `core.views.root`).
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "/?next=/settings/")
+
+    def test_un_invitado_no_ve_las_claves_de_api_en_ajustes(self):
+        self.client.force_login(self.make_user("lector", role=User.ROLE_VIEWER))
+        html = self.client.get("/settings/").content.decode()
+        self.assertIn('id="shared-links-list"', html)
+        self.assertNotIn('id="apikeys-list"', html)
+
     def test_cambiar_tema(self):
         self.assertEqual(self.json_post("/api/profile/set-theme", {"theme": "gold"}).status_code, 200)
         self.user.refresh_from_db()

@@ -355,6 +355,10 @@ function clearDropVisual(){
 function wireRowDrag(row, it, parentPath, isAttach){
   if(!CAN_WRITE) return;
   if(isAttach) return;   // Adjuntos no se puede arrastrar (ruta fija en el backend)
+  // En móvil, draggable=true rompe el scroll táctil del árbol (Chrome/Android interpreta
+  // el dedo sobre la fila como intento de drag en vez de scroll). Como no hay soporte de
+  // reordenar por touch de todos modos, se desactiva por debajo del breakpoint móvil.
+  if(window.innerWidth<768) return;
   row.draggable=true;
   row.addEventListener('dragstart', e=>{
     e.stopPropagation();
@@ -472,14 +476,24 @@ async function loadTree(){
   TREE=res.tree; FLAT=[]; BY_PATH=new Map(); BY_BASE=new Map(); flatten(TREE);
   renderTree(); flashSync();
 }
+// Carpetas de la raíz que NO se muestran en el árbol (sólo ocultas visualmente:
+// el índice FLAT/BY_PATH/BY_BASE se construye con el árbol COMPLETO, así que los
+// embeds ![[imagen.webp]] siguen resolviendo con findFileByName y las imágenes
+// se ven igual en las notas). No filtrar nunca en el backend: build_tree() lo
+// comparten la API v1 y el export/import de bóvedas.
+const HIDDEN_ROOT_FOLDERS=new Set(['Adjuntos']);
+function visibleTree(items){
+  return (items||[]).filter(it=>!(it.type==='folder' && HIDDEN_ROOT_FOLDERS.has(it.path)));
+}
 function renderTree(){
   const tree=$('vault-tree');
   const q=($('vault-search-input').value||'').toLowerCase().trim();
   tree.innerHTML='';
   if(q){ renderSearchResults(tree, q); return; }
-  if(!TREE.length){ tree.innerHTML='<div class="tree-empty">Bóveda vacía.<br>Crea tu primera nota<br>o importa una bóveda.</div>'; return; }
+  const visible=visibleTree(TREE);
+  if(!visible.length){ tree.innerHTML='<div class="tree-empty">Bóveda vacía.<br>Crea tu primera nota<br>o importa una bóveda.</div>'; return; }
   const frag=document.createDocumentFragment();
-  buildTreeDOM(TREE, frag, 0, '');
+  buildTreeDOM(visible, frag, 0, '');
   tree.appendChild(frag);
 }
 // Una fila de resultado (opcionalmente con fragmento de texto resaltado).
@@ -543,7 +557,7 @@ async function searchContent(q, namePaths){
   extra.forEach(r=>wrap.appendChild(hitRow({type:'note', name:r.name, path:r.path}, hlTerms(r.snippet||'', terms), terms)));
 }
 function allFolderPaths(items, acc){ items.forEach(it=>{ if(it.type==='folder'){ acc.push(it.path); allFolderPaths(it.children||[], acc);} }); return acc; }
-function expandAll(){ allFolderPaths(TREE, []).forEach(p=>expanded.add(p)); persistExpanded(); renderTree(); }
+function expandAll(){ allFolderPaths(visibleTree(TREE), []).forEach(p=>expanded.add(p)); persistExpanded(); renderTree(); }
 function collapseAll(){ expanded.clear(); persistExpanded(); renderTree(); }
 function syncSearchClear(){ $('vault-search').classList.toggle('has-value', !!$('vault-search-input').value); }
 function toggleSearch(force){
@@ -1279,20 +1293,9 @@ async function deleteImage(info){
 function insertIntoEditor(text){ if(ED){ ED.insert(text); onEdit(); } }
 function uploadAsset(file){
   const fd=new FormData(); fd.append('file', file, file.name||'image.png'); fd.append('csrfmiddlewaretoken', CSRF);
-  fd.append('dir', localStorage.getItem('vault-img-dir')||'');   // carpeta elegida (vacío = automático)
+  // Sin parámetro de carpeta: el backend (vault.save_upload) guarda SIEMPRE en
+  // `Adjuntos/`, sin que el usuario elija nada.
   return fetch('/api/notes/upload',{method:'POST', body:fd}).then(r=>r.json());
-}
-/* ════════════ Selector de carpeta para imágenes ════════════ */
-function collectFolders(items, acc){ (items||[]).forEach(it=>{ if(it.type==='folder'){ acc.push(it.path); collectFolders(it.children, acc); } }); return acc; }
-function openImgDirModal(){
-  // Las imágenes se centralizan siempre en "Adjuntos" (forzado en el backend),
-  // así que el selector de carpeta ya no aplica: mostramos solo el aviso.
-  $('imgdir-list').innerHTML=
-    '<div class="imgdir-info">'
-    + '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>'
-    + '<span>Todas las imágenes se guardan en <b>Adjuntos</b>.</span>'
-    + '</div>';
-  $('imgdir-modal').classList.add('show');
 }
 let imgBusy=false;
 async function handleImageFile(file){
@@ -1514,8 +1517,6 @@ $('import-go').addEventListener('click', ()=>{
   xhr.onerror=()=>{ alert(importFile.size>MAX_IMPORT_MB*1048576 ? tooBig() : 'Error de red al importar. Revisa tu conexión e inténtalo de nuevo.'); done(); };
   xhr.send(fd);
 });
-$('empty-new').addEventListener('click', ()=>newNote());
-$('empty-import').addEventListener('click', openImport);
 
 /* ════════════ Wiring ════════════ */
 // Ctrl/Cmd+S guarda ya (el editor CM gestiona escritura y tabulación).
@@ -1532,13 +1533,11 @@ document.addEventListener('keydown', e=>{
 // Lightbox: cerrar al pulsar o con Escape.
 $('img-lightbox').addEventListener('click', closeLightbox);
 // Backdrop click cierra modales secundarios
-$('imgdir-modal').addEventListener('click',e=>{if(e.target===$('imgdir-modal'))$('imgdir-modal').classList.remove('show');});
 $('storage-modal').addEventListener('click',e=>{if(e.target===$('storage-modal'))$('storage-modal').classList.remove('show');});
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   if($('img-lightbox').classList.contains('show')){ closeLightbox(); return; }
   if($('storage-modal').classList.contains('show')){ $('storage-modal').classList.remove('show'); return; }
-  if($('imgdir-modal').classList.contains('show')){ $('imgdir-modal').classList.remove('show'); return; }
   if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
@@ -1573,7 +1572,6 @@ $('vault-settings-menu').addEventListener('keydown', e=>{
   if(e.key==='ArrowUp'){e.preventDefault();_vsmBtns[(_vi-1+_vsmBtns.length)%_vsmBtns.length]?.focus();}
   if(e.key==='Escape'){e.preventDefault();closeVaultSettingsMenu();$('btn-img-dir').focus();}
 });
-$('vsm-imgdir').addEventListener('click', () => { closeVaultSettingsMenu(); openImgDirModal(); });
 $('vsm-export').addEventListener('click', () => { closeVaultSettingsMenu(); if(dirty) saveNow(); window.location='/api/notes/export'; });
 $('vsm-import').addEventListener('click', () => { closeVaultSettingsMenu(); openImport(); });
 $('vsm-storage').addEventListener('click', () => { closeVaultSettingsMenu(); openStorageModal(); });
@@ -1771,7 +1769,6 @@ $('btn-optimize-images').addEventListener('click', async () => {
 document.addEventListener('click', e => {
   if (!$('vault-settings-wrap').contains(e.target)) closeVaultSettingsMenu();
 });
-$('imgdir-cancel').addEventListener('click', ()=>$('imgdir-modal').classList.remove('show'));
 $('btn-collapse-all').addEventListener('click', collapseAll);
 $('btn-expand-all').addEventListener('click', expandAll);
 $('vault-search-input').addEventListener('input', ()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(renderTree, 140); syncSearchClear(); });

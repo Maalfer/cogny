@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Conocimiento — Cogny{% endblock %}
+
+{% comment %}
+  noindex a propósito: la bóveda está pensada para la comunidad, no para salir
+  en buscadores. Además, un buscador nunca traería un dominio de origen
+  permitido, así que lo único que indexaría sería la página de bloqueo.
+{% endcomment %}
+{% block extra_head %}
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/vendor/highlight-github-dark.min.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/notes/notes.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/knowledge/conocimiento.css?v={{ ASSET_VERSION }}">
+{% endblock %}
+
+{% block header_title %}Conocimiento{% endblock %}
+
+{% block body_class %}subapp-body kn-body{% endblock %}
+{% block wrapper_class %}kn-wrapper{% endblock %}
+
+{% block content %}
+<div class="kn">
+
+  <aside class="kn-side" id="kn-side" aria-label="Índice de la bóveda">
+    <div class="kn-side-head">
+      <div class="kn-search">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input type="search" id="kn-q" placeholder="Buscar en los apuntes…"
+               autocomplete="off" spellcheck="false" aria-label="Buscar en los apuntes">
+        <button type="button" id="kn-q-clear" class="kn-q-clear" aria-label="Limpiar búsqueda" hidden>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+    </div>
+    <nav class="kn-tree" id="kn-tree" aria-label="Carpetas y notas"></nav>
+    <div class="kn-results" id="kn-results" hidden></div>
+  </aside>
+
+  <div class="kn-overlay" id="kn-overlay" hidden></div>
+
+  <main class="kn-main" id="kn-main">
+    <div class="kn-bar">
+      <button type="button" class="kn-side-toggle" id="kn-side-toggle"
+              aria-label="Ver el índice" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+      <div class="kn-crumb" id="kn-crumb">Conocimiento</div>
+      <span class="kn-ro" title="Estos apuntes son de sólo lectura">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+        Sólo lectura
+      </span>
+    </div>
+
+    <div class="kn-note" id="kn-note">
+      <div class="kn-welcome" id="kn-welcome">
+        <span class="kn-welcome-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg>
+        </span>
+        <h1>Apuntes abiertos</h1>
+        <p>Toda la bóveda, para leer y aprender. Elige una nota en el índice o
+           busca lo que necesites.</p>
+        <p class="kn-welcome-note">No hace falta cuenta y no se puede editar
+           nada: lo que ves es una copia viva de mis apuntes.</p>
+      </div>
+      <article class="markdown-body" id="kn-content" hidden></article>
+    </div>
+  </main>
+</div>
+
+<div id="img-lightbox" class="img-lightbox" aria-hidden="true"><button class="lightbox-close" aria-label="Cerrar imagen">&#215;</button><img alt=""></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/notes/marked.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/highlight.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/katex/katex.min.js?v={{ ASSET_VERSION }}"></script>
+{{ open_path|json_script:"kn-open-path" }}
+<script src="/static/knowledge/conocimiento.js?v={{ ASSET_VERSION }}"></script>
+{% endblock %}

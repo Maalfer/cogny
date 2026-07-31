@@ -1,21 +1,47 @@
 """Middleware que inyecta variables globales (tema) y habilita el CORS de subidas."""
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 
+# Cache corta: evita una consulta a BD en cada petición anónima (lector
+# público de /conocimiento, notas compartidas, login...) sin dejar el tema
+# del propietario desactualizado más de unos segundos tras cambiarlo.
+_OWNER_THEME_CACHE_KEY = "cogny:owner_theme"
+_OWNER_THEME_CACHE_TTL = 30
+
 
 class GlobalContextMiddleware(MiddlewareMixin):
-    """Lee la cookie bh_theme y la expone como request.bh_theme."""
+    """Expone el tema activo como `request.bh_theme`.
+
+    Con sesión: gana el tema guardado en la cuenta de quien ha entrado.
+    Sin sesión (enlace de /conocimiento, nota compartida, login...): se
+    aplica siempre el tema que el propietario tiene elegido ahora mismo,
+    no una preferencia local del visitante — así todos ven la web "como la
+    tiene puesta" el dueño, entren por donde entren.
+    """
 
     def process_request(self, request):
-        theme = request.COOKIES.get("bh_theme", "")
-        if theme not in ("dark", "light", "dracula", "pink", "gold"):
-            theme = ""
-        # Si el usuario está autenticado y tiene un theme guardado, ese gana.
         if request.user.is_authenticated and getattr(request.user, "theme", None):
             theme = request.user.theme
-        request.bh_theme = theme or "dark"
+        else:
+            theme = self._owner_theme()
+        request.bh_theme = theme
         return None
+
+    @staticmethod
+    def _owner_theme():
+        theme = cache.get(_OWNER_THEME_CACHE_KEY)
+        if theme is None:
+            from apps.accounts.models import User
+            theme = (
+                User.objects.filter(role=User.ROLE_OWNER)
+                .values_list("theme", flat=True)
+                .first()
+                or "dark"
+            )
+            cache.set(_OWNER_THEME_CACHE_KEY, theme, _OWNER_THEME_CACHE_TTL)
+        return theme
 
     def process_response(self, request, response):
         # Refresca la cookie con el tema actual para que el script inline del <html>
