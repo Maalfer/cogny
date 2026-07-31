@@ -4,7 +4,7 @@
 
 <h1 align="center">Cogny</h1>
 <p align="center">Bóveda de notas en Markdown, autoalojada y minimalista.</p>
-<p align="center"><a href="https://maalfer.github.io/cogny/">maalfer.github.io/cogny</a></p>
+<p align="center"><a href="https://cogny.es">cogny.es</a></p>
 <p align="center">
   <a href="https://github.com/Maalfer/cogny/releases/tag/v1.0.3"><img src="https://img.shields.io/github/v/tag/Maalfer/cogny?label=versi%C3%B3n&color=06b6d4" alt="Versión"></a>
 </p>
