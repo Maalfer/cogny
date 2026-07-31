@@ -51,7 +51,7 @@
 </div>
 <div id="swagger-ui"></div>
 <script src="{% static 'vendor/swagger/swagger-ui-bundle.js' %}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 window.ui = SwaggerUIBundle({
   url: '/api/v1/openapi.json',
   dom_id: '#swagger-ui',

@@ -139,6 +139,11 @@
     }
     return lines.slice(start, end).join('\n');
   }
+  // Ver notes.js: mismo saneado, misma razón — esta vista además es pública
+  // y sin autenticar (/conocimiento/), así que el payload correría contra
+  // cualquier visitante que entre por dominio permitido o enlace maestro.
+  const SANITIZE_CONFIG = {USE_PROFILES: {html: true, mathMl: true, svg: true}};
+
   function renderMarkdown(src) {
     const { body, props } = parseFrontmatter(src);
     let html = '';
@@ -147,7 +152,7 @@
       props.forEach(([k, v]) => { html += `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`; });
       html += '</table></div>';
     }
-    return html + marked.parse(extractFootnotes(body));
+    return DOMPurify.sanitize(html + marked.parse(extractFootnotes(body)), SANITIZE_CONFIG);
   }
 
   /* ════════════ Post-proceso ════════════ */

@@ -18,4 +18,7 @@ def global_context(request):
         "is_owner": bool(user and user.is_authenticated and user.is_owner),
         # Host DNS-only para subidas grandes (import de bóvedas > 100 MB).
         "UPLOAD_HOST": getattr(settings, "UPLOAD_HOST", ""),
+        # Nonce de la CSP de esta petición (ContentSecurityPolicyMiddleware):
+        # va en cada <script> inline propio de la app.
+        "csp_nonce": getattr(request, "csp_nonce", ""),
     }

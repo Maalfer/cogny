@@ -251,7 +251,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function api(url, body) {
   return fetch(url, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -362,7 +362,7 @@ document.querySelectorAll('.pfx-eye').forEach(btn => {
 </script>
 
 {% if is_owner %}
-<script>
+<script nonce="{{ csp_nonce }}">
 /* ════════════ Accesos invitados (sólo lo ve el propietario) ════════════ */
 (function() {
   const $ = id => document.getElementById(id);

@@ -100,6 +100,11 @@
     foot += '</ol>';
     return src + foot;
   }
+  // Ver notes.js: mismo saneado, misma razón — esta vista además es pública
+  // y sin autenticar (/s/<token>/), así que el payload correría contra
+  // cualquier visitante sin necesidad de cuenta en el sitio.
+  const SANITIZE_CONFIG = {USE_PROFILES: {html: true, mathMl: true, svg: true}};
+
   function renderMarkdown(src) {
     const { body, props } = parseFrontmatter(src);
     let html = '';
@@ -109,7 +114,7 @@
       html += '</table></div>';
     }
     html += marked.parse(extractFootnotes(body));
-    return html;
+    return DOMPurify.sanitize(html, SANITIZE_CONFIG);
   }
 
   /* ── Post-proceso: resaltado de código, callouts, mermaid ────────────────── */

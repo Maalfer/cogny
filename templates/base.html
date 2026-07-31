@@ -16,14 +16,14 @@
 <link rel="manifest" href="/manifest.json">
 {# Prefetch al backend en cuanto se hace el TLS handshake — acelera el primer fetch JSON #}
 <link rel="preconnect" href="//{{ request.get_host }}">
-<script>(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
+<script nonce="{{ csp_nonce }}">(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
 <link rel="stylesheet" href="/static/css/app.css?v={{ ASSET_VERSION }}">
 {% comment %}
   Único puente plantilla → JS estático: todo lo que el servidor tiene que
   contarle al cliente viaja en este objeto, y nada más.
   (Ojo: {# #} NO admite varias líneas — se colaría como texto en la página.)
 {% endcomment %}
-<script>window.COGNY = {
+<script nonce="{{ csp_nonce }}">window.COGNY = {
   csrf: "{{ csrf_token|default:'' }}",
   assetVersion: "{{ ASSET_VERSION }}",
   uploadHost: "{{ UPLOAD_HOST|default:'' }}",

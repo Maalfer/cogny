@@ -1,4 +1,6 @@
 """Middleware que inyecta variables globales (tema) y habilita el CORS de subidas."""
+import secrets
+
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponse
@@ -51,6 +53,44 @@ class GlobalContextMiddleware(MiddlewareMixin):
             response.set_cookie(
                 "bh_theme", theme, max_age=60 * 60 * 24 * 365 * 5, samesite="Lax"
             )
+        return response
+
+
+class ContentSecurityPolicyMiddleware(MiddlewareMixin):
+    """CSP con nonce por petición: defensa en profundidad frente al Stored XSS
+    de las notas (el saneado real va en el cliente, con DOMPurify sobre el
+    HTML de `marked` — ver notes.js/shared.js/conocimiento.js). Si ese saneado
+    fallara alguna vez, `script-src` sin `unsafe-inline` sigue bloqueando que
+    un `<script>` o un manejador `onerror=...` inyectado en una nota se
+    ejecute.
+
+    Los `<script>` inline propios de la app (el puente plantilla→JS de
+    `base.html`, login, perfil, Swagger) llevan `nonce="{{ csp_nonce }}"` —
+    lo expone `apps.core.context_processors.global_context`. `style-src`
+    admite `unsafe-inline` porque KaTeX posiciona las fórmulas con estilos
+    inline por elemento; no hay forma razonable de dar nonce a eso.
+    """
+
+    def process_request(self, request):
+        request.csp_nonce = secrets.token_urlsafe(16)
+        return None
+
+    def process_response(self, request, response):
+        nonce = getattr(request, "csp_nonce", "")
+        upload_host = getattr(settings, "UPLOAD_HOST", "")
+        connect_src = "'self'" + (f" https://{upload_host}" if upload_host else "")
+        response["Content-Security-Policy"] = "; ".join([
+            "default-src 'self'",
+            f"script-src 'self' 'nonce-{nonce}'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self'",
+            f"connect-src {connect_src}",
+            "worker-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "frame-ancestors 'self'",
+        ])
         return response
 
 

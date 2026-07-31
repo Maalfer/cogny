@@ -94,6 +94,14 @@ function extractFootnotes(src){
   return src+foot;
 }
 
+/* El Markdown de una nota es contenido de usuario (cualquier editor puede
+   escribirlo) y `marked` deja pasar HTML crudo embebido tal cual: sin este
+   saneado, `<img onerror=...>` o `<script>` dentro de una nota se ejecutarían
+   en la sesión de quien la abra, incluida la del propietario. KaTeX/Mermaid
+   necesitan MathML, SVG y clases/estilos inline, así que se permiten esos
+   perfiles en vez de una allowlist mínima de HTML. */
+const SANITIZE_CONFIG = {USE_PROFILES: {html: true, mathMl: true, svg: true}};
+
 function renderMarkdown(src){
   const {body, props}=parseFrontmatter(src);
   let html='';
@@ -102,7 +110,7 @@ function renderMarkdown(src){
     html+='</table></div>';}
   let md=extractFootnotes(body);
   html+=marked.parse(md);
-  return html;
+  return DOMPurify.sanitize(html, SANITIZE_CONFIG);
 }
 
 const CALLOUT_ICON='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';

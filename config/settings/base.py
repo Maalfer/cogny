@@ -59,6 +59,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.GlobalContextMiddleware",
+    "apps.core.middleware.ContentSecurityPolicyMiddleware",
     "apps.core.middleware.UploadCorsMiddleware",
 ]
 

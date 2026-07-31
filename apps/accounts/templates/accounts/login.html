@@ -11,7 +11,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png?v={{ ASSET_VERSION }}">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v={{ ASSET_VERSION }}">
-<script>(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
+<script nonce="{{ csp_nonce }}">(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
 <link rel="stylesheet" href="/static/css/app.css?v={{ ASSET_VERSION }}">
 </head>
 <body class="auth-body">
@@ -48,7 +48,7 @@
 
   <p class="auth-footer">Cogny &copy; {% now "Y" %}</p>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
