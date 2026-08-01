@@ -74,9 +74,13 @@ _SVG_ATTR_CASE = {a.lower(): a for a in (
 _URI_ATTRS = {"src", "href", "xlink:href", "action", "formaction"}
 _SAFE_URI_RE = re.compile(r"^(https?:|mailto:|data:image/|#)", re.IGNORECASE)
 
-# url(...) dentro de `style` (background-image y similares) es otra vía hacia
-# el mismo recurso que src/href, así que se valida con las mismas reglas.
+# url(...) en CSS (background-image, @import, @font-face src, cursor,
+# content, list-style-image...) es otra vía hacia el mismo recurso que
+# src/href, así que se valida con las mismas reglas — tanto si aparece en un
+# atributo `style="..."` como dentro del texto de una etiqueta <style>.
+# `@import "http://..."` sin `url()` es la otra sintaxis válida de @import.
 _CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)(.*?)\1\s*\)""", re.IGNORECASE)
+_CSS_IMPORT_STR_RE = re.compile(r"""@import\s+(['"])(.*?)\1""", re.IGNORECASE)
 
 
 def _is_safe_http_host(hostname: str) -> bool:
@@ -115,8 +119,9 @@ def _is_safe_uri(value: str) -> bool:
     return True
 
 
-def _sanitize_style(value: str) -> str:
-    return _CSS_URL_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
+def _sanitize_css(value: str) -> str:
+    value = _CSS_URL_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
+    return _CSS_IMPORT_STR_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
 
 
 class _NoteHTMLSanitizer(HTMLParser):
@@ -129,13 +134,18 @@ class _NoteHTMLSanitizer(HTMLParser):
     scripts, y cualquier URI que no sea http(s)/mailto/data:image/#ancla
     (bloquea en particular `file://` y cualquier ruta sin esquema, que con
     Chromium en modo headless podrían leer notas de otros usuarios o el .env
-    del servidor).
+    del servidor). `<style>` sobrevive (Mermaid lo usa para el tema del SVG)
+    pero su contenido pasa por el mismo saneado de CSS que el atributo
+    `style=`: html.parser lo entrega tal cual por `handle_data` (modo CDATA),
+    así que sin esto un `@import url(...)`/`background:url(...)` dentro de
+    la etiqueta se colaría intacto pese a estar bloqueado en el atributo.
     """
 
     def __init__(self):
         super().__init__(convert_charrefs=False)
         self.out = []
         self._skip_depth = 0
+        self._in_style = False
 
     def _clean_attrs(self, attrs):
         cleaned = []
@@ -146,7 +156,7 @@ class _NoteHTMLSanitizer(HTMLParser):
             if lname in _URI_ATTRS and value and not _is_safe_uri(value):
                 continue
             if lname == "style" and value:
-                value = _sanitize_style(value)
+                value = _sanitize_css(value)
             cleaned.append((_SVG_ATTR_CASE.get(lname, name), value))
         return cleaned
 
@@ -156,6 +166,8 @@ class _NoteHTMLSanitizer(HTMLParser):
             return
         if self._skip_depth:
             return
+        if tag == "style" and not self_closing:
+            self._in_style = True
         tag = _SVG_TAG_CASE.get(tag, tag)
         attr_str = "".join(
             f' {n}="{html_escape(v, quote=True)}"' if v is not None else f" {n}"
@@ -175,11 +187,13 @@ class _NoteHTMLSanitizer(HTMLParser):
             return
         if self._skip_depth:
             return
+        if tag == "style":
+            self._in_style = False
         self.out.append(f"</{_SVG_TAG_CASE.get(tag, tag)}>")
 
     def handle_data(self, data):
         if not self._skip_depth:
-            self.out.append(data)
+            self.out.append(_sanitize_css(data) if self._in_style else data)
 
     def handle_entityref(self, name):
         if not self._skip_depth:
