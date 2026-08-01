@@ -10,7 +10,6 @@ duplicarlos aquí sería la forma más fácil de acabar con dos reglas de seguri
 que divergen.
 """
 import base64
-import mimetypes
 import multiprocessing
 import re
 import secrets
@@ -627,8 +626,9 @@ def file_content(request):
         return err
     if not target.is_file():
         return json_error("Archivo no encontrado", 404)
-    ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-    return FileResponse(open(target, "rb"), content_type=ctype, filename=target.name)
+    content_type, as_attachment = vault.safe_content_type(target.name)
+    return FileResponse(open(target, "rb"), content_type=content_type,
+                        as_attachment=as_attachment, filename=target.name)
 
 
 # ════════════ Enlaces compartidos ════════════

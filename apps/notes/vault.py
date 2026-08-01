@@ -68,6 +68,37 @@ KEEP_AS_IS = {".gif", ".svg", ".ico", ".webp"}
 # Carpeta fija donde aterrizan todos los adjuntos subidos desde la web.
 ATTACHMENTS_DIR = "Adjuntos"
 
+# `sanitize_name` no filtra la extensión (cualquier editor puede subir un
+# .html/.js) y `save_upload` guarda tal cual lo que Pillow no reconoce como
+# imagen, así que aquí es donde se decide qué se sirve para renderizar en el
+# navegador y qué se fuerza a descargar — compartido por las dos vistas que
+# devuelven un adjunto (`apps.notes.views.asset` y `apps.api.views.file_content`)
+# para que no puedan volver a divergir. Sólo las imágenes rasterizadas y el
+# PDF son inertes al navegarlos directamente; el Content-Type se fija a mano
+# en vez de fiarse de `mimetypes.guess_type`, para que un adjunto no pueda
+# hacerse pasar por otra cosa.
+_INLINE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    ".ico": "image/x-icon", ".tiff": "image/tiff", ".heic": "image/heic",
+    ".avif": "image/avif", ".pdf": "application/pdf",
+}
+# El SVG es una imagen legítima (se usa en <img>, que nunca ejecuta su script
+# embebido) pero, navegado directamente, es un documento con su propio
+# contexto de scripting: se sirve con el Content-Type correcto para que siga
+# funcionando como <img>, pero forzando descarga en acceso directo.
+_SVG_CONTENT_TYPE = "image/svg+xml"
+
+
+def safe_content_type(filename: str):
+    """`(content_type, as_attachment)` seguros para servir `filename` como adjunto."""
+    ext = Path(filename).suffix.lower()
+    if ext == ".svg":
+        return _SVG_CONTENT_TYPE, True
+    if ext in _INLINE_CONTENT_TYPES:
+        return _INLINE_CONTENT_TYPES[ext], False
+    return "application/octet-stream", True
+
 
 # ── Rutas ────────────────────────────────────────────────────────────────────
 
