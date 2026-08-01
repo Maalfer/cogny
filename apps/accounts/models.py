@@ -135,6 +135,11 @@ class ApiKey(models.Model):
             return None
         if not hmac.compare_digest(key.key_hash, cls.hash_key(raw)):
             return None
+        # Desactivar una cuenta (p. ej. tras un incidente) debe cortar TODO su
+        # acceso, no solo el login por contraseña: sin esto, sus claves de API
+        # seguían vivas con sus mismos privilegios pese a `is_active=False`.
+        if not key.user.is_active:
+            return None
         return key
 
     @property
