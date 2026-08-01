@@ -462,8 +462,17 @@ def _extract_asset_refs(content: str) -> set:
 def _resolve_asset_ref(root: Path, ref: str):
     """Resuelve una referencia de embed a un archivo del vault (o None).
 
-    Misma semántica que `findFileByName` del cliente: ruta exacta primero,
-    si no por nombre de archivo en cualquier parte del vault.
+    A diferencia de `findFileByName` del cliente (ruta exacta primero, si no
+    por nombre en CUALQUIER parte del vault — correcto para un usuario ya
+    autenticado, que ya ve la bóveda entera), aquí el fallback por nombre se
+    restringe a `Adjuntos/`: sin esto, un `![[nombre]]` sin ruta —la sintaxis
+    normal de los embeds— filtraría cualquier imagen/PDF de la bóveda con ese
+    nombre, viva donde viva, a través del enlace público de una nota sin
+    relación real con ella (justo lo que el comentario de `_SHARE_ASSET_EXTS`
+    dice evitar). `Adjuntos/` es donde aterrizan todos los adjuntos subidos
+    por la vía normal (`vault.save_upload`), así que el caso legítimo sigue
+    funcionando; sólo deja de "adivinarse" un adjunto colocado a propósito
+    fuera de ahí (p. ej. con `folder` en la API).
     """
     cleaned = ref.replace("\\", "/").split("#")[0].strip().lstrip("./")
     if not cleaned:
@@ -476,7 +485,10 @@ def _resolve_asset_ref(root: Path, ref: str):
         pass
     base = cleaned.rsplit("/", 1)[-1].lower()
     base_noext = re.sub(r"\.[^.]+$", "", base)
-    for p in root.rglob("*"):
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+    if not attachments_dir.is_dir():
+        return None
+    for p in attachments_dir.rglob("*"):
         try:
             if not p.is_file() or p.suffix.lower() not in _SHARE_ASSET_EXTS:
                 continue
