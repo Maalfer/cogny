@@ -66,9 +66,13 @@ _SVG_ATTR_CASE = {a.lower(): a for a in (
     "yChannelSelector", "zoomAndPan",
 )}
 # Atributos que pueden apuntar a un recurso: sólo se permiten esquemas inofensivos
-# (http/https/mailto/data:image), rutas relativas o fragmentos (#ancla).
+# (http/https/mailto/data:image) o fragmentos (#ancla). Nada de rutas relativas
+# ni absolutas: el documento se carga con `file://`, así que cualquier valor sin
+# esquema (`/etc/passwd`, `../../etc/passwd`, `secreto.png`) resuelve ahí mismo
+# como lectura de fichero local — el cliente ya manda las imágenes como
+# `data:` URI, no hay caso de uso legítimo para permitirlas aquí.
 _URI_ATTRS = {"src", "href", "xlink:href", "action", "formaction"}
-_SAFE_URI_RE = re.compile(r"^(https?:|mailto:|data:image/|#|/|[^:]*$)", re.IGNORECASE)
+_SAFE_URI_RE = re.compile(r"^(https?:|mailto:|data:image/|#)", re.IGNORECASE)
 
 # url(...) dentro de `style` (background-image y similares) es otra vía hacia
 # el mismo recurso que src/href, así que se valida con las mismas reglas.
@@ -122,9 +126,10 @@ class _NoteHTMLSanitizer(HTMLParser):
     demasiadas etiquetas/atributos legítimos (KaTeX, Mermaid-SVG, highlight.js)
     como para enumerarlos todos sin arriesgarse a romper el renderizado. En su
     lugar neutralizamos los vectores concretos: handlers on*, iframes/objects/
-    scripts, y cualquier URI que no sea http(s)/mailto/data:image/relativa
-    (bloquea en particular `file://`, que con Chromium en modo headless podría
-    leer notas de otros usuarios o el .env del servidor).
+    scripts, y cualquier URI que no sea http(s)/mailto/data:image/#ancla
+    (bloquea en particular `file://` y cualquier ruta sin esquema, que con
+    Chromium en modo headless podrían leer notas de otros usuarios o el .env
+    del servidor).
     """
 
     def __init__(self):
