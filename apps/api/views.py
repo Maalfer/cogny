@@ -11,6 +11,7 @@ que divergen.
 """
 import base64
 import mimetypes
+import multiprocessing
 import re
 import secrets
 import shutil
@@ -222,6 +223,39 @@ def notes(request):
     return JsonResponse({"success": True})
 
 
+# Límite de tiempo para el "find" en modo regex de note_content(): el patrón
+# lo manda el cliente tal cual y el motor `re` de Python hace backtracking
+# (no es RE2), así que algo como "(a+)+$" contra una nota que "casi" encaja
+# cuelga el proceso horas con apenas unas decenas de caracteres. re.subn() no
+# tiene forma de interrumpirse desde fuera (no libera el GIL durante el
+# matching), así que se ejecuta en un subproceso aparte que se mata si se
+# pasa del tiempo — matar el proceso es la única forma de recuperar la CPU.
+_REGEX_TIMEOUT_S = 2
+
+
+def _regex_subn_worker(pattern, repl, string, count, out):
+    try:
+        out.put(("ok", re.subn(pattern, repl, string, count=count)))
+    except re.error as exc:
+        out.put(("error", str(exc)))
+
+
+def _safe_regex_subn(pattern, repl, string, count):
+    ctx = multiprocessing.get_context("fork")
+    out = ctx.Queue()
+    proc = ctx.Process(target=_regex_subn_worker, args=(pattern, repl, string, count, out))
+    proc.start()
+    proc.join(_REGEX_TIMEOUT_S)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join()
+        raise TimeoutError
+    status, payload = out.get()
+    if status == "error":
+        raise re.error(payload)
+    return payload
+
+
 @api_view(methods=("GET", "PUT", "POST", "PATCH"))
 def note_content(request):
     """GET: leer el Markdown · PUT/POST: sobrescribir · PATCH: editar parcialmente."""
@@ -280,12 +314,15 @@ def note_content(request):
         count = 0 if body_or_query(request, "all", False) else 1
         try:
             if use_regex:
-                new, replacements = re.subn(find, replace, new, count=count)
+                new, replacements = _safe_regex_subn(find, replace, new, count)
             else:
                 replacements = new.count(find) if count == 0 else (1 if find in new else 0)
                 new = new.replace(find, replace, -1 if count == 0 else 1)
         except re.error as exc:
             return json_error(f"Expresión regular inválida: {exc}")
+        except TimeoutError:
+            return json_error(
+                f"Expresión regular demasiado costosa de evaluar (límite {_REGEX_TIMEOUT_S}s)", 400)
         if not replacements:
             return json_error("El texto de 'find' no aparece en la nota", 404)
     if prepend:
