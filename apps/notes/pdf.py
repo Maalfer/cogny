@@ -13,6 +13,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 from html import escape as html_escape
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
@@ -83,6 +84,36 @@ _CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)(.*?)\1\s*\)""", re.IGNORECASE)
 _CSS_IMPORT_STR_RE = re.compile(r"""@import\s+(['"])(.*?)\1""", re.IGNORECASE)
 
 
+_DNS_TIMEOUT_S = 3
+
+
+def _resolve_host(hostname: str):
+    """`getaddrinfo(hostname, None)` acotado por tiempo, o `None` si falla/tarda.
+
+    `socket.getaddrinfo` no acepta un timeout — con DNS lento o un host que no
+    responde puede colgarse decenas de segundos (confirmado: una nota con un
+    `<a href="https://...">` normal tardó 30s en sanearse en un entorno con DNS
+    inalcanzable), bloqueando el worker que exporta el PDF exactamente igual
+    que el ReDoS del find/replace de la API. Se resuelve en un hilo aparte con
+    `join(timeout)`; si no vuelve a tiempo, se trata como inseguro (igual que
+    ya se hacía con `socket.gaierror`) y el hilo colgado se abandona — no hay
+    forma de matar una llamada de red bloqueante desde fuera, pero tampoco
+    consume CPU mientras espera, así que abandonarlo es inofensivo.
+    """
+    result = []
+
+    def worker():
+        try:
+            result.append(socket.getaddrinfo(hostname, None))
+        except socket.gaierror:
+            pass
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(_DNS_TIMEOUT_S)
+    return result[0] if result else None
+
+
 def _is_safe_http_host(hostname: str) -> bool:
     """Descarta hosts loopback/privados/link-local (incluye el endpoint de
     metadata de nube 169.254.169.254) para esquemas http(s).
@@ -98,10 +129,10 @@ def _is_safe_http_host(hostname: str) -> bool:
     try:
         candidates = [ipaddress.ip_address(hostname)]
     except ValueError:
-        try:
-            candidates = [ipaddress.ip_address(info[4][0]) for info in socket.getaddrinfo(hostname, None)]
-        except socket.gaierror:
+        infos = _resolve_host(hostname)
+        if infos is None:
             return False
+        candidates = [ipaddress.ip_address(info[4][0]) for info in infos]
     return not any(
         ip.is_private or ip.is_loopback or ip.is_link_local
         or ip.is_multicast or ip.is_reserved or ip.is_unspecified
