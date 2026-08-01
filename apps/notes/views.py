@@ -291,6 +291,25 @@ def upload(request):
                          "path": vault.rel_of(root, target)})
 
 
+# `sanitize_name` no filtra la extensión (cualquier editor puede subir un
+# .html/.js), así que aquí es donde se decide qué se sirve como para
+# renderizar en el navegador y qué se fuerza a descargar. Sólo las imágenes
+# rasterizadas y el PDF son inertes al navegarlos directamente; el propio
+# Content-Type se fija a mano en vez de fiarse del `mimetypes.guess_type`
+# de Django, para que un adjunto no pueda hacerse pasar por otra cosa.
+_INLINE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    ".ico": "image/x-icon", ".tiff": "image/tiff", ".heic": "image/heic",
+    ".avif": "image/avif", ".pdf": "application/pdf",
+}
+# El SVG es una imagen legítima (se usa en <img>, que nunca ejecuta su
+# script embebido) pero, navegado directamente, es un documento con su
+# propio contexto de scripting: se sirve con el Content-Type correcto para
+# que siga funcionando como <img>, pero forzando descarga en acceso directo.
+_SVG_CONTENT_TYPE = "image/svg+xml"
+
+
 @login_required
 @require_GET
 def asset(request):
@@ -301,7 +320,15 @@ def asset(request):
         raise Http404
     if not target.exists() or target.is_dir():
         raise Http404
-    return FileResponse(open(target, "rb"))
+    ext = target.suffix.lower()
+    if ext == ".svg":
+        content_type, as_attachment = _SVG_CONTENT_TYPE, True
+    elif ext in _INLINE_CONTENT_TYPES:
+        content_type, as_attachment = _INLINE_CONTENT_TYPES[ext], False
+    else:
+        content_type, as_attachment = "application/octet-stream", True
+    return FileResponse(open(target, "rb"), content_type=content_type,
+                        as_attachment=as_attachment, filename=target.name)
 
 
 # ════════════ Export / import ════════════
