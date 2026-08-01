@@ -6,13 +6,16 @@ lo envolvemos en un documento autónomo y lo imprimimos. Chromium arranca con
 `--disable-javascript`: sólo tiene que maquetar e imprimir.
 """
 import glob
+import ipaddress
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 from html import escape as html_escape
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 from django.conf import settings
 
@@ -67,6 +70,50 @@ _SVG_ATTR_CASE = {a.lower(): a for a in (
 _URI_ATTRS = {"src", "href", "xlink:href", "action", "formaction"}
 _SAFE_URI_RE = re.compile(r"^(https?:|mailto:|data:image/|#|/|[^:]*$)", re.IGNORECASE)
 
+# url(...) dentro de `style` (background-image y similares) es otra vía hacia
+# el mismo recurso que src/href, así que se valida con las mismas reglas.
+_CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)(.*?)\1\s*\)""", re.IGNORECASE)
+
+
+def _is_safe_http_host(hostname: str) -> bool:
+    """Descarta hosts loopback/privados/link-local (incluye el endpoint de
+    metadata de nube 169.254.169.254) para esquemas http(s).
+
+    Chromium arranca sin proxy ni `--host-resolver-rules`, así que cualquier
+    URL http(s) que sobreviva al saneado dispara una petición de red real
+    desde el servidor; `file://` ya estaba bloqueado pero las direcciones
+    internas para http(s) no lo estaban. Resuelve el host (soporta también
+    IPs en hex/octal/decimal, que `ipaddress` por sí solo no reconoce pero
+    el resolver del sistema sí normaliza) y rechaza si el fallo de DNS o
+    cualquier IP resuelta cae en un rango no público.
+    """
+    try:
+        candidates = [ipaddress.ip_address(hostname)]
+    except ValueError:
+        try:
+            candidates = [ipaddress.ip_address(info[4][0]) for info in socket.getaddrinfo(hostname, None)]
+        except socket.gaierror:
+            return False
+    return not any(
+        ip.is_private or ip.is_loopback or ip.is_link_local
+        or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+        for ip in candidates
+    )
+
+
+def _is_safe_uri(value: str) -> bool:
+    value = value.strip()
+    if not _SAFE_URI_RE.match(value):
+        return False
+    split = urlsplit(value)
+    if split.scheme.lower() in ("http", "https"):
+        return bool(split.hostname) and _is_safe_http_host(split.hostname)
+    return True
+
+
+def _sanitize_style(value: str) -> str:
+    return _CSS_URL_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
+
 
 class _NoteHTMLSanitizer(HTMLParser):
     """Sanitiza el HTML de una nota antes de imprimirlo a PDF.
@@ -91,8 +138,10 @@ class _NoteHTMLSanitizer(HTMLParser):
             lname = name.lower()
             if lname.startswith("on"):
                 continue
-            if lname in _URI_ATTRS and value and not _SAFE_URI_RE.match(value.strip()):
+            if lname in _URI_ATTRS and value and not _is_safe_uri(value):
                 continue
+            if lname == "style" and value:
+                value = _sanitize_style(value)
             cleaned.append((_SVG_ATTR_CASE.get(lname, name), value))
         return cleaned
 
