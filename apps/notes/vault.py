@@ -17,6 +17,7 @@ Nada de aquí conoce `HttpRequest` ni devuelve respuestas: se comunica con
 valores de Python y, cuando algo va mal de una forma que el usuario debe leer,
 levanta `VaultError` con el mensaje ya redactado.
 """
+import fcntl
 import io
 import json
 import logging
@@ -24,6 +25,7 @@ import os
 import re
 import shutil
 import tempfile
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -58,6 +60,10 @@ MAX_PATH_DEPTH = 20
 # Tope de tamaño descomprimido por importación: generoso para vaults reales
 # (unos pocos GB de notas+imágenes) pero evita que un ZIP bomb llene el disco.
 MAX_IMPORT_UNCOMPRESSED = 2 * 1024 ** 3
+
+# Fichero de lock (flock) que serializa las importaciones en modo "replace"
+# de una misma bóveda: ver el comentario en import_zip().
+_IMPORT_LOCK_NAME = ".import.lock"
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".heic", ".avif"}
 NOTE_EXTS = {".md"}
@@ -585,30 +591,60 @@ def import_zip(base: Path, fileobj, mode: str = "merge") -> None:
             # apartamos lo actual con un `rename` —barato, mismo sistema de
             # ficheros— y sólo lo tiramos cuando la importación ha terminado bien.
             # Si algo falla, lo devolvemos a su sitio y el usuario no pierde nada.
-            stash = base / f".import-anterior-{os.getpid()}"
-            stash.mkdir(exist_ok=True)
-            moved = []
+            #
+            # Todo esto asume que sólo UNA importación "replace" toca `base` a la
+            # vez. gunicorn corre con `--threads 4` (gthread): varios hilos
+            # comparten el mismo `os.getpid()`, así que dos "replace" concurrentes
+            # del mismo worker podían generar el mismo nombre de stash y pisarse
+            # entre sí — carrera confirmada de extremo a extremo (10 peticiones
+            # concurrentes -> varias fallaban con 500, y en el peor caso alguna
+            # importación ya terminada con éxito perdía sus ficheros porque el
+            # siguiente "replace" los barría al mismo stash compartido antes de
+            # borrarlo). `fcntl.flock` —a propósito, no `fcntl.lockf`: los locks
+            # POSIX de `lockf` son por proceso y NO bloquean a otro hilo del mismo
+            # proceso, justo el caso que hay que cubrir aquí— serializa todos los
+            # "replace" de esta bóveda; el nombre del stash pasa a un UUID por
+            # operación como defensa adicional, ya sin depender de la exclusión
+            # mutua para no colisionar.
+            lock_path = base / _IMPORT_LOCK_NAME
+            lock_fp = open(lock_path, "a")
             try:
-                for it in base.iterdir():
-                    if it.name.startswith("."):
-                        continue
-                    it.rename(stash / it.name)
-                    moved.append(it.name)
-                _extract(zf, targets)
-            except Exception:
-                # Deshacer: quitamos lo poco que se haya extraído y restauramos.
-                for it in base.iterdir():
-                    if it.name.startswith("."):
-                        continue
-                    shutil.rmtree(it, ignore_errors=True) if it.is_dir() else it.unlink(missing_ok=True)
-                for name in moved:
-                    try:
-                        (stash / name).rename(base / name)
-                    except OSError:
-                        log.exception("import: no se pudo restaurar %s", name)
+                try:
+                    fcntl.flock(lock_fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except OSError as exc:
+                    raise VaultError(
+                        "Ya hay una importación en curso sobre esta bóveda; "
+                        "inténtalo de nuevo en unos segundos",
+                        409,
+                    ) from exc
+
+                stash = base / f".import-anterior-{uuid.uuid4().hex}"
+                stash.mkdir(exist_ok=True)
+                moved = []
+                try:
+                    for it in base.iterdir():
+                        if it.name.startswith("."):
+                            continue
+                        it.rename(stash / it.name)
+                        moved.append(it.name)
+                    _extract(zf, targets)
+                except Exception:
+                    # Deshacer: quitamos lo poco que se haya extraído y restauramos.
+                    for it in base.iterdir():
+                        if it.name.startswith("."):
+                            continue
+                        shutil.rmtree(it, ignore_errors=True) if it.is_dir() else it.unlink(missing_ok=True)
+                    for name in moved:
+                        try:
+                            (stash / name).rename(base / name)
+                        except OSError:
+                            log.exception("import: no se pudo restaurar %s", name)
+                    shutil.rmtree(stash, ignore_errors=True)
+                    raise
                 shutil.rmtree(stash, ignore_errors=True)
-                raise
-            shutil.rmtree(stash, ignore_errors=True)
+            finally:
+                fcntl.flock(lock_fp, fcntl.LOCK_UN)
+                lock_fp.close()
     except zipfile.BadZipFile as exc:
         raise VaultError("ZIP inválido") from exc
     except OSError as exc:
