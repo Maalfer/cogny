@@ -75,6 +75,18 @@ _SVG_ATTR_CASE = {a.lower(): a for a in (
 _URI_ATTRS = {"src", "href", "xlink:href", "action", "formaction"}
 _SAFE_URI_RE = re.compile(r"^(https?:|mailto:|data:image/|#)", re.IGNORECASE)
 
+# `srcset` es otro atributo de tipo URI en <img>, pero no es una URI suelta
+# como `src`: es una lista "url descriptor, url descriptor, ..." (p.ej.
+# `file:///etc/passwd 1x`), así que _URI_ATTRS/_SAFE_URI_RE no lo cubrían y
+# Chromium resolvía el candidato `file://` igual que si hubiera sobrevivido
+# en `src` — mismo hueco de lectura de fichero local, atributo distinto. Se
+# valida cada candidato por separado y sólo sobreviven los que ya pasarían
+# el chequeo de `src`/`href`. Sólo se separa en la coma seguida de espacio:
+# una `data:` URI (el caso legítimo, imágenes ya embebidas por el cliente)
+# lleva una coma interna sin espacio detrás (`data:image/png;base64,AAAA`)
+# que no debe partir el candidato.
+_SRCSET_SPLIT_RE = re.compile(r",\s+")
+
 # url(...) en CSS (background-image, @import, @font-face src, cursor,
 # content, list-style-image...) es otra vía hacia el mismo recurso que
 # src/href, así que se valida con las mismas reglas — tanto si aparece en un
@@ -150,6 +162,17 @@ def _is_safe_uri(value: str) -> bool:
     return True
 
 
+def _sanitize_srcset(value: str) -> str:
+    safe = []
+    for candidate in _SRCSET_SPLIT_RE.split(value.strip()):
+        if not candidate:
+            continue
+        url = candidate.split(None, 1)[0]
+        if _is_safe_uri(url):
+            safe.append(candidate)
+    return ", ".join(safe)
+
+
 def _sanitize_css(value: str) -> str:
     value = _CSS_URL_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
     return _CSS_IMPORT_STR_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
@@ -186,6 +209,10 @@ class _NoteHTMLSanitizer(HTMLParser):
                 continue
             if lname in _URI_ATTRS and value and not _is_safe_uri(value):
                 continue
+            if lname == "srcset" and value:
+                value = _sanitize_srcset(value)
+                if not value:
+                    continue
             if lname == "style" and value:
                 value = _sanitize_css(value)
             cleaned.append((_SVG_ATTR_CASE.get(lname, name), value))
