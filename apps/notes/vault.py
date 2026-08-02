@@ -200,7 +200,13 @@ def read_order(directory: Path) -> list:
     try:
         data = json.loads(f.read_text(encoding="utf-8"))
         return [n for n in (data.get("order") or []) if isinstance(n, str)]
-    except (OSError, json.JSONDecodeError, AttributeError):
+    # UnicodeDecodeError no es OSError (hereda de ValueError): un `.vaultorder`
+    # con bytes no-UTF-8 -p.ej. plantado por una importación de ZIP, que
+    # escribe el contenido tal cual sin validar codificación- se colaba sin
+    # capturar y build_tree(), al ser recursivo, propagaba el fallo de esa
+    # única carpeta (por profunda que estuviera) hasta romper el árbol
+    # completo de la bóveda para todos los usuarios.
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError):
         return []
 
 
