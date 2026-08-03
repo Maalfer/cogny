@@ -47,6 +47,12 @@ def api_view(methods=("GET",)):
       GET/HEAD se considera escritura. La regla funciona porque en esta API
       ningún GET modifica nada (exportar la bóveda lee; optimizar imágenes,
       que sí escribe, es POST).
+    - HEAD se normaliza a GET antes de llamar a la vista (ver más abajo):
+      las vistas despachan con `if request.method == "GET": ...` y cualquier
+      otro método cae, por descarte, en su última rama (la de escritura).
+      Sin la normalización, HEAD saltaba tanto el permiso de sólo lectura
+      de arriba como el despacho de la vista, ejecutando esa rama de
+      escritura con una clave marcada como sólo lectura.
     """
     allowed = {m.upper() for m in methods}
     if "GET" in allowed:
@@ -102,6 +108,12 @@ def api_view(methods=("GET",)):
                         # seguir con `{}` y quejarse de un campo que falta.
                         return json_error("El cuerpo no es JSON válido")
                     request.json = parsed if isinstance(parsed, dict) else {}
+
+            if request.method == "HEAD":
+                # Normalizar aquí, en un único sitio, cierra el bypass para
+                # las vistas actuales y para cualquier vista futura que
+                # combine GET con métodos de escritura en la misma función.
+                request.method = "GET"
 
             try:
                 return fn(request, *args, **kwargs)
