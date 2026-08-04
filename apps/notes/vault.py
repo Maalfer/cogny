@@ -74,6 +74,14 @@ KEEP_AS_IS = {".gif", ".svg", ".ico", ".webp"}
 # Carpeta fija donde aterrizan todos los adjuntos subidos desde la web.
 ATTACHMENTS_DIR = "Adjuntos"
 
+# Registro (fichero JSON dentro de Adjuntos/) de qué nota subió cada adjunto.
+# Sólo lo consulta la resolución de assets para el enlace PÚBLICO (ver
+# `_resolve_asset_ref` en views.py): la bóveda autenticada sigue viendo todos
+# los adjuntos sin restricción, por diseño. Adjuntos previos a este control
+# quedan sin dueño registrado a propósito (`attachment_owner` -> None).
+_ATTACHMENT_OWNERS_FILE = ".owners.json"
+_ATTACHMENT_OWNERS_LOCK = ".owners.lock"
+
 # `sanitize_name` no filtra la extensión (cualquier editor puede subir un
 # .html/.js) y `save_upload` guarda tal cual lo que Pillow no reconoce como
 # imagen, así que aquí es donde se decide qué se sirve para renderizar en el
@@ -413,7 +421,7 @@ def to_webp(data: bytes):
         return None
 
 
-def save_upload(base: Path, uploaded_file) -> Path:
+def save_upload(base: Path, uploaded_file, note_path: str = "") -> Path:
     """Guarda un adjunto en la bóveda y devuelve su ruta final.
 
     Si es una imagen ráster la recodificamos a WebP (~30-50% menos peso sin
@@ -423,6 +431,11 @@ def save_upload(base: Path, uploaded_file) -> Path:
     Todos los adjuntos aterrizan SIEMPRE en `Adjuntos/`: la nota los referencia
     como `![[nombre]]`, que resuelve por nombre de archivo en toda la bóveda, así
     que su ubicación física no afecta al renderizado y las mantenemos juntas.
+
+    `note_path`, si se indica, queda registrado como la nota que subió este
+    adjunto (ver `attachment_owner`) — sólo lo usa la resolución de assets del
+    enlace público, para no publicar por su nombre un adjunto sin relación con
+    la nota que se comparte.
     """
     target_dir = base / ATTACHMENTS_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -439,14 +452,47 @@ def save_upload(base: Path, uploaded_file) -> Path:
     if optimized is not None:
         target = free_path(target_dir, Path(name).stem or "imagen", ".webp")
         target.write_bytes(optimized)
-        return target
+    else:
+        stem, suffix = Path(name).stem, Path(name).suffix
+        target = free_path(target_dir, stem, suffix)
+        with open(target, "wb") as fp:
+            for chunk in uploaded_file.chunks():
+                fp.write(chunk)
 
-    stem, suffix = Path(name).stem, Path(name).suffix
-    target = free_path(target_dir, stem, suffix)
-    with open(target, "wb") as fp:
-        for chunk in uploaded_file.chunks():
-            fp.write(chunk)
+    if note_path:
+        _record_attachment_owner(target_dir, target.name, note_path)
     return target
+
+
+def _read_attachment_owners(attachments_dir: Path) -> dict:
+    try:
+        return json.loads((attachments_dir / _ATTACHMENT_OWNERS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _record_attachment_owner(attachments_dir: Path, filename: str, note_path: str) -> None:
+    lock_fp = open(attachments_dir / _ATTACHMENT_OWNERS_LOCK, "a")
+    try:
+        fcntl.flock(lock_fp, fcntl.LOCK_EX)
+        owners = _read_attachment_owners(attachments_dir)
+        owners[filename] = note_path
+        write_text_atomic(attachments_dir / _ATTACHMENT_OWNERS_FILE, json.dumps(owners))
+    finally:
+        fcntl.flock(lock_fp, fcntl.LOCK_UN)
+        lock_fp.close()
+
+
+def attachment_owner(base: Path, attachment_path: Path):
+    """Ruta (relativa a la bóveda) de la nota que subió este adjunto, o `None`
+    si no hay registro — adjunto anterior a este control, o fuera de
+    `Adjuntos/`."""
+    attachments_dir = base / ATTACHMENTS_DIR
+    try:
+        rel = attachment_path.relative_to(attachments_dir)
+    except ValueError:
+        return None
+    return _read_attachment_owners(attachments_dir).get(str(rel).replace("\\", "/"))
 
 
 def optimize_images(base: Path):

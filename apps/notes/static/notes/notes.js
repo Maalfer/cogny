@@ -1663,7 +1663,10 @@ function insertIntoEditor(text){ if(ED){ ED.insert(text); onEdit(); } }
 function uploadAsset(file){
   const fd=new FormData(); fd.append('file', file, file.name||'image.png'); fd.append('csrfmiddlewaretoken', CSRF);
   // Sin parámetro de carpeta: el backend (vault.save_upload) guarda SIEMPRE en
-  // `Adjuntos/`, sin que el usuario elija nada.
+  // `Adjuntos/`, sin que el usuario elija nada. Sí mandamos la nota actual:
+  // el backend registra con ella el dueño del adjunto, para poder resolverlo
+  // en el enlace público sólo desde esta misma nota (ver _resolve_asset_ref).
+  if(current) fd.append('note', current.path);
   return fetch('/api/notes/upload',{method:'POST', body:fd}).then(r=>r.json());
 }
 let imgBusy=false;

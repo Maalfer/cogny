@@ -286,7 +286,8 @@ def upload(request):
     if not f:
         return _err("Falta archivo")
     root = vault.root()
-    target = vault.save_upload(root, f)
+    note_path = as_text(request.POST.get("note")).strip()
+    target = vault.save_upload(root, f, note_path=note_path)
     return JsonResponse({"success": True, "name": target.name,
                          "path": vault.rel_of(root, target)})
 
@@ -603,52 +604,69 @@ def _extract_asset_refs(content: str) -> set:
     return refs
 
 
-def _resolve_asset_ref(root: Path, ref: str):
-    """Resuelve una referencia de embed a un archivo del vault (o None).
+def _resolve_asset_ref(root: Path, ref: str, note_path: str):
+    """Resuelve una referencia de embed a un archivo del vault (o None) para
+    el enlace PÚBLICO de `note_path`.
 
     A diferencia de `findFileByName` del cliente (ruta exacta primero, si no
     por nombre en CUALQUIER parte del vault — correcto para un usuario ya
-    autenticado, que ya ve la bóveda entera), aquí el fallback por nombre se
-    restringe a `Adjuntos/`: sin esto, un `![[nombre]]` sin ruta —la sintaxis
-    normal de los embeds— filtraría cualquier imagen/PDF de la bóveda con ese
-    nombre, viva donde viva, a través del enlace público de una nota sin
-    relación real con ella (justo lo que el comentario de `_SHARE_ASSET_EXTS`
-    dice evitar). `Adjuntos/` es donde aterrizan todos los adjuntos subidos
-    por la vía normal (`vault.save_upload`), así que el caso legítimo sigue
-    funcionando; sólo deja de "adivinarse" un adjunto colocado a propósito
-    fuera de ahí (p. ej. con `folder` en la API).
+    autenticado, que ya ve la bóveda entera), aquí ni la ruta directa ni el
+    fallback por nombre bastan por sí solos: los dos se restringen a
+    `Adjuntos/` (fuera de ahí no hay ningún adjunto legítimo, sólo hace falta
+    escribir a mano `![alt](OtraCarpeta/archivo.pdf)` para apuntar a
+    cualquier cosa) Y, dentro de `Adjuntos/`, el archivo tiene que estar
+    registrado como subido para ESTA nota exacta (`vault.attachment_owner`).
+    Sin la segunda condición, cualquier adjunto ya existente en la bóveda
+    compartida —de cualquier nota, de cualquier usuario— se publicaría con
+    sólo nombrarlo desde una nota sin relación real con él; con ella, el
+    editor sólo puede compartir públicamente lo que él mismo subió para esta
+    nota. Adjuntos anteriores a este control quedan sin dueño registrado a
+    propósito: no se resuelven en el enlace público (fail-closed), aunque la
+    bóveda autenticada los sigue viendo sin restricción.
     """
     cleaned = ref.replace("\\", "/").split("#")[0].strip().lstrip("./")
     if not cleaned:
         return None
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+
+    candidate = None
     try:
         direct = vault.safe_path(root, cleaned)
         if direct.is_file() and direct.suffix.lower() in _SHARE_ASSET_EXTS:
-            return direct
+            candidate = direct
     except VaultError:
         pass
-    base = cleaned.rsplit("/", 1)[-1].lower()
-    base_noext = re.sub(r"\.[^.]+$", "", base)
-    attachments_dir = root / vault.ATTACHMENTS_DIR
-    if not attachments_dir.is_dir():
-        return None
-    for p in attachments_dir.rglob("*"):
-        try:
-            if not p.is_file() or p.suffix.lower() not in _SHARE_ASSET_EXTS:
+
+    if candidate is None and attachments_dir.is_dir():
+        base = cleaned.rsplit("/", 1)[-1].lower()
+        base_noext = re.sub(r"\.[^.]+$", "", base)
+        for p in attachments_dir.rglob("*"):
+            try:
+                if not p.is_file() or p.suffix.lower() not in _SHARE_ASSET_EXTS:
+                    continue
+            except OSError:
                 continue
-        except OSError:
-            continue
-        if p.name.lower() == base or p.stem.lower() == base_noext:
-            return p
-    return None
+            if p.name.lower() == base or p.stem.lower() == base_noext:
+                candidate = p
+                break
+
+    if candidate is None:
+        return None
+    try:
+        candidate.relative_to(attachments_dir)
+    except ValueError:
+        return None
+    if vault.attachment_owner(root, candidate) != note_path:
+        return None
+    return candidate
 
 
-def _build_share_assets(root: Path, token: str, content: str) -> dict:
+def _build_share_assets(root: Path, token: str, content: str, note_path: str) -> dict:
     """`{ref_original: url_firmada}` sólo para las imágenes/PDFs referenciados
     por ESTA nota — nunca la bóveda entera."""
     out = {}
     for ref in _extract_asset_refs(content):
-        hit = _resolve_asset_ref(root, ref)
+        hit = _resolve_asset_ref(root, ref, note_path)
         if hit:
             rel = vault.rel_of(root, hit)
             sig = quote(signing.dumps({"t": token, "p": rel}, salt=_SHARE_ASSET_SALT), safe="")
@@ -687,7 +705,7 @@ def shared_note_view(request, token):
     return render(request, "notes/shared.html", {
         "note_name": target.stem,
         "content": content,
-        "assets": _build_share_assets(root, token, content),
+        "assets": _build_share_assets(root, token, content, share.path),
     })
 
 

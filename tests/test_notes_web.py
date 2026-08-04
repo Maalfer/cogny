@@ -189,6 +189,67 @@ class SharingTests(VaultTestCase):
         self.assertEqual(SharedNote.objects.count(), 0)
 
 
+class SharedAssetOwnershipTests(VaultTestCase):
+    """El enlace público sólo debe resolver imágenes/PDFs que la propia nota
+    subió para sí misma — nunca adjuntos ajenos, vivan donde vivan."""
+
+    def setUp(self):
+        super().setUp()
+        self.editor = self.make_user(username="editor_t", role=User.ROLE_EDITOR)
+        self.client.force_login(self.editor)
+
+    def _share(self, path, password=""):
+        return self.json_post("/api/notes/share/create",
+                              {"path": path, "password": password}).json()["token"]
+
+    def test_caso_legitimo_el_adjunto_subido_para_la_nota_si_se_ve(self):
+        self.write_note("Publico/nota.md", "hola")
+        up = self.client.post("/api/notes/upload",
+                              {"file": _fake_image("foto.jpg"), "note": "Publico/nota.md"})
+        name = up.json()["name"]
+        self.write_note("Publico/nota.md", f"hola\n![[{name}]]")
+        token = self._share("Publico/nota.md")
+        anon = self.client_class()
+        body = anon.get(f"/s/{token}/").content.decode()
+        self.assertIn("asset?p=", body)
+
+    def test_no_se_filtra_un_archivo_fuera_de_adjuntos_por_ruta_literal(self):
+        self.write_note("Documentos/secreto.jpg", "PRIVADO")
+        self.write_note("Publico/nota.md", "hola\n![alt](Documentos/secreto.jpg)")
+        token = self._share("Publico/nota.md")
+        anon = self.client_class()
+        body = anon.get(f"/s/{token}/").content.decode()
+        self.assertNotIn("asset?p=", body)
+
+    def test_no_se_filtra_un_adjunto_de_otra_nota_sin_relacion(self):
+        self.write_note("Privado/finanzas.md", "notas")
+        up = self.client.post("/api/notes/upload",
+                              {"file": _fake_image("factura.jpg"), "note": "Privado/finanzas.md"})
+        name = up.json()["name"]
+        self.write_note("Publico/nota.md", f"hola\n![[{name}]]")
+        token = self._share("Publico/nota.md")
+        anon = self.client_class()
+        body = anon.get(f"/s/{token}/").content.decode()
+        self.assertNotIn("asset?p=", body)
+
+    def test_no_se_filtra_un_adjunto_previo_al_control_de_dueno(self):
+        # Simula un adjunto subido antes de este fix: aterriza en Adjuntos/
+        # pero sin pasar por save_upload(note_path=...), así que no queda
+        # registrado ningún dueño.
+        self.write_note("Adjuntos/viejo.jpg", "PREVIO")
+        self.write_note("Publico/nota.md", "hola\n![[viejo.jpg]]")
+        token = self._share("Publico/nota.md")
+        anon = self.client_class()
+        body = anon.get(f"/s/{token}/").content.decode()
+        self.assertNotIn("asset?p=", body)
+
+
+def _fake_image(name):
+    f = io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    f.name = name
+    return f
+
+
 class ReadOnlyRoleTests(VaultTestCase):
     """El rol de sólo lectura se aplica en el servidor, no sólo escondiendo botones."""
 
