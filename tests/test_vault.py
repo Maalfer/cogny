@@ -1,4 +1,5 @@
 """La capa de bóveda: rutas seguras, orden manual, escritura atómica, ZIPs."""
+import io
 import zipfile
 
 from apps.notes import vault
@@ -153,6 +154,17 @@ class ExportImportTests(VaultTestCase):
     def test_rechaza_algo_que_no_es_un_zip(self):
         with self.assertRaises(VaultError):
             vault.import_zip(vault.root(), __import__("io").BytesIO(b"no soy un zip"))
+
+    def test_replace_con_zip_vacio_no_arrasa_la_boveda(self):
+        root = vault.root()
+        self.write_note("no-debe-desaparecer.md", "x")
+        vacio = io.BytesIO()
+        with zipfile.ZipFile(vacio, "w"):
+            pass
+        vacio.seek(0)
+        with self.assertRaises(VaultError):
+            vault.import_zip(root, vacio, mode="replace")
+        self.assertTrue((root / "no-debe-desaparecer.md").exists())
 
 
 class SearchTests(VaultTestCase):

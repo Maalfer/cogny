@@ -591,6 +591,12 @@ def import_zip(base: Path, fileobj, mode: str = "merge") -> None:
                 _extract(zf, targets)
                 return
 
+            if not targets:
+                # Un ZIP sin entradas no lanza excepción al "extraerlo" (no hay
+                # nada que iterar), así que sin este corte "reemplazar" con un
+                # ZIP vacío se leería como éxito y tiraría el respaldo entero.
+                raise VaultError("El ZIP está vacío: no hay nada con qué reemplazar la bóveda")
+
             # Modo "replace": borrar y extraer después deja la bóveda vacía y sin
             # rehacer si la extracción falla a medias (disco lleno, ZIP corrupto en
             # una entrada que sólo se descubre al leerla). En vez de borrar,
