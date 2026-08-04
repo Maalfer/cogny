@@ -4,6 +4,13 @@ El cliente manda el HTML YA renderizado (KaTeX, Mermaid y highlight.js corren
 en el navegador, con las imágenes incrustadas como data-URI). Aquí lo saneamos,
 lo envolvemos en un documento autónomo y lo imprimimos. Chromium arranca con
 `--disable-javascript`: sólo tiene que maquetar e imprimir.
+
+La nota puede maquetarse con un "tema" (`themes.py`): una plantilla HTML+CSS
+escrita a mano que envuelve el contenido —cabecera con logo, portada, pie,
+colores de empresa—. La plantilla se rellena y se sanea con el mismo
+`sanitize_html` que el cuerpo de la nota: aunque la escriba el dueño de la
+bóveda, aquí dentro un `file://` seguiría siendo lectura de ficheros del
+servidor.
 """
 import glob
 import ipaddress
@@ -19,6 +26,8 @@ from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 from django.conf import settings
+
+from . import themes
 
 
 class PdfError(Exception):
@@ -329,14 +338,76 @@ def _styles() -> str:
     return _CSS_CACHE
 
 
-def render(body_html: str, dark: bool = False) -> bytes:
-    """Imprime a PDF el HTML (ya saneado) de una nota. Levanta `PdfError`."""
-    body_class = "markdown-body print-dark" if dark else "markdown-body"
-    doc = (
-        '<!doctype html><html><head><meta charset="utf-8"><style>'
-        + _styles() +
-        '</style></head><body class="' + body_class + '">' + body_html + '</body></html>'
+# ── Hoja y temas ─────────────────────────────────────────────────────────────
+
+# Nota para quien escriba un tema (y para el `theme_starter.html`): Chromium no
+# implementa las cajas de margen de `@page`, que serían el sitio de una
+# cabecera repetida. Lo que sí repite en cada página es el `<thead>`/`<tfoot>`
+# de una tabla, y el contenido refluye entre ellos sin solaparse. Sacar un
+# `position:fixed` al margen con desplazamientos negativos (`top:-17mm`) NO
+# vale: este Chromium lo coloca en el lado contrario de la página.
+
+_MARGIN_MM = 14           # margen por defecto; un tema lo cambia con su @page
+
+
+def _page_rule(landscape: bool, margin: str) -> str:
+    """La regla `@page` completa: sin `size` explícito Chromium usa Letter."""
+    size = "A4 landscape" if landscape else "A4"
+    return f"@page{{size:{size};margin:{margin}}}"
+
+
+# ── Impresión ────────────────────────────────────────────────────────────────
+
+def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
+              landscape: bool = False, theme_html: str | None = None) -> str:
+    """El HTML autónomo que se le da a imprimir a Chromium.
+
+    Separado de `render` para poder comprobarlo en los tests sin arrancar un
+    navegador: aquí es donde se decide la hoja (tamaño, clases, plantilla), y
+    una equivocación no se ve hasta abrir el PDF.
+
+    `theme_html` permite imprimir una plantilla que aún no está guardada (la
+    vista previa del editor de temas) sin tener que crear un tema de mentira.
+    """
+    body = '<main class="markdown-body">' + body_html + '</main>'
+    if theme is not None or theme_html is not None:
+        template = theme_html if theme_html is not None else theme.html
+        images = themes.image_map(theme) if theme is not None else {}
+        # Rellenar ANTES de sanear: los marcadores no son URIs válidas, así que
+        # un `src="{{ img:logo }}"` perdería el atributo entero si se saneara
+        # primero. Y sanear DESPUÉS es obligatorio: la plantilla la escribe una
+        # persona, pero el `file://` que se le cuele lo lee el servidor.
+        body = sanitize_html(themes.fill(template, body, title, images))
+    page_css = _page_rule(landscape, f"{_MARGIN_MM}mm")
+    body_class = " ".join(c for c in ("print-dark" if dark else "",
+                                      "landscape" if landscape else "") if c)
+    # La clase va también en <html>: el fondo de `body` sólo pinta su caja, así
+    # que en hoja oscura los márgenes de la página salían en blanco (un marco
+    # blanco alrededor del texto, muy visible al abrir el PDF a página completa).
+    return (
+        '<!doctype html><html class="' + ("print-dark" if dark else "") +
+        '"><head><meta charset="utf-8"><style>'
+        + _styles() + page_css +
+        '</style></head><body class="' + body_class + '">'
+        + body + '</body></html>'
     )
+
+
+def render(body_html: str, dark: bool = False, theme=None, title: str = "",
+           landscape: bool = False, theme_html: str | None = None) -> bytes:
+    """Imprime a PDF el HTML (ya saneado) de una nota. Levanta `PdfError`.
+
+    Con `theme` (un `PdfTheme`) la nota se maqueta dentro de la plantilla
+    HTML+CSS de ese tema; sin él sale con la hoja de estilo base, clara o
+    `dark`.
+
+    En `landscape` la hoja no es la vertical estirada: el texto pasa a dos
+    columnas (a lo ancho de un A4 apaisado una línea a página completa son
+    ~26 cm, ilegibles) y los bloques que no caben en una columna —tablas,
+    diagramas, código largo, imágenes grandes— los marca el cliente con
+    `pdf-wide` para que ocupen el ancho completo. Ver `notes_print.css`.
+    """
+    doc = _document(body_html, dark, theme, title, landscape, theme_html)
 
     workdir = tempfile.mkdtemp(prefix="notepdf_")
     try:

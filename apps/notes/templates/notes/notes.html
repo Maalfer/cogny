@@ -348,6 +348,94 @@
   </div>
 </div>
 
+<!-- Exportar a PDF: elegir estilo (base, oscuro o un tema propio en HTML+CSS) -->
+<input type="file" id="theme-img-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style="display:none">
+<div class="modal-back" id="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">
+  <div class="modal pdf-modal">
+
+    <!-- ── Paso 1: elegir estilo ── -->
+    <div id="pdf-pane-pick">
+      <h3 id="pdf-modal-title">Exportar a PDF</h3>
+      <p>Elige cómo quieres que se vea el documento. <span id="pdf-note-name"></span></p>
+      <div class="pdf-styles" id="pdf-styles" role="radiogroup" aria-label="Estilo del PDF"></div>
+      <div class="pdf-orient">
+        <span>Orientación</span>
+        <div class="seg-pill" id="pdf-orient" role="radiogroup" aria-label="Orientación del PDF">
+          <button type="button" data-orient="portrait" role="radio" aria-checked="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v16h12V4H6z"/></svg>
+            Vertical
+          </button>
+          <button type="button" data-orient="landscape" role="radio" aria-checked="false">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 6h20a0 0 0 0 1 0 0v12a0 0 0 0 1 0 0H2a0 0 0 0 1 0 0V6zm2 2v8h16V8H4z"/></svg>
+            Horizontal
+          </button>
+        </div>
+        <small id="pdf-orient-hint">La hoja apaisada reparte el texto en dos columnas y saca tablas, diagramas e imágenes grandes a todo el ancho.</small>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="pdf-cancel">Cancelar</button>
+        <button class="btn-primary" id="pdf-go">Exportar PDF</button>
+      </div>
+    </div>
+
+    <!-- ── Paso 2: editor del tema (la plantilla HTML+CSS) ── -->
+    <div id="pdf-pane-edit" style="display:none">
+      <div class="theme-head">
+        <h3 id="pdf-edit-title">Nuevo tema</h3>
+        <input type="text" id="theme-name" class="vault-input-field" maxlength="80"
+               placeholder="Nombre del tema — p. ej. Acme S.L." autocomplete="off" aria-label="Nombre del tema">
+      </div>
+
+      <div class="theme-cols">
+        <div class="theme-editor">
+          <div class="theme-editor-bar">
+            <span>Plantilla · HTML y CSS</span>
+            <button type="button" id="theme-reset" title="Volver a la plantilla de ejemplo">Plantilla de ejemplo</button>
+          </div>
+          <textarea id="theme-html" spellcheck="false" autocomplete="off" autocapitalize="off"
+                    aria-label="Plantilla HTML y CSS del tema"></textarea>
+        </div>
+
+        <aside class="theme-side">
+          <div class="theme-side-block">
+            <h4>Marcadores</h4>
+            {# Los marcadores del tema usan la misma sintaxis que Django: sin
+               `verbatim` los renderizaría como variables vacías. Y este
+               comentario va FUERA del bloque, porque dentro se vería tal cual. #}
+            {% verbatim %}
+            <ul class="theme-tokens" id="theme-tokens">
+              <li><code data-ins="{{ contenido }}">{{ contenido }}</code><small>La nota. Obligatorio.</small></li>
+              <li><code data-ins="{{ titulo }}">{{ titulo }}</code><small>Nombre de la nota</small></li>
+              <li><code data-ins="{{ fecha }}">{{ fecha }}</code><small>Fecha de hoy, en largo</small></li>
+            </ul>
+            {% endverbatim %}
+            <p class="theme-hint">Pulsa uno para insertarlo donde tengas el cursor.</p>
+          </div>
+
+          <div class="theme-side-block">
+            <h4>Imágenes <small id="theme-img-count"></small></h4>
+            <div class="theme-imgs" id="theme-imgs"></div>
+            <button type="button" class="theme-add-img" id="theme-add-img">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Subir imagen
+            </button>
+            <p class="theme-hint" id="theme-img-hint">Se incrustan en el PDF. Guarda el tema antes de subirlas.</p>
+          </div>
+        </aside>
+      </div>
+
+      <div class="pdf-error" id="theme-error" style="display:none"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="theme-delete" style="margin-right:auto;color:#f87171;display:none">Eliminar tema</button>
+        <button class="btn-cancel" id="theme-preview">Vista previa</button>
+        <button class="btn-cancel" id="theme-back">Cancelar</button>
+        <button class="btn-primary" id="theme-save">Guardar tema</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -355,6 +443,7 @@
 <script src="/static/notes/marked.min.js?v={{ ASSET_VERSION }}"></script>
 <script src="/static/vendor/dompurify/purify.min.js?v={{ ASSET_VERSION }}"></script>
 <script src="/static/vendor/highlight.min.js?v={{ ASSET_VERSION }}"></script>
+<script src="/static/vendor/highlightjs-http.min.js?v={{ ASSET_VERSION }}"></script>
 <script src="/static/vendor/katex/katex.min.js?v={{ ASSET_VERSION }}"></script>
 <script src="/static/vendor/codemirror/balucm.js?v={{ ASSET_VERSION }}"></script>
 <script src="/static/notes/md-ctxmenu.js?v={{ ASSET_VERSION }}" defer></script>

@@ -1,0 +1,108 @@
+<!-- ══════════════════════════════════════════════════════════════════════════
+     TEMA DE EXPORTACIÓN A PDF · HTML + CSS, sin más
+
+     Lo único obligatorio es {{ contenido }}: ahí se inserta la nota ya
+     renderizada, dentro de un <main class="markdown-body">. Todo lo demás
+     (esta cabecera, el pie, los colores) es tuyo: bórralo, cámbialo o
+     empieza de cero. Sin portada a propósito: el PDF empieza directamente
+     por la nota. Si quieres una, añade tu propia <section> con
+     `break-after:page` antes de {{ contenido }}.
+
+     MARCADORES
+       {{ contenido }}     la nota (obligatorio, una sola vez)
+       {{ titulo }}        el nombre de la nota, sin la extensión
+       {{ fecha }}         la fecha de hoy en largo — 3 de agosto de 2026
+       {{ img:NOMBRE }}    una imagen del tema, incrustada en el PDF
+
+     TRES COSAS QUE CONVIENE SABER (son rarezas del Chromium que imprime)
+
+     1. Cabecera y pie se repiten en todas las páginas porque van en el
+        <thead> y el <tfoot> de la tabla de abajo: es lo único que Chromium
+        repite al paginar. NO uses `position:fixed` con desplazamientos
+        negativos para sacarlos al margen — los coloca en el lado contrario.
+        El pie sí va fijo abajo, y el <tfoot> sólo le reserva el hueco: así
+        queda pegado al borde inferior también en la última página.
+
+     2. No pongas `size` en @page. La orientación (vertical / horizontal) se
+        elige al exportar, y si la fijas aquí ese botón deja de funcionar.
+        En horizontal el cuerpo pasa solo a dos columnas; para afinarlo usa
+        selectores `body.landscape ...`.
+
+     3. Los estilos base de la nota (títulos, código, tablas, fórmulas) ya
+        están cargados: aquí sólo hace falta lo que quieras cambiar.
+     ══════════════════════════════════════════════════════════════════════════ -->
+
+<style>
+  :root{
+    --color:      #1a56db;   /* color de la empresa */
+    --color-flojo:#e6ecfb;   /* una versión clara del mismo, para fondos */
+    --gris:       #8a8a8a;
+  }
+
+  @page{ margin: 12mm 16mm; }
+
+  /* ── Estructura que repite cabecera y pie ─────────────────────────────── */
+  .hoja{ width:100%; border-collapse:collapse; table-layout:fixed; }
+  .hoja > thead > tr > td,
+  .hoja > tfoot > tr > td,
+  .hoja > tbody > tr > td{ padding:0; border:0; vertical-align:top; }
+
+  .cabecera{
+    display:flex; align-items:flex-end; justify-content:space-between; gap:6mm;
+    height:14mm; margin-bottom:6mm; padding-bottom:1.6mm;
+    border-bottom:.7mm solid var(--color);
+  }
+  .cabecera img{ height:11mm; width:auto; max-width:70mm; object-fit:contain; }
+  .cabecera b{
+    font-size:8.5pt; font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--color); padding-bottom:.6mm;
+  }
+
+  /* El hueco del <tfoot> tiene que ser algo más alto que el pie, o el texto
+     se le mete debajo en la última línea de cada página. */
+  .hueco-pie{ height:15mm; }
+  .pie{
+    position:fixed; left:0; right:0; bottom:0; height:9mm; padding-top:1.5mm;
+    display:flex; justify-content:space-between; align-items:center; gap:6mm;
+    border-top:.25mm solid var(--color-flojo);
+    font-size:7.5pt; color:var(--gris);
+  }
+  .pie span{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+
+  /* ── El color de la empresa dentro de la nota ─────────────────────────── */
+  .markdown-body h1{ color:var(--color); }
+  .markdown-body h1,
+  .markdown-body h2{ border-bottom-color:var(--color-flojo); }
+  .markdown-body a,
+  .markdown-body .wikilink{ color:var(--color); }
+  .markdown-body blockquote{ border-left-color:var(--color); }
+  .markdown-body th{ background:var(--color-flojo); }
+</style>
+
+<footer class="pie">
+  <span>Confidencial</span>
+  <span>{{ titulo }}</span>
+</footer>
+
+<table class="hoja">
+  <thead>
+    <tr><td>
+      <header class="cabecera">
+        <img src="{{ img:logo }}" alt="">
+        <b>Mi empresa</b>
+      </header>
+    </td></tr>
+  </thead>
+
+  <tfoot>
+    <tr><td><div class="hueco-pie"></div></td></tr>
+  </tfoot>
+
+  <tbody>
+    <tr><td>
+
+      {{ contenido }}
+
+    </td></tr>
+  </tbody>
+</table>

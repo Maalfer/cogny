@@ -76,6 +76,13 @@ class ContentSecurityPolicyMiddleware(MiddlewareMixin):
         return None
 
     def process_response(self, request, response):
+        # Una vista puede querer una política MÁS estricta que la de la app para
+        # su respuesta (los ficheros subidos por el usuario —logos de marca,
+        # adjuntos de la bóveda pública— se sirven con `sandbox`). Si ya la ha
+        # puesto, se respeta: pisarla aquí convertía ese endurecimiento en
+        # código muerto sin que nada avisara.
+        if response.has_header("Content-Security-Policy"):
+            return response
         nonce = getattr(request, "csp_nonce", "")
         upload_host = getattr(settings, "UPLOAD_HOST", "")
         connect_src = "'self'" + (f" https://{upload_host}" if upload_host else "")

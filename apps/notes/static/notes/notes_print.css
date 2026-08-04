@@ -39,6 +39,10 @@ body{
 .markdown-body li.task-list-item{list-style:none;margin-left:-1.3em}
 .markdown-body input[type=checkbox]{margin-right:.5em}
 .markdown-body img{max-width:100%;height:auto;border-radius:8px;break-inside:avoid}
+/* Un diagrama Mermaid (o un <svg> pegado a mano en la nota) no tenía esta
+   protección: se podía partir a media figura entre dos páginas igual que le
+   pasaría a una tabla o una imagen sin este `break-inside`. */
+.markdown-body .mermaid,.markdown-body svg{max-width:100%;break-inside:avoid}
 .markdown-body table{border-collapse:collapse;margin:.7em 0;width:auto;break-inside:avoid}
 .markdown-body th,.markdown-body td{border:1px solid #ccc;padding:.4em .7em}
 .markdown-body th{background:#f0f0f0}
@@ -78,10 +82,72 @@ body{
 /* No imprimir el botón "copiar" de los bloques de código */
 .code-copy{display:none !important}
 
-@page{margin:14mm}
+/* A4 explícito: sin `size` Chromium headless imprime en Letter (216×279mm),
+   que es lo que NO se usa aquí. La regla la reemite `pdf.py` según la
+   orientación elegida, y un tema puede cambiar los márgenes con su propio
+   `@page` (pero no el `size`, o rompería el botón de orientación). */
+@page{size:A4;margin:14mm}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APAISADO (`body.landscape`)
+   Un A4 apaisado da 26,9 cm de ancho útil: a página completa la línea de texto
+   sería el doble de larga de lo legible, así que el cuerpo pasa a DOS columnas
+   (≈12,8 cm cada una, como una revista). No hay nada que configurar — la nota
+   se escribe igual y aquí se recoloca sola.
+
+   Lo que no cabe en una columna sale a ancho completo con `column-span:all`:
+   el título de la nota siempre, y los bloques que el cliente haya marcado
+   como `pdf-wide` tras medirlos en el navegador (tablas anchas, diagramas,
+   código con líneas largas, imágenes grandes) — ver `markWideBlocks` en
+   notes.js.
+
+   Ojo si se toca: `column-fill:auto` parece lo correcto para paginar, pero
+   con este Chromium deja una PÁGINA FINAL EN BLANCO; el reparto por defecto
+   (balance) pagina bien. Y `column-span:all` no surte efecto en una `<table>`
+   (no es block-level): por eso el cliente la envuelve en un div. Comprobado
+   imprimiendo de verdad.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body.landscape .markdown-body{column-count:2;column-gap:12mm}
+body.landscape .markdown-body>h1,
+body.landscape .markdown-body>.pdf-wide,
+body.landscape .markdown-body>.note-props,
+body.landscape .markdown-body>.katex-display{column-span:all}
+/* Un bloque partido entre dos columnas se lee fatal (media tabla arriba a la
+   derecha, la otra media abajo a la izquierda): los que tienen forma de
+   "figura" se mantienen enteros. */
+body.landscape .markdown-body :is(pre,table,img,blockquote,.callout,.internal-embed,.katex-display){break-inside:avoid}
+/* Las columnas son estrechas: el código y las tablas aprietan un poco la
+   tipografía para que quepan sin partir palabras a lo bestia. */
+body.landscape .markdown-body pre code{font-size:.78rem}
+body.landscape .markdown-body th,body.landscape .markdown-body td{padding:.3em .5em;font-size:.92em}
+body.landscape .markdown-body .pdf-wide pre code{font-size:.86rem}
+/* Una tabla que ya no cabía en una columna aprovecha la banda entera en vez de
+   quedarse pegada a la izquierda con medio folio en blanco al lado. */
+body.landscape .markdown-body>.pdf-wide>table{width:100%}
+/* Una imagen (o un diagrama) de relación de aspecto casi cuadrada o vertical,
+   estirada al ancho completo del apaisado, puede salir más alta que una
+   página entera — y entonces ni el `break-inside:avoid` de arriba libra de
+   que Chromium la parta a media imagen entre dos páginas, porque "evitar" no
+   es "prohibir": si el bloque no cabe de ningún modo, se parte igual
+   (comprobado con una captura casi cuadrada de verdad). Limitar también la
+   altura hace que ceda ancho —dos columnas de sobra a los lados— antes que
+   partirse. El caso normal (capturas anchas 16:9) no lo nota: nunca llegan a
+   esa altura. Centrado porque, al ceder ancho, si no se ve pegada a la
+   izquierda con el hueco solo a la derecha.
+   El número es el hueco más pequeño que deja cualquiera de los temas de
+   fábrica tras su cabecera y su pie en A4 apaisado (297×210mm, @page de
+   12mm) — el ancho no importa aquí, todos usan el mismo alto de página. */
+body.landscape .markdown-body>.pdf-wide{text-align:center}
+body.landscape .markdown-body .pdf-wide img,
+body.landscape .markdown-body .pdf-wide svg{max-height:135mm}
+body.landscape .markdown-body h1{font-size:1.6rem;margin-top:0}
+body.landscape .markdown-body h2{font-size:1.25rem}
 
 /* ───────────── Variante OSCURA (hoja negra, texto blanco) ───────────── */
-body.print-dark{background:#0d1117;color:#e6edf3}
+/* La clase está en <html> y en <body>: el fondo de `body` sólo cubre su caja,
+   y sin pintar también la raíz los márgenes de página quedan en blanco. */
+html.print-dark,body.print-dark{background:#0d1117}
+body.print-dark{color:#e6edf3}
 body.print-dark .markdown-body h1,body.print-dark .markdown-body h2,
 body.print-dark .markdown-body h3,body.print-dark .markdown-body h4{color:#fff;border-color:#30363d}
 body.print-dark .markdown-body a,body.print-dark .markdown-body .wikilink{color:#58a6ff}

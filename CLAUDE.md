@@ -18,7 +18,17 @@ configuración de la bóveda pública.
   export/import ZIP, enlaces públicos de sólo lectura. Todo lo que toca disco
   vive en `apps/notes/vault.py` (rutas seguras vía `safe_path`, orden manual
   de carpetas, escritura atómica, búsqueda, stats, optimización a WebP);
-  `apps/notes/pdf.py` exporta una nota a PDF con Chromium headless.
+  `apps/notes/pdf.py` exporta una nota a PDF con Chromium headless y
+  `apps/notes/themes.py` guarda los "temas": plantillas HTML+CSS escritas a
+  mano (`theme_starter.html` es la de ejemplo) con un `{{ contenido }}` donde
+  entra la nota. No hay ajustes sueltos de color o logo a propósito: cualquier
+  decisión de aspecto se escribe en el CSS del tema. Las imágenes del tema son
+  ficheros bajo `DATA_ROOT/themes/`, no blobs en la BD, y se incrustan como
+  `data:` URI. El HTML del tema **se sanea igual que el de una nota** aunque lo
+  escriba el dueño: Chromium imprime desde `file://`. Si tocas la maqueta del
+  PDF, lee antes los comentarios de `pdf.py`/`theme_starter.html` sobre cómo se
+  repiten cabecera y pie (thead/tfoot, no `position:fixed` con offsets
+  negativos) y sobre el apaisado a dos columnas.
 - `apps/knowledge` — bóveda pública de sólo lectura en `/conocimiento`, para
   compartir la misma bóveda de `apps.notes` hacia fuera sin exponer el editor.
   Dos formas de entrar: por dominio de origen permitido (`Referer`/`Origin`,

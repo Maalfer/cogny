@@ -761,8 +761,10 @@ function jumpToMatch(terms){
   if(pos>=0){ try{ ED.view.dispatch({selection:{anchor:pos, head:pos}, scrollIntoView:true}); ED.focus(); }catch(e){} }
 }
 // Exporta una nota a PDF imprimiendo su vista previa renderizada (máxima fidelidad:
-// KaTeX, código, imágenes, callouts…). El usuario elige "Guardar como PDF".
-async function exportNotePDF(it, dark){
+// KaTeX, código, imágenes, callouts…). `opts` = {dark, theme, landscape}:
+// `theme` es el id de una plantilla HTML+CSS propia, y manda sobre `dark`.
+async function exportNotePDF(it, opts){
+  opts = opts || {};
   if(!current || current.path!==it.path){ await openNote(it.path); await new Promise(r=>setTimeout(r,150)); }
   setStatus('Generando PDF…', false);
   const pp=$('print-pane');
@@ -778,12 +780,22 @@ async function exportNotePDF(it, dark){
         const r=await fetch(src); if(!r.ok) return;
         const blob=await r.blob();
         img.setAttribute('src', await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);}));
+        // Cambiar `src` no actualiza `naturalWidth` al momento: hasta que el
+        // navegador decodifica la nueva `data:` URI, sigue devolviendo las
+        // medidas de la imagen ANTERIOR (comprobado). Con la misma imagen de
+        // siempre no se nota, pero si la carga original no había terminado a
+        // tiempo (250ms más arriba), `markWideBlocks` mediría 0 y una imagen
+        // grande de verdad se quedaría encogida en la columna en vez de
+        // ensancharse. `decode()` espera a que la nueva imagen esté lista.
+        if(!img.complete) await img.decode().catch(()=>{});
       }catch(_){}
     }));
+    if(opts.landscape) markWideBlocks(pp);
     const base=(((current&&current.name)||it.name||'nota')).replace(/\.md$/i,'');
     const res=await fetch('/api/notes/pdf',{method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-      body:JSON.stringify({html:pp.innerHTML, title:base, dark:!!dark})});
+      body:JSON.stringify({html:pp.innerHTML, title:base, dark:!!opts.dark,
+                           theme:opts.theme||null, landscape:!!opts.landscape})});
     if(!res.ok) throw new Error('http '+res.status);
     const blob=await res.blob();
     const url=URL.createObjectURL(blob);
@@ -797,6 +809,357 @@ async function exportNotePDF(it, dark){
     pp.innerHTML='';
   }
 }
+
+/* En apaisado el cuerpo va a dos columnas (~12,8 cm cada una). Lo que no cabe
+   ahí dentro se marca para que el PDF lo saque a ancho completo. Se decide en
+   el navegador porque es el único sitio donde el contenido ya está medido: el
+   servidor recibe HTML, no cajas. Sólo se marcan hijos DIRECTOS del cuerpo —
+   `column-span:all` no es fiable en elementos anidados—, así que un bloque
+   ancho dentro de una lista o una cita se queda en su columna.
+   Umbrales en píxeles CSS: una columna del PDF son ~480px a 96 ppp. */
+const WIDE_PX = 480;          // no cabe en una columna
+const WIDE_IMG_PX = 900;      // imagen grande de verdad (una captura, no un icono)
+const WIDE_CODE_COLS = 62;    // caracteres por línea antes de que el código apriete
+function markWideBlocks(pane){
+  const needsWidth = el => {
+    // Los elementos SVG (los diagramas de Mermaid) devuelven `tagName` en
+    // minúsculas aunque estén en un documento HTML: se normaliza.
+    const tag = (el.tagName || '').toUpperCase();
+    if(tag==='IMG') return el.naturalWidth > WIDE_IMG_PX;
+    if(tag==='PRE') return (el.textContent||'').split('\n').some(l => l.length > WIDE_CODE_COLS);
+    if(tag==='TABLE' || tag==='SVG' || el.classList.contains('katex-display'))
+      return el.getBoundingClientRect().width > WIDE_PX;
+    return false;
+  };
+  // `column-span:all` sólo surte efecto en cajas de bloque: una <table> (que
+  // es `display:table`) o un <img>/<svg> sueltos (que son inline por defecto)
+  // se quedan en su columna aunque lleven la clase, así que se envuelven en
+  // un div y es el div el que se ensancha. Un <svg> de Mermaid normalmente ya
+  // llega envuelto en su propio <div class="mermaid"> (ver `postProcess`) y
+  // no necesita este paso, pero un SVG pegado a mano en la nota como HTML
+  // crudo sí puede llegar suelto — cubrir el caso general es más barato que
+  // confiar en que siempre venga envuelto.
+  const NEEDS_WRAP = new Set(['TABLE', 'IMG', 'SVG']);
+  const mark = block => {
+    // Mismo aviso que en `needsWidth`: un <svg> devuelve tagName en minúsculas.
+    if(!NEEDS_WRAP.has((block.tagName || '').toUpperCase())){ block.classList.add('pdf-wide'); return; }
+    const wrap = document.createElement('div');
+    wrap.className = 'pdf-wide';
+    block.parentNode.insertBefore(wrap, block);
+    wrap.appendChild(block);
+  };
+  Array.from(pane.children).forEach(block=>{
+    const candidates = [block, ...block.querySelectorAll('img,pre,table,svg,.katex-display')];
+    if(candidates.some(needsWidth)) mark(block);
+  });
+  // Chromium no reparte bien un tramo de dos columnas MUY corto metido entre
+  // dos bloques que ya ocupan todo el ancho: en vez de ensanchar el segundo
+  // bloque, lo encoge a una columna como si no llevara `pdf-wide` (comprobado
+  // imprimiendo de verdad — con una foto pequeña y un pie de foto entre dos
+  // capturas grandes, la segunda captura salía encogida en vez de a toda
+  // anchura). Un hueco que ya es "ligero" de por sí —poco texto, o trae su
+  // propia imagen/tabla/código— se ensancha también: es mejor que ese hueco
+  // ocupe toda la anchura a que Chromium rompa el bloque de después. Un hueco
+  // con párrafos de verdad no se toca, para no perder las dos columnas donde
+  // sí aportan.
+  // Un bloque con imagen/tabla/tabla/código cuenta como "corto" aunque su
+  // texto sea mínimo (el pie de una foto), porque lo que pesa es el hueco
+  // visual que deja, no las letras. Un bloque de solo texto, en cambio, tiene
+  // que ser realmente breve —una frase suelta tipo "Respuesta:"— para no
+  // tragarse un párrafo normal que ya lee bien en dos columnas.
+  const GAP_TEXT_LIMIT = 80;
+  const isLightweight = el => !!el.querySelector('img,svg,table,pre') ||
+    (el.textContent || '').length <= GAP_TEXT_LIMIT;
+  const all = Array.from(pane.children);   // ya con los <div class="pdf-wide"> que envuelven tablas/imágenes
+  let i = 0;
+  while(i < all.length){
+    if(all[i].classList.contains('pdf-wide')){ i++; continue; }
+    let j = i;
+    while(j < all.length && !all[j].classList.contains('pdf-wide')) j++;
+    if(i > 0 && j < all.length && all.slice(i, j).every(isLightweight)){
+      for(let k=i;k<j;k++) all[k].classList.add('pdf-wide');
+    }
+    i = j;
+  }
+}
+
+/* ════════════ Modal de exportación a PDF (estilos y temas propios) ════════════
+   Dos estilos de serie (claro y oscuro) y los temas que escriba el usuario: un
+   tema es una plantilla HTML+CSS con un `{{ contenido }}` donde entra la nota,
+   así que el aspecto del PDF no está limitado a las opciones que se nos hayan
+   ocurrido. Los temas viven en el servidor (`/api/notes/themes`), valen para
+   cualquier nota y desde cualquier dispositivo. */
+let PDF_THEMES = [];         // temas cargados del servidor (sin el HTML)
+let PDF_STARTER = '';        // plantilla de ejemplo que manda el servidor
+let pdfItem = null;          // nota que se va a exportar
+let pdfChoice = localStorage.getItem('cogny-pdf-style') || 'light';
+let pdfLandscape = localStorage.getItem('cogny-pdf-orient') === 'landscape';
+let themeEditing = null;     // tema en edición (null = nuevo)
+
+function themeById(id){ return PDF_THEMES.find(t=>t.id===id) || null; }
+function themeImgSrc(img){ return '/api/notes/themes/image?image='+img.id; }
+
+// Miniatura de la página resultante (mismas proporciones que un A4, y en
+// apaisado con las dos columnas que de verdad va a llevar el PDF). Con tema,
+// `o.accent` (ver `accent_colors` en themes.py) pinta la cabecera y el
+// título con los colores reales de esa plantilla, para distinguir las
+// tarjetas de un vistazo en vez de que todas salgan iguales.
+function pdfThumb(o){
+  const col = '<i></i><i></i><i></i><i class="s"></i><i></i><i></i>';
+  const body = pdfLandscape
+    ? `<div class="pdf-thumb-body"><i class="t span"></i>
+         <div class="pdf-thumb-cols"><div>${col}</div><div>${col}</div></div></div>`
+    : `<div class="pdf-thumb-body"><i class="t"></i>${col}<i class="s"></i></div>`;
+  const chrome = o.themed ? '<div class="pdf-thumb-hd"><em></em></div>' : '';
+  const foot = o.themed ? '<div class="pdf-thumb-ft"></div>' : '';
+  const accent = o.accent || [];
+  const vars = accent.length
+    ? `--tacc:${esc(accent[0])};${accent[1]?`--tacc2:${esc(accent[1])};`:''}`
+    : '';
+  const style = vars ? ` style="${vars}"` : '';
+  return `<div class="pdf-thumb${o.dark?' dark':''}${pdfLandscape?' land':''}"${style}>
+    ${chrome}${body}${foot}</div>`;
+}
+
+const ICO_PENCIL = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+
+function renderPdfCards(){
+  const cards = [
+    {key:'light', name:'Original', sub:'Estilo base',  thumb:{}},
+    {key:'dark',  name:'Oscuro',   sub:'Hoja negra',   thumb:{dark:true}},
+  ];
+  PDF_THEMES.forEach(t=>cards.push({
+    key:'t'+t.id, name:t.name, theme:t,
+    sub: t.images.length ? t.images.length+(t.images.length===1?' imagen':' imágenes') : 'HTML + CSS',
+    thumb:{themed:true, dark:!!t.dark, accent:t.accent},
+  }));
+  if(!cards.some(c=>c.key===pdfChoice)) pdfChoice='light';
+  let html = cards.map(c=>`
+    <div class="pdf-card${c.key===pdfChoice?' sel':''}" data-style="${c.key}" role="radio"
+         tabindex="${c.key===pdfChoice?'0':'-1'}" aria-checked="${c.key===pdfChoice}">
+      ${pdfThumb(c.thumb)}
+      <span class="pdf-card-name">${esc(c.name)}</span>
+      <span class="pdf-card-sub">${esc(c.sub)}</span>
+      ${c.theme&&CAN_WRITE?`<button class="pdf-card-edit" data-edit="${c.theme.id}" title="Editar el tema" aria-label="Editar el tema ${esc(c.theme.name)}">${ICO_PENCIL}</button>`:''}
+    </div>`).join('');
+  if(CAN_WRITE) html += `<button class="pdf-card pdf-card-new" id="pdf-new-theme">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Nuevo tema</button>`;
+  const box = $('pdf-styles');
+  box.innerHTML = html;
+  box.querySelectorAll('.pdf-card[data-style]').forEach(el=>{
+    el.addEventListener('click', ev=>{
+      const edit = ev.target.closest('[data-edit]');
+      if(edit){ openThemeEditor(themeById(+edit.dataset.edit)); return; }
+      pdfChoice = el.dataset.style; localStorage.setItem('cogny-pdf-style', pdfChoice); renderPdfCards();
+    });
+    el.addEventListener('keydown', ev=>{
+      if(ev.key===' '||ev.key==='Enter'){ ev.preventDefault(); el.click(); }
+    });
+  });
+  const nt = $('pdf-new-theme');
+  if(nt) nt.addEventListener('click', ()=>openThemeEditor(null));
+  renderPdfOrient();
+}
+
+function renderPdfOrient(){
+  $('pdf-orient').querySelectorAll('button').forEach(btn=>{
+    const on = (btn.dataset.orient==='landscape') === pdfLandscape;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-checked', on);
+  });
+  $('pdf-orient-hint').style.display = pdfLandscape ? '' : 'none';
+}
+
+async function loadThemes(){
+  try{
+    const res = await fetch('/api/notes/themes').then(r=>r.json());
+    PDF_THEMES = res.themes || [];
+    PDF_STARTER = res.starter || '';
+  }catch(e){ PDF_THEMES = []; }
+}
+
+function closePdfModal(){ $('pdf-modal').classList.remove('show'); pdfItem=null; }
+
+async function openPdfModal(it){
+  pdfItem = it;
+  showPdfPane('pick');
+  $('pdf-note-name').textContent = it && it.name ? '«'+it.name.replace(/\.md$/i,'')+'»' : '';
+  $('pdf-modal').classList.add('show');
+  renderPdfCards();          // pinta ya con lo que hubiera cacheado
+  await loadThemes();
+  if(pdfItem) renderPdfCards();
+}
+
+function showPdfPane(which){
+  const editing = which==='edit';
+  $('pdf-pane-pick').style.display = editing ? 'none' : '';
+  $('pdf-pane-edit').style.display = editing ? '' : 'none';
+  $('pdf-modal').querySelector('.pdf-modal').classList.toggle('editing', editing);
+}
+
+/* ── Editor de temas (la plantilla HTML+CSS) ── */
+async function openThemeEditor(theme){
+  if(!guardWrite()) return;
+  themeError('');
+  themeEditing = theme || null;
+  $('pdf-edit-title').textContent = theme ? 'Editar tema' : 'Nuevo tema';
+  $('theme-name').value = theme ? theme.name : '';
+  $('theme-delete').style.display = theme ? '' : 'none';
+  $('theme-html').value = theme ? '' : PDF_STARTER;
+  showPdfPane('edit');
+  renderThemeImages();
+  if(theme){
+    // El HTML de la plantilla no viaja en el listado (son 120 KB por tema):
+    // se pide sólo al abrirla para editar.
+    try{
+      const res = await fetch('/api/notes/themes?id='+theme.id).then(r=>r.json());
+      if(res.theme){ themeEditing = res.theme; $('theme-html').value = res.theme.html || ''; renderThemeImages(); }
+    }catch(e){ themeError('No se pudo cargar la plantilla'); }
+  }
+  setTimeout(()=>$(theme ? 'theme-html' : 'theme-name').focus(), 30);
+}
+
+function renderThemeImages(){
+  const imgs = (themeEditing && themeEditing.images) || [];
+  const box = $('theme-imgs');
+  box.innerHTML = imgs.map(img=>`
+    <div class="theme-img" title="Insertar {{ img:${esc(img.name)} }}">
+      <img src="${esc(themeImgSrc(img))}" alt="">
+      <code data-ins="{{ img:${esc(img.name)} }}">${esc(img.name)}</code>
+      <button type="button" data-del="${img.id}" aria-label="Eliminar la imagen ${esc(img.name)}">&#215;</button>
+    </div>`).join('') || '<p class="theme-empty">Todavía no hay imágenes.</p>';
+  $('theme-img-count').textContent = imgs.length ? '('+imgs.length+')' : '';
+  const saved = !!(themeEditing && themeEditing.id);
+  $('theme-add-img').disabled = !saved;
+  $('theme-img-hint').textContent = saved
+    ? 'Se incrustan en el PDF. Pulsa el nombre para insertar su marcador.'
+    : 'Guarda el tema antes de subir imágenes.';
+  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
+    const res = await api('/api/notes/themes/image/delete', {image:+b.dataset.del});
+    if(res.theme){ themeEditing = Object.assign(themeEditing||{}, res.theme); renderThemeImages(); }
+  }));
+}
+
+// Inserta texto en la posición del cursor de la plantilla (marcadores).
+function insertInTemplate(text){
+  const ta = $('theme-html');
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + text.length;
+  ta.focus();
+}
+
+function themeError(msg){
+  const box = $('theme-error');
+  box.textContent = msg || '';
+  box.style.display = msg ? '' : 'none';
+}
+
+async function saveTheme(){
+  const name = $('theme-name').value.trim();
+  const html = $('theme-html').value;
+  if(!name){ themeError('Ponle un nombre al tema'); $('theme-name').focus(); return; }
+  const btn = $('theme-save'); btn.disabled = true; themeError('');
+  try{
+    const res = await api('/api/notes/themes/save',
+                          {id: themeEditing && themeEditing.id, name, html});
+    if(res.error){ themeError(res.error); return; }
+    themeEditing = res.theme;
+    await loadThemes();
+    pdfChoice = 't'+res.theme.id; localStorage.setItem('cogny-pdf-style', pdfChoice);
+    showPdfPane('pick'); renderPdfCards();
+  }catch(e){
+    themeError('No se pudo guardar el tema');
+  }finally{ btn.disabled = false; }
+}
+
+function deleteThemeFromEditor(){
+  if(!themeEditing || !themeEditing.id) return;
+  const t = themeEditing;
+  showConfirmDialog('Eliminar tema', `¿Eliminar el tema «${t.name}»? Los PDF ya exportados no cambian.`,
+    'Sí, eliminar', async ()=>{
+      await api('/api/notes/themes/delete', {id:t.id});
+      if(pdfChoice==='t'+t.id){ pdfChoice='light'; localStorage.setItem('cogny-pdf-style', pdfChoice); }
+      await loadThemes();
+      showPdfPane('pick'); renderPdfCards();
+    });
+}
+
+// Vista previa: imprime una nota de muestra con la plantilla TAL COMO ESTÁ en
+// el editor, sin guardarla — afinar un tema es prueba y error.
+async function previewTheme(){
+  const btn = $('theme-preview'); btn.disabled = true; themeError('');
+  const old = btn.textContent; btn.textContent = 'Generando…';
+  try{
+    const res = await fetch('/api/notes/themes/preview', {method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({id: themeEditing && themeEditing.id,
+                           html: $('theme-html').value, landscape: pdfLandscape})});
+    if(!res.ok){
+      let msg = 'No se pudo generar la vista previa';
+      try{ msg = (await res.json()).error || msg; }catch(_){}
+      themeError(msg); return;
+    }
+    const url = URL.createObjectURL(await res.blob());
+    window.open(url, '_blank', 'noopener');
+    setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  }catch(e){
+    themeError('No se pudo generar la vista previa');
+  }finally{ btn.disabled = false; btn.textContent = old; }
+}
+
+async function uploadThemeImage(file){
+  if(!file || !themeEditing || !themeEditing.id) return;
+  if(file.size > 2*1024*1024){ themeError('La imagen no puede pasar de 2 MB'); return; }
+  themeError('');
+  const fd = new FormData();
+  fd.append('id', themeEditing.id); fd.append('file', file); fd.append('name', file.name);
+  try{
+    const res = await fetch('/api/notes/themes/image/upload', {method:'POST', body:fd}).then(r=>r.json());
+    if(res.error){ themeError(res.error); return; }
+    themeEditing = Object.assign(themeEditing, res.theme);
+    renderThemeImages();
+  }catch(e){ themeError('No se pudo subir la imagen'); }
+}
+
+/* ── Cableado del modal ── */
+$('pdf-cancel').addEventListener('click', closePdfModal);
+$('pdf-modal').addEventListener('click', e=>{ if(e.target===$('pdf-modal')) closePdfModal(); });
+$('pdf-go').addEventListener('click', ()=>{
+  const it = pdfItem; if(!it) return;
+  const theme = pdfChoice.startsWith('t') ? +pdfChoice.slice(1) : null;
+  closePdfModal();
+  exportNotePDF(it, {dark: pdfChoice==='dark', theme, landscape: pdfLandscape});
+});
+$('pdf-orient').addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  pdfLandscape = btn.dataset.orient==='landscape';
+  localStorage.setItem('cogny-pdf-orient', pdfLandscape ? 'landscape' : 'portrait');
+  renderPdfCards();   // las miniaturas cambian de forma con la orientación
+});
+$('theme-back').addEventListener('click', ()=>{ showPdfPane('pick'); renderPdfCards(); });
+$('theme-save').addEventListener('click', saveTheme);
+$('theme-delete').addEventListener('click', deleteThemeFromEditor);
+$('theme-preview').addEventListener('click', previewTheme);
+$('theme-reset').addEventListener('click', ()=>{
+  showConfirmDialog('Plantilla de ejemplo',
+    'Se sustituirá lo que hay en el editor por la plantilla de ejemplo comentada. El tema guardado no cambia hasta que pulses Guardar.',
+    'Sí, sustituir', ()=>{ $('theme-html').value = PDF_STARTER; $('theme-html').focus(); });
+});
+$('theme-add-img').addEventListener('click', ()=>$('theme-img-file').click());
+$('theme-img-file').addEventListener('change', e=>{ uploadThemeImage(e.target.files[0]); e.target.value=''; });
+// Los marcadores (y los nombres de imagen) se insertan pulsándolos.
+$('pdf-pane-edit').addEventListener('click', e=>{
+  const chip = e.target.closest('code[data-ins]');
+  if(chip) insertInTemplate(chip.dataset.ins);
+});
+// Tab dentro de la plantilla indenta, no salta de campo: es un editor de código.
+$('theme-html').addEventListener('keydown', e=>{
+  if(e.key!=='Tab' || e.ctrlKey || e.altKey) return;
+  e.preventDefault();
+  insertInTemplate('  ');
+});
+
 function cssEsc(s){return (window.CSS&&CSS.escape)?CSS.escape(s):s.replace(/["\\]/g,'\\$&');}
 // Renderiza UN bloque de markdown dentro del editor live-preview (reutiliza todo
 // el pipeline: marked + KaTeX + resaltado + callouts + embeds/imágenes).
@@ -1119,8 +1482,7 @@ function showCtxMenu(e,it){
   if(it.type==='note'){
     html+=`<button data-act="open-new-tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>Abrir en nueva pestaña</button><div class="ctx-sep"></div>`;
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
-    html+=`<button data-act="pdf">${pdfIco}Exportar a PDF</button>`;
-    html+=`<button data-act="pdf-dark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-5.4-5.4c0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>Exportar a PDF (oscuro)</button>
+    html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
     ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}<div class="ctx-sep"></div>`;
   }
   if(CAN_WRITE){
@@ -1146,8 +1508,7 @@ function showCtxMenu(e,it){
     b.onclick=()=>{ hideCtx(); const a=b.dataset.act;
       if(a==='new-note') newNote(it.path); else if(a==='new-folder') newFolder(it.path);
       else if(a==='open-new-tab') openInNewTab(it.path);
-      else if(a==='pdf') exportNotePDF(it,false);
-      else if(a==='pdf-dark') exportNotePDF(it,true);
+      else if(a==='pdf') openPdfModal(it);
       else if(a==='share') openShareModal(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };
   });
@@ -1546,6 +1907,13 @@ document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   if($('img-lightbox').classList.contains('show')){ closeLightbox(); return; }
   if($('storage-modal').classList.contains('show')){ $('storage-modal').classList.remove('show'); return; }
+  if($('pdf-modal').classList.contains('show')){
+    // Desde el editor de marca, Escape vuelve al selector de estilo (no cierra
+    // el modal entero: perder el formulario a medias sería un mal sobresalto).
+    if($('pdf-pane-edit').style.display!=='none'){ $('theme-back').click(); }
+    else closePdfModal();
+    return;
+  }
   if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }

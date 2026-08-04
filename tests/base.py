@@ -29,7 +29,10 @@ class VaultTestCase(TestCase):
         self.addCleanup(shutil.rmtree, self.tmp_root, True)
         self.vault_dir = self.tmp_root / "vault"
         self.vault_dir.mkdir()
-        patcher = override_settings(VAULT_ROOT=self.vault_dir)
+        # `DATA_ROOT` también: de él cuelga lo que la app guarda fuera de la
+        # bóveda (los logos de las marcas de PDF, por ejemplo). Sin redirigirlo,
+        # un test escribiría en los datos reales de la instalación.
+        patcher = override_settings(VAULT_ROOT=self.vault_dir, DATA_ROOT=self.tmp_root)
         patcher.enable()
         self.addCleanup(patcher.disable)
 

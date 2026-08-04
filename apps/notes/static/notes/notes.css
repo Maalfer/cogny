@@ -233,10 +233,22 @@
 .markdown-body mark{background:#fde68a;color:#1a1a1a;padding:0 .15em;border-radius:3px}
 .markdown-body mark.jump-hl{background:#f5c842;color:#1a1a1a;border-radius:3px;animation:jump-pulse 1.4s ease-out}
 @keyframes jump-pulse{0%{box-shadow:0 0 0 4px rgba(245,200,66,.55)}100%{box-shadow:0 0 0 0 rgba(245,200,66,0)}}
-/* Buffer oculto: aquí se renderiza la nota antes de exportarla a PDF.
-   La exportación la hace el servidor con Chromium headless (endpoint
-   /api/notes/pdf), por eso ya no hacen falta reglas de impresión. */
-#print-pane{ display:none; }
+/* Buffer donde se renderiza la nota antes de exportarla a PDF. La exportación
+   la hace el servidor con Chromium headless (endpoint /api/notes/pdf), por
+   eso ya no hacen falta reglas de impresión aquí — pero en apaisado,
+   `markWideBlocks` (notes.js) SÍ necesita medir el ancho real de tablas,
+   diagramas Mermaid y fórmulas para decidir cuáles no caben en una columna.
+   Con `display:none` el navegador no genera caja para nada de dentro:
+   `getBoundingClientRect()` da siempre 0 y todo se queda sin marcar como
+   ancho (comprobado — la tabla y el SVG dejaban de ensancharse aunque no
+   cupieran ni de lejos en 12,8 cm). Sacarlo de la pantalla con `position:
+   fixed` en vez de ocultarlo sí lo deja medible, y `width:1400px` evita que
+   el propio buffer, al no tener un ancho natural definido, apriete el
+   contenido antes de medirlo y falsee el resultado. */
+#print-pane{
+  position:fixed; left:-99999px; top:0; width:1400px;
+  visibility:hidden; pointer-events:none;
+}
 .wikilink{cursor:pointer;border-bottom:1px dashed color-mix(in srgb,var(--vault-accent) 50%,transparent)}
 .wikilink.missing{color:#f87171;border-bottom-color:rgba(248,113,113,.5)}
 
@@ -422,8 +434,10 @@
 :root:is([data-theme="light"]) .ctx-menu button:hover{background:rgba(0,0,0,.06)}
 :root:is([data-theme="light"]) .modal{background:#ffffff}
 :root:is([data-theme="light"]) .modal h3{color:#0f1320}
+/* Sólo los elementos "caja" llevan fondo: agrupar aquí el texto del modal le
+   ponía a `<p>` y a los `small` un rectángulo gris que no pintaba nada. */
 :root:is([data-theme="light"]) .modal p,
-:root:is([data-theme="light"]) .modal label small,
+:root:is([data-theme="light"]) .modal label small{color:#5b6373}
 :root:is([data-theme="light"]) .modal-drop,
 :root:is([data-theme="light"]) .btn-cancel{background:rgba(0,0,0,.07);color:#1f2533}
 :root:is([data-theme="light"]) .modal-progress{background:rgba(0,0,0,.1)}
@@ -483,11 +497,151 @@
 :root:is([data-theme="light"]) .vault-input-field{background:#fff;color:#1a1f2e;border-color:#d1d5db}
 :root:is([data-theme="light"]) .vault-input-field::placeholder{color:#9aa2b4}
 
+/* ════════════ Exportar a PDF: estilos y temas propios ════════════
+   Dos pantallas dentro del mismo modal: elegir estilo (tarjetas con una
+   miniatura de la página resultante) y editar el tema, que es una plantilla
+   HTML+CSS a pelo. Las miniaturas son CSS puro con las medidas del A4 real
+   (aspect-ratio 1/1.414, o al revés en apaisado). Los selectores llevan
+   `.modal-back` delante porque el `.modal` genérico de app.css tiene esa
+   misma especificidad. */
+.modal-back .pdf-modal{max-width:540px}
+.modal-back .pdf-modal.editing{max-width:min(1040px,94vw)}
+/* El diálogo de confirmación se abre DESDE este modal (borrar un tema) y va
+   antes en el DOM: sin subirle el z-index quedaría tapado por él. */
+#confirm-dialog,#input-dialog{z-index:1400}
+
+.pdf-styles{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-bottom:1.1rem}
+.pdf-card{position:relative;border:1px solid var(--vault-line);border-radius:12px;padding:.5rem;background:rgba(255,255,255,.03);cursor:pointer;text-align:left;color:inherit;font:inherit;transition:border-color .15s,background .15s}
+.pdf-card:hover{border-color:rgba(255,255,255,.24)}
+.pdf-card.sel{border-color:var(--vault-accent);background:color-mix(in srgb,var(--vault-accent) 10%,transparent)}
+.pdf-card:focus-visible{outline:2px solid var(--vault-accent);outline-offset:2px}
+.pdf-card-name{display:block;font-size:.78rem;font-weight:700;color:#fff;margin-top:.45rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdf-card-sub{display:block;font-size:.68rem;color:rgba(255,255,255,.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdf-card-edit{position:absolute;top:.45rem;right:.45rem;width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;display:none;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.pdf-card-edit svg{width:12px;height:12px}
+.pdf-card:hover .pdf-card-edit,.pdf-card.sel .pdf-card-edit{display:flex}
+.pdf-card-new{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3rem;border-style:dashed;color:rgba(255,255,255,.5);font-size:.78rem;font-weight:600;min-height:120px}
+.pdf-card-new svg{width:22px;height:22px}
+.pdf-card-new:hover{color:#fff}
+
+/* Orientación de la hoja */
+.pdf-orient{margin:-.35rem 0 1rem}
+.pdf-orient>span{display:block;font-size:.78rem;font-weight:600;color:rgba(255,255,255,.72);margin-bottom:.3rem}
+.pdf-orient small{display:block;margin-top:.4rem;font-size:.72rem;line-height:1.45;color:rgba(255,255,255,.45)}
+.seg-pill{display:flex;gap:2px;padding:2px;background:rgba(255,255,255,.06);border-radius:9px}
+.seg-pill button{flex:1;display:flex;align-items:center;justify-content:center;gap:.35rem;background:none;border:none;border-radius:7px;padding:.35rem;cursor:pointer;font-size:.78rem;font-weight:600;color:rgba(255,255,255,.6)}
+.seg-pill button.active{background:var(--vault-accent);color:#fff}
+.seg-pill svg{width:13px;height:13px}
+
+/* Miniatura de la página resultante. Sin tema (Original/Oscuro) usa el
+   acento de la propia app; con tema, `renderPdfCards` pone `--tacc`/`--tacc2`
+   en línea con los colores reales de esa plantilla (ver `accent_colors` en
+   themes.py) para que cada tarjeta se distinga de un vistazo. */
+.pdf-thumb{aspect-ratio:1/1.414;border-radius:6px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35);display:flex;flex-direction:column;padding:6px;overflow:hidden}
+.pdf-thumb.dark{background:#0d1117}
+.pdf-thumb.land{aspect-ratio:1.414/1;padding:5px}
+.pdf-thumb-hd{display:flex;align-items:center;gap:3px;padding-bottom:2px;margin-bottom:4px;border-bottom:1.5px solid var(--tacc,var(--vault-accent));min-height:9px}
+.pdf-thumb-hd em{height:3px;flex:0 1 34%;background:var(--tacc,var(--vault-accent));border-radius:2px;opacity:.8}
+.pdf-thumb-body{flex:1;display:flex;flex-direction:column;gap:3px;min-height:0}
+.pdf-thumb-body i{display:block;height:2.5px;border-radius:2px;background:rgba(0,0,0,.15)}
+.pdf-thumb-body i.t{height:4px;width:62%;background:var(--tacc2,rgba(0,0,0,.42));opacity:.9;margin-bottom:1px}
+.pdf-thumb-body i.s{width:52%}
+.pdf-thumb-body i.span{width:100%}
+.pdf-thumb.dark .pdf-thumb-body i{background:rgba(255,255,255,.2)}
+.pdf-thumb.dark .pdf-thumb-body i.t{background:var(--tacc2,rgba(255,255,255,.7))}
+.pdf-thumb-cols{flex:1;display:flex;gap:6px;min-height:0}
+.pdf-thumb-cols>div{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.pdf-thumb-ft{height:2px;margin-top:4px;border-top:1px solid var(--tacc2,rgba(0,0,0,.12))}
+.pdf-thumb.dark .pdf-thumb-ft{border-top-color:var(--tacc2,rgba(255,255,255,.14))}
+
+/* ── Editor de temas: la plantilla a la izquierda, la chuleta a la derecha ── */
+.theme-head{display:flex;align-items:center;gap:.8rem;margin-bottom:.9rem;flex-wrap:wrap}
+.theme-head h3{margin:0;flex:0 0 auto}
+.theme-head .vault-input-field{margin:0;flex:1;min-width:200px;padding:.45rem .65rem;font-size:.88rem}
+.theme-cols{display:grid;grid-template-columns:1fr 240px;gap:1rem;align-items:stretch}
+.theme-editor{display:flex;flex-direction:column;min-width:0;border:1px solid var(--vault-line);border-radius:12px;overflow:hidden;background:rgba(0,0,0,.25)}
+.theme-editor-bar{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .6rem;border-bottom:1px solid var(--vault-line);background:rgba(255,255,255,.03)}
+.theme-editor-bar span{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.theme-editor-bar button{background:none;border:1px solid var(--vault-line);border-radius:7px;padding:.2rem .5rem;font-size:.72rem;color:rgba(255,255,255,.7);cursor:pointer}
+.theme-editor-bar button:hover{color:#fff;border-color:var(--vault-accent)}
+#theme-html{flex:1;width:100%;min-height:46vh;resize:vertical;border:none;outline:none;padding:.7rem .8rem;
+  background:transparent;color:#e6edf3;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:.79rem;line-height:1.6;tab-size:2;white-space:pre;overflow:auto}
+
+.theme-side{display:flex;flex-direction:column;gap:.9rem;min-width:0}
+.theme-side-block h4{margin:0 0 .45rem;font-size:.74rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.theme-side-block h4 small{font-weight:600;letter-spacing:0;opacity:.7}
+.theme-tokens{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.35rem}
+.theme-tokens li{display:flex;flex-direction:column;gap:.1rem}
+.theme-tokens code,.theme-img code{align-self:flex-start;max-width:100%;background:rgba(255,255,255,.07);border:1px solid var(--vault-line);
+  border-radius:6px;padding:.15rem .4rem;font-size:.72rem;color:var(--vault-accent);cursor:pointer;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.theme-tokens code:hover,.theme-img code:hover{background:rgba(255,255,255,.14)}
+.theme-tokens small{font-size:.7rem;color:rgba(255,255,255,.45)}
+.theme-hint{margin:.45rem 0 0;font-size:.7rem;line-height:1.45;color:rgba(255,255,255,.4)}
+.theme-empty{margin:0;font-size:.72rem;color:rgba(255,255,255,.35)}
+.theme-imgs{display:flex;flex-direction:column;gap:.4rem}
+.theme-img{display:flex;align-items:center;gap:.45rem;min-width:0}
+.theme-img img{width:30px;height:30px;object-fit:contain;border-radius:6px;background:rgba(255,255,255,.07);flex:0 0 auto}
+.theme-img button{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.4);font-size:1.05rem;line-height:1;cursor:pointer;padding:0 .15rem}
+.theme-img button:hover{color:#f87171}
+.theme-add-img{display:flex;align-items:center;justify-content:center;gap:.35rem;width:100%;margin-top:.5rem;
+  background:rgba(255,255,255,.06);border:1px dashed var(--vault-line);border-radius:9px;padding:.45rem;
+  font-size:.75rem;font-weight:600;color:rgba(255,255,255,.65);cursor:pointer}
+.theme-add-img:hover:not(:disabled){color:#fff;border-color:var(--vault-accent)}
+.theme-add-img:disabled{opacity:.45;cursor:default}
+.theme-add-img svg{width:14px;height:14px}
+
+.pdf-error{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#fca5a5;border-radius:9px;padding:.5rem .7rem;font-size:.8rem;margin:.8rem 0 0}
+/* El editor es más alto que el modal (que ya scrollea): los botones se quedan
+   pegados abajo para no tener que bajar hasta el final para guardar. */
+.modal-back .pdf-modal .modal-actions{position:sticky;bottom:0;z-index:3;background:#1c1c2e;
+  padding:.75rem 0 .1rem;margin-top:.2rem}
+
+@media(max-width:900px){
+  .theme-cols{grid-template-columns:1fr}
+  .theme-side{flex-direction:row;flex-wrap:wrap;gap:1.2rem}
+  .theme-side-block{flex:1 1 200px}
+}
+@media(max-width:760px){
+  .pdf-styles{grid-template-columns:repeat(2,1fr)}
+  #theme-html{min-height:38vh;font-size:.74rem}
+}
+
+/* Tema claro */
+:root:is([data-theme="light"]) .pdf-card{background:rgba(0,0,0,.02)}
+:root:is([data-theme="light"]) .pdf-card:hover{border-color:rgba(0,0,0,.2)}
+:root:is([data-theme="light"]) .pdf-card-name{color:#0f1320}
+:root:is([data-theme="light"]) .pdf-card-sub,
+:root:is([data-theme="light"]) .pdf-card-new,
+:root:is([data-theme="light"]) .theme-tokens small,
+:root:is([data-theme="light"]) .theme-hint,
+:root:is([data-theme="light"]) .theme-empty,
+:root:is([data-theme="light"]) .theme-editor-bar span,
+:root:is([data-theme="light"]) .theme-side-block h4{color:#6b7280}
+:root:is([data-theme="light"]) .pdf-card-new:hover{color:#0f1320}
+:root:is([data-theme="light"]) .pdf-orient>span{color:#4d5566}
+:root:is([data-theme="light"]) .pdf-orient small{color:#6b7280}
+:root:is([data-theme="light"]) .seg-pill{background:rgba(0,0,0,.05)}
+:root:is([data-theme="light"]) .seg-pill button{color:#5b6373}
+:root:is([data-theme="light"]) .seg-pill button.active{color:#fff}
+:root:is([data-theme="light"]) .theme-editor{background:#fbfcfe}
+:root:is([data-theme="light"]) .theme-editor-bar{background:rgba(0,0,0,.03)}
+:root:is([data-theme="light"]) .theme-editor-bar button{color:#4d5566}
+:root:is([data-theme="light"]) #theme-html{color:#1f2533}
+:root:is([data-theme="light"]) .theme-tokens code,
+:root:is([data-theme="light"]) .theme-img code{background:rgba(0,0,0,.05)}
+:root:is([data-theme="light"]) .theme-add-img{background:rgba(0,0,0,.04);color:#4d5566}
+:root:is([data-theme="light"]) .theme-img img{background:rgba(0,0,0,.05)}
+:root:is([data-theme="light"]) .modal-back .pdf-modal .modal-actions{background:#ffffff}
+
+
 /* ─────────────── Tema Dorado (oscuro + amarillo claro) ───────────────
    El acento es amarillo, así que los elementos con RELLENO de acento llevan
    texto oscuro (por defecto era blanco, ilegible sobre amarillo). */
 :root[data-theme="gold"] .tree-row.active,
 :root[data-theme="gold"] .vault-side-head button.on,
 :root[data-theme="gold"] .seg button.active,
+:root[data-theme="gold"] .seg-pill button.active,
 :root[data-theme="gold"] .format-bar button:hover,
 :root[data-theme="gold"] .btn-primary{ color:#17150c; }

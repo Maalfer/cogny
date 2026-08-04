@@ -21,10 +21,10 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.permissions import require_write
-from apps.core.api import as_text, error_response as _err, json_body
+from apps.core.api import as_int, as_text, error_response as _err, json_body
 
-from . import pdf, vault
-from .models import SharedNote
+from . import pdf, themes, vault
+from .models import PdfTheme, PdfThemeImage, SharedNote
 from .vault import VaultError
 
 
@@ -339,17 +339,161 @@ def import_vault(request):
 @require_POST
 @json_body
 def notes_pdf(request):
-    """PDF de la nota que el cliente manda ya renderizada (ver `pdf.py`)."""
+    """PDF de la nota que el cliente manda ya renderizada (ver `pdf.py`).
+
+    `theme` (opcional) es el id de un `PdfTheme`: maqueta la nota dentro de esa
+    plantilla HTML+CSS. Un id que ya no existe es un 404 y no un export
+    silenciosamente sin tema: si el usuario pidió el PDF con la identidad de
+    una empresa, un PDF neutro es una respuesta equivocada, no una degradación
+    aceptable. `landscape` saca la hoja apaisada (y a dos columnas).
+    """
     body_html = pdf.sanitize_html(request.data.get("html") or "")
     if not body_html.strip():
         return _err("Nada que exportar")
-    title = vault.sanitize_name(request.data.get("title") or "nota") or "nota"
+    display_title = as_text(request.data.get("title")).strip()[:120]
+    filename = vault.sanitize_name(display_title or "nota") or "nota"
+    theme = None
+    if request.data.get("theme") not in (None, "", 0):
+        theme = PdfTheme.objects.filter(pk=as_int(request.data.get("theme"))).first()
+        if theme is None:
+            return _err("El tema ya no existe", 404)
     try:
-        pdf_bytes = pdf.render(body_html, dark=bool(request.data.get("dark")))
+        pdf_bytes = pdf.render(body_html, dark=bool(request.data.get("dark")),
+                               theme=theme, title=display_title,
+                               landscape=bool(request.data.get("landscape")))
     except pdf.PdfError as exc:
         return _err(str(exc), exc.status)
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="{title}.pdf"'
+    resp["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+    resp["Content-Length"] = str(len(pdf_bytes))
+    return resp
+
+
+# ════════════ Temas de exportación (plantillas HTML+CSS) ════════════
+
+@login_required
+@require_GET
+def themes_list(request):
+    """Los temas disponibles para exportar.
+
+    También en sólo lectura: quien sólo puede leer sigue pudiendo exportar con
+    un tema ya creado, aunque no pueda tocarlo. Con `?id=` devuelve además el
+    HTML de la plantilla — en el listado no va, que son 120 KB por tema.
+    """
+    if request.GET.get("id"):
+        theme = PdfTheme.objects.filter(pk=as_int(request.GET.get("id"))).first()
+        if theme is None:
+            raise Http404
+        return JsonResponse({"theme": themes.theme_json(theme, with_html=True)})
+    return JsonResponse({
+        "themes": [themes.theme_json(t) for t in PdfTheme.objects.prefetch_related("images")],
+        "starter": themes.starter_html(),
+    })
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def theme_save(request):
+    """Crea un tema, o actualiza el del `id` recibido."""
+    theme = None
+    if request.data.get("id"):
+        theme = PdfTheme.objects.filter(pk=as_int(request.data.get("id"))).first()
+        if theme is None:
+            return _err("El tema ya no existe", 404)
+    try:
+        theme = themes.save_theme(request.data, theme)
+    except themes.ThemeError as exc:
+        return _err(str(exc), exc.status)
+    return JsonResponse({"success": True, "theme": themes.theme_json(theme, with_html=True)})
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def theme_delete(request):
+    theme = PdfTheme.objects.filter(pk=as_int(request.data.get("id"))).first()
+    if theme is not None:
+        themes.delete_theme(theme)
+    return JsonResponse({"success": True})
+
+
+@login_required
+@require_write
+@require_POST
+def theme_image_upload(request):
+    """Sube una imagen del tema — multipart, no JSON."""
+    theme = PdfTheme.objects.filter(pk=as_int(request.POST.get("id"))).first()
+    if theme is None:
+        return _err("El tema ya no existe", 404)
+    upload = request.FILES.get("file")
+    if not upload:
+        return _err("Falta archivo")
+    try:
+        themes.add_image(theme, request.POST.get("name", ""), upload)
+    except themes.ThemeError as exc:
+        return _err(str(exc), exc.status)
+    return JsonResponse({"success": True, "theme": themes.theme_json(theme)})
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def theme_image_delete(request):
+    image = PdfThemeImage.objects.filter(pk=as_int(request.data.get("image"))).first()
+    if image is None:
+        return _err("La imagen ya no existe", 404)
+    theme = image.theme
+    themes.remove_image(image)
+    return JsonResponse({"success": True, "theme": themes.theme_json(theme)})
+
+
+@login_required
+@require_GET
+def theme_image(request):
+    """La imagen tal cual, para la lista del editor de temas."""
+    image = PdfThemeImage.objects.filter(pk=as_int(request.GET.get("image"))).first()
+    path = themes.image_path(image) if image else None
+    if not path or not path.exists():
+        raise Http404
+    resp = FileResponse(open(path, "rb"),
+                        content_type=themes.IMAGE_MIME.get(image.ext, "application/octet-stream"))
+    # Un SVG es un documento con scripts en potencia, y servido desde el mismo
+    # origen que la app sería XSS con sesión. En el editor se pinta dentro de un
+    # <img> (donde nunca ejecuta), pero abrir esta URL a pelo sí lo haría: el
+    # sandbox lo neutraliza y `nosniff` evita que el navegador reinterprete el
+    # tipo por su cuenta.
+    resp["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def theme_preview(request):
+    """PDF de una nota de muestra con la plantilla que se está editando.
+
+    Va sin guardar a propósito: afinar un tema es prueba y error, y obligar a
+    guardar cada tanteo llenaría la lista de versiones a medio hacer.
+    """
+    html = as_text(request.data.get("html"))
+    if len(html) > themes.MAX_HTML_CHARS:
+        return _err("La plantilla no puede pasar de 120.000 caracteres")
+    theme = PdfTheme.objects.filter(pk=as_int(request.data.get("id"))).first()
+    try:
+        pdf_bytes = pdf.render(themes.SAMPLE_NOTE_HTML,
+                               theme=theme, theme_html=html,
+                               title="Nota de muestra",
+                               landscape=bool(request.data.get("landscape")))
+    except pdf.PdfError as exc:
+        return _err(str(exc), exc.status)
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = 'inline; filename="vista-previa.pdf"'
     resp["Content-Length"] = str(len(pdf_bytes))
     return resp
 
