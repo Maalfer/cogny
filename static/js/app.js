@@ -37,6 +37,12 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloaded) return;
     reloaded = true;
+    // El export headless de la API (`?headless_pdf=1`, ver `pdf_headless.py`)
+    // es una navegación de un solo uso desde un Chromium sin usuario detrás,
+    // con un perfil siempre nuevo: el SW "toma control por primera vez" en
+    // CADA export, y recargar aquí abortaría el render a medias — el export
+    // nunca llegaría a dejar su resultado listo.
+    if (new URLSearchParams(location.search).get('headless_pdf')) return;
     location.reload();
   });
 }

@@ -116,6 +116,7 @@ def build_spec(request) -> dict:
         "tags": [
             {"name": "Meta", "description": "Identidad y estado de la clave."},
             {"name": "Notas", "description": "Crear, leer, editar, mover y borrar notas Markdown."},
+            {"name": "PDF", "description": "Exportar notas a PDF y gestionar las plantillas (temas) reutilizables."},
             {"name": "Carpetas", "description": "Estructura de carpetas de la bóveda."},
             {"name": "Archivos", "description": "Adjuntos: imágenes, PDFs y demás."},
             {"name": "Compartir", "description": "Enlaces públicos a notas concretas."},
@@ -223,6 +224,22 @@ def build_spec(request) -> dict:
                         "revoked": {"type": "boolean"},
                         "created_at": {"type": "string", "format": "date-time"},
                         "last_used_at": {"type": ["string", "null"], "format": "date-time"},
+                    },
+                },
+                "PdfTheme": {
+                    "type": "object",
+                    "description": "Plantilla HTML+CSS (con `{{ contenido }}`) para maquetar un PDF. "
+                                   "`accent`/`dark` se derivan del `html` en cada petición, nunca se guardan aparte.",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "name": {"type": "string"},
+                        "images": {"type": "array", "items": {"type": "object", "properties": {
+                            "id": {"type": "integer"}, "name": {"type": "string"}, "ext": {"type": "string"}}}},
+                        "updated_at": {"type": ["string", "null"], "format": "date-time"},
+                        "accent": {"type": "array", "items": {"type": "string"},
+                                  "description": "Hasta 3 colores `#hex` detectados en el `:root{}` de la plantilla."},
+                        "dark": {"type": "boolean", "description": "Si el fondo de la plantilla es oscuro."},
+                        "html": {"type": "string", "description": "Sólo en el detalle de un tema, nunca en el listado."},
                     },
                 },
             },
@@ -435,6 +452,34 @@ def _paths() -> dict:
                 },
             },
         },
+        "/api/v1/notes/pdf": {
+            "get": {
+                "tags": ["PDF"],
+                "summary": "Exportar una nota a PDF",
+                "description": "Operación de lectura (vale para cualquier rol, incluida una "
+                               "clave de sólo lectura) que puede tardar varios segundos: un "
+                               "Chromium interno con JavaScript renderiza la nota (KaTeX, "
+                               "Mermaid, resaltado de código, wikilinks/embeds…) exactamente "
+                               "igual que el editor antes de imprimirla. `theme` (opcional) es "
+                               "el id de un tema propio — si no existe, `404` en vez de un PDF "
+                               "sin maquetar. `landscape` saca la hoja apaisada a dos columnas.",
+                "parameters": [
+                    _PATH_Q,
+                    _param("dark", "Hoja oscura (se ignora si mandas `theme`).",
+                           schema={"type": "boolean", "default": False}),
+                    _param("theme", "Id de un tema propio (ver `GET /pdf/themes`).",
+                           schema={"type": "integer"}),
+                    _param("landscape", "A4 apaisado, a dos columnas.",
+                           schema={"type": "boolean", "default": False}),
+                ],
+                "responses": {
+                    "200": {"description": "El PDF", "content": {"application/pdf": {
+                        "schema": {"type": "string", "format": "binary"}}}},
+                    "502": _resp("No se pudo renderizar la nota (fallo interno del render headless)", ref="Error"),
+                    **_ERRORS,
+                },
+            },
+        },
         "/api/v1/search": {
             "get": {
                 "tags": ["Notas"],
@@ -457,6 +502,134 @@ def _paths() -> dict:
                     }}),
                     **_ERRORS,
                 },
+            },
+        },
+
+        # ── PDF (temas) ───────────────────────────────────────────────────
+        "/api/v1/pdf/themes": {
+            "get": {
+                "tags": ["PDF"],
+                "summary": "Temas disponibles",
+                "description": "El listado no trae `html` (~120 KB por tema): pide "
+                               "`GET /pdf/themes/{id}` para el detalle completo. También "
+                               "devuelve `starter`, la plantilla de ejemplo comentada para "
+                               "escribir un tema nuevo desde cero.",
+                "responses": {
+                    "200": _resp("OK", {"type": "object", "properties": {
+                        "themes": {"type": "array", "items": {"$ref": "#/components/schemas/PdfTheme"}},
+                        "starter": {"type": "string"},
+                    }}),
+                    **_ERRORS,
+                },
+            },
+            "post": {
+                "tags": ["PDF"],
+                "summary": "Crear un tema",
+                "description": "La plantilla tiene que incluir `{{ contenido }}` (dónde se "
+                               "inserta la nota); opcionalmente `{{ titulo }}`, `{{ fecha }}` "
+                               "y `{{ img:NOMBRE }}` para las imágenes que subas después. "
+                               "Máximo 30 temas y 120.000 caracteres de plantilla.",
+                "requestBody": _json_body({
+                    "name": {"type": "string"},
+                    "html": {"type": "string"},
+                }, required=["name", "html"]),
+                "responses": {
+                    "201": _resp("Creado", {"type": "object", "properties": {
+                        "success": {"type": "boolean"},
+                        "theme": {"$ref": "#/components/schemas/PdfTheme"}}}),
+                    **_ERRORS,
+                },
+            },
+        },
+        "/api/v1/pdf/themes/{id}": {
+            "get": {
+                "tags": ["PDF"],
+                "summary": "Un tema, con su plantilla completa",
+                "parameters": [_param("id", "Id del tema.", where="path", required=True,
+                                      schema={"type": "integer"})],
+                "responses": {"200": _resp("OK", {"type": "object", "properties": {
+                    "theme": {"$ref": "#/components/schemas/PdfTheme"}}}), **_ERRORS},
+            },
+            "patch": {
+                "tags": ["PDF"],
+                "summary": "Actualizar un tema",
+                "description": "Los campos que no mandes conservan su valor actual. "
+                               "`PUT` en esta misma ruta hace exactamente lo mismo.",
+                "parameters": [_param("id", "Id del tema.", where="path", required=True,
+                                      schema={"type": "integer"})],
+                "requestBody": _json_body({"name": {"type": "string"}, "html": {"type": "string"}}),
+                "responses": {"200": _resp("Actualizado", {"type": "object", "properties": {
+                    "success": {"type": "boolean"},
+                    "theme": {"$ref": "#/components/schemas/PdfTheme"}}}), **_ERRORS},
+            },
+            "put": {
+                "tags": ["PDF"],
+                "summary": "Actualizar un tema (alias de PATCH)",
+                "description": "Idéntico a `PATCH` en esta misma ruta: los campos que no "
+                               "mandes conservan su valor actual (no es un reemplazo "
+                               "completo del recurso). Se acepta el verbo `PUT` además de "
+                               "`PATCH` porque algunos clientes generan uno u otro según su "
+                               "convención.",
+                "parameters": [_param("id", "Id del tema.", where="path", required=True,
+                                      schema={"type": "integer"})],
+                "requestBody": _json_body({"name": {"type": "string"}, "html": {"type": "string"}}),
+                "responses": {"200": _resp("Actualizado", {"type": "object", "properties": {
+                    "success": {"type": "boolean"},
+                    "theme": {"$ref": "#/components/schemas/PdfTheme"}}}), **_ERRORS},
+            },
+            "delete": {
+                "tags": ["PDF"],
+                "summary": "Borrar un tema",
+                "description": "Irreversible: borra también sus imágenes en disco.",
+                "parameters": [_param("id", "Id del tema.", where="path", required=True,
+                                      schema={"type": "integer"})],
+                "responses": {"200": _resp("Borrado", ref="Ok"), **_ERRORS},
+            },
+        },
+        "/api/v1/pdf/themes/{id}/images": {
+            "post": {
+                "tags": ["PDF"],
+                "summary": "Subir una imagen del tema",
+                "description": "Multipart, no JSON. Se referencia desde la plantilla como "
+                               "`{{ img:NOMBRE }}` (NOMBRE = el nombre del fichero sin "
+                               "extensión). Máximo 2 MB y 12 imágenes por tema; volver a subir "
+                               "el mismo nombre reemplaza la imagen anterior.",
+                "parameters": [_param("id", "Id del tema.", where="path", required=True,
+                                      schema={"type": "integer"})],
+                "requestBody": {"required": True, "content": {"multipart/form-data": {
+                    "schema": {"type": "object", "properties": {
+                        "file": {"type": "string", "format": "binary"},
+                        "name": {"type": "string", "description": "Nombre a usar en `{{ img:NOMBRE }}` (por defecto, el del fichero)."},
+                    }, "required": ["file"]}}}},
+                "responses": {"201": _resp("Subida", {"type": "object", "properties": {
+                    "success": {"type": "boolean"},
+                    "theme": {"$ref": "#/components/schemas/PdfTheme"}}}), **_ERRORS},
+            },
+        },
+        "/api/v1/pdf/themes/{id}/images/{image_id}": {
+            "get": {
+                "tags": ["PDF"],
+                "summary": "Descargar una imagen del tema",
+                "parameters": [
+                    _param("id", "Id del tema.", where="path", required=True, schema={"type": "integer"}),
+                    _param("image_id", "Id de la imagen.", where="path", required=True, schema={"type": "integer"}),
+                ],
+                "responses": {
+                    "200": {"description": "La imagen", "content": {"application/octet-stream": {
+                        "schema": {"type": "string", "format": "binary"}}}},
+                    **_ERRORS,
+                },
+            },
+            "delete": {
+                "tags": ["PDF"],
+                "summary": "Borrar una imagen del tema",
+                "parameters": [
+                    _param("id", "Id del tema.", where="path", required=True, schema={"type": "integer"}),
+                    _param("image_id", "Id de la imagen.", where="path", required=True, schema={"type": "integer"}),
+                ],
+                "responses": {"200": _resp("Borrada", {"type": "object", "properties": {
+                    "success": {"type": "boolean"},
+                    "theme": {"$ref": "#/components/schemas/PdfTheme"}}}), **_ERRORS},
             },
         },
 

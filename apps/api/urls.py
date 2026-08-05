@@ -21,6 +21,7 @@ urlpatterns = [
     path("v1/notes/rename", views.note_rename, name="note_rename"),
     path("v1/notes/move", views.note_move, name="note_move"),
     path("v1/notes/duplicate", views.note_duplicate, name="note_duplicate"),
+    path("v1/notes/pdf", views.notes_pdf, name="notes_pdf"),
     path("v1/search", views.search, name="search"),
 
     # Carpetas
@@ -50,6 +51,13 @@ urlpatterns = [
     # Claves
     path("v1/keys", views.keys, name="keys"),
     path("v1/keys/<int:key_id>", views.key_revoke, name="key_revoke"),
+
+    # Temas de exportación a PDF
+    path("v1/pdf/themes", views.pdf_themes, name="pdf_themes"),
+    path("v1/pdf/themes/<int:theme_id>", views.pdf_theme_detail, name="pdf_theme_detail"),
+    path("v1/pdf/themes/<int:theme_id>/images", views.pdf_theme_images, name="pdf_theme_images"),
+    path("v1/pdf/themes/<int:theme_id>/images/<int:image_id>", views.pdf_theme_image_detail,
+         name="pdf_theme_image_detail"),
 
     # Cualquier otra ruta bajo /api/v1 → 404 en JSON (va la última a propósito).
     re_path(r"^v1(/.*)?$", views.not_found, name="not_found"),

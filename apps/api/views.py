@@ -18,15 +18,15 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.accounts import services as accounts
 from apps.accounts.models import ApiKey, User
 from apps.core.api import as_int, as_optional_text, as_text
-from apps.notes import vault
-from apps.notes.models import SharedNote
+from apps.notes import pdf, pdf_headless, themes, vault
+from apps.notes.models import PdfTheme, PdfThemeImage, SharedNote
 from apps.notes.vault import VaultError
 
 from .auth import api_view, body_or_query, json_error, owner_only
@@ -91,6 +91,13 @@ def _role_param(request, default):
     de turno lo rechace con un 400 en vez de degradarlo al rol por defecto.
     """
     return as_optional_text(body_or_query(request, "role"), default)
+
+
+def _truthy(value) -> bool:
+    """`bool(request.GET.get(...))` daría `True` para `'0'` (string no vacía):
+    esto trata sólo 1/true/yes/on como verdadero, para parámetros booleanos
+    que llegan como texto en una querystring."""
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
 # ════════════ Meta ════════════
@@ -423,6 +430,58 @@ def note_duplicate(request):
         dst = src.parent / f"{src.stem} {n}.md"
     vault.write_text_atomic(dst, src.read_text(encoding="utf-8"))
     return JsonResponse({"success": True, "note": _note_info(root, dst)}, status=201)
+
+
+@api_view(methods=("GET",))
+def notes_pdf(request):
+    """Exporta una nota a PDF. Operación de lectura: vale para cualquier rol,
+    incluida una clave de sólo lectura.
+
+    A diferencia del resto de la API no hay HTML ya renderizado que reenviar
+    (eso lo manda el navegador en la sesión web — ver `notes_pdf` en
+    `apps.notes.views`): aquí un Chromium interno CON JavaScript renderiza la
+    nota primero, exactamente como lo haría el editor, para no reimplementar
+    marked/KaTeX/Mermaid/highlight.js en Python (ver `apps.notes.pdf_headless`).
+    Puede tardar varios segundos.
+    """
+    root = vault.root()
+    target, err = _resolve(root, request.GET.get("path", ""))
+    if err:
+        return err
+    if not target.is_file() or target.suffix.lower() != ".md":
+        return json_error("Nota no encontrada", 404)
+
+    # `theme=0` cuenta como "sin tema", igual que en la sesión web
+    # (`notes_pdf` en apps.notes.views: `not in (None, "", 0)`) — aquí llega
+    # como texto de querystring, así que se compara tras convertir a entero
+    # en vez de con `if theme_raw:` (que trataría la cadena "0" como verdadera).
+    theme = None
+    theme_id = as_int(request.GET.get("theme"))
+    if theme_id:
+        theme = PdfTheme.objects.filter(pk=theme_id).first()
+        if theme is None:
+            return json_error("El tema ya no existe", 404)
+    dark = _truthy(request.GET.get("dark"))
+    landscape = _truthy(request.GET.get("landscape"))
+
+    try:
+        body_html = pdf_headless.render_note_to_html(
+            request.user, vault.rel_of(root, target), landscape=landscape)
+    except pdf_headless.HeadlessRenderError as exc:
+        return json_error(str(exc), 502)
+    body_html = pdf.sanitize_html(body_html)
+    if not body_html.strip():
+        return json_error("La nota está vacía")
+    try:
+        pdf_bytes = pdf.render(body_html, dark=dark, theme=theme,
+                               title=target.stem, landscape=landscape)
+    except pdf.PdfError as exc:
+        return json_error(str(exc), exc.status)
+    filename = vault.sanitize_name(target.stem) or "nota"
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+    resp["Content-Length"] = str(len(pdf_bytes))
+    return resp
 
 
 @api_view(methods=("GET",))
@@ -868,3 +927,96 @@ def key_revoke(request, key_id):
     key.revoked = True
     key.save(update_fields=["revoked"])
     return JsonResponse({"success": True})
+
+
+# ════════════ Temas de exportación a PDF ════════════
+# Plantillas HTML+CSS reutilizables para `/notes/pdf` — ver `apps.notes.themes`.
+# Igual que en la sesión web, gestionarlos es una escritura normal (permiso de
+# `editor` basta); sólo `theme_json`/listar es de lectura.
+
+@api_view(methods=("GET", "POST"))
+def pdf_themes(request):
+    """GET: temas disponibles (sin `html`: ~120 KB cada uno) · POST: crea uno."""
+    if request.method == "GET":
+        return JsonResponse({
+            "themes": [themes.theme_json(t) for t in PdfTheme.objects.prefetch_related("images")],
+            "starter": themes.starter_html(),
+        })
+    try:
+        theme = themes.save_theme({
+            "name": body_or_query(request, "name"),
+            "html": body_or_query(request, "html"),
+        })
+    except themes.ThemeError as exc:
+        return json_error(str(exc), exc.status)
+    return JsonResponse({"success": True, "theme": themes.theme_json(theme, with_html=True)},
+                        status=201)
+
+
+@api_view(methods=("GET", "PATCH", "PUT", "DELETE"))
+def pdf_theme_detail(request, theme_id):
+    """GET: un tema con su `html` completo · PATCH/PUT: actualizar · DELETE: borrar."""
+    theme = PdfTheme.objects.filter(pk=theme_id).first()
+    if theme is None:
+        return json_error("El tema ya no existe", 404)
+
+    if request.method == "GET":
+        return JsonResponse({"theme": themes.theme_json(theme, with_html=True)})
+
+    if request.method == "DELETE":
+        themes.delete_theme(theme)
+        return JsonResponse({"success": True})
+
+    # PATCH/PUT — campos omitidos conservan su valor actual.
+    name = body_or_query(request, "name")
+    html = body_or_query(request, "html")
+    try:
+        theme = themes.save_theme({
+            "name": name if name is not None else theme.name,
+            "html": html if html is not None else theme.html,
+        }, theme)
+    except themes.ThemeError as exc:
+        return json_error(str(exc), exc.status)
+    return JsonResponse({"success": True, "theme": themes.theme_json(theme, with_html=True)})
+
+
+@api_view(methods=("POST",))
+def pdf_theme_images(request, theme_id):
+    """Sube una imagen del tema — multipart, no JSON (igual que la web)."""
+    theme = PdfTheme.objects.filter(pk=theme_id).first()
+    if theme is None:
+        return json_error("El tema ya no existe", 404)
+    upload = request.FILES.get("file")
+    if not upload:
+        return json_error("Sube la imagen como fichero multipart en el campo 'file'")
+    try:
+        themes.add_image(theme, request.POST.get("name", ""), upload)
+    except themes.ThemeError as exc:
+        return json_error(str(exc), exc.status)
+    return JsonResponse({"success": True, "theme": themes.theme_json(theme)}, status=201)
+
+
+@api_view(methods=("GET", "DELETE"))
+def pdf_theme_image_detail(request, theme_id, image_id):
+    """GET: el binario de la imagen · DELETE: la borra."""
+    image = PdfThemeImage.objects.filter(pk=image_id, theme_id=theme_id).first()
+    if image is None:
+        return json_error("La imagen ya no existe", 404)
+
+    if request.method == "DELETE":
+        theme = image.theme
+        themes.remove_image(image)
+        return JsonResponse({"success": True, "theme": themes.theme_json(theme)})
+
+    path = themes.image_path(image)
+    if not path.exists():
+        return json_error("La imagen ya no existe", 404)
+    resp = FileResponse(open(path, "rb"),
+                        content_type=themes.IMAGE_MIME.get(image.ext, "application/octet-stream"))
+    # Mismo motivo que `theme_image` en la sesión web: un SVG servido desde
+    # este origen es un XSS en potencia si se abre suelto en vez de dentro de
+    # un <img>. El sandbox lo neutraliza y `nosniff` evita que el navegador
+    # reinterprete el tipo por su cuenta.
+    resp["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp

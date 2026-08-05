@@ -2,12 +2,18 @@
 from django.urls import include, path
 
 from apps.core import views as core_views
-from apps.notes import views as notes_views
+from apps.notes import pdf_headless, views as notes_views
 
 
 urlpatterns = [
     # Página raíz: el vault (autenticado) o el login (anónimo).
     path("", core_views.root, name="root"),
+
+    # Login de un solo uso para el Chromium interno de exportación a PDF vía
+    # API (ver `apps.notes.pdf_headless`) — sólo responde a peticiones desde
+    # loopback, nunca expuesto por nginx hacia fuera.
+    path("internal/pdf-headless/<str:token>/", pdf_headless.headless_login,
+         name="pdf_headless_login"),
 
     # Cuentas (login, perfil, ajustes).
     path("", include("apps.accounts.urls")),

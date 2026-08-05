@@ -760,41 +760,54 @@ function jumpToMatch(terms){
   let pos=-1; list.forEach(t=>{const i=text.indexOf(t.toLowerCase()); if(i>=0&&(pos<0||i<pos))pos=i;});
   if(pos>=0){ try{ ED.view.dispatch({selection:{anchor:pos, head:pos}, scrollIntoView:true}); ED.focus(); }catch(e){} }
 }
+// Renderiza una nota en el pane oculto exactamente como la vería el Chromium
+// del servidor (KaTeX, código, imágenes incrustadas como data-URI, columnas
+// anchas marcadas si `opts.landscape`) y devuelve el HTML final. Separado de
+// `exportNotePDF` para que `runHeadlessPdfExport` (export headless por API,
+// ver más abajo) pueda reusar exactamente los mismos pasos sin duplicarlos.
+async function prepareExportHtml(it, opts){
+  opts = opts || {};
+  if(!current || current.path!==it.path){ await openNote(it.path); await new Promise(r=>setTimeout(r,150)); }
+  const pp=$('print-pane');
+  pp.innerHTML=renderMarkdown(ED?ED.getValue():((current&&current.content)||'')); postProcess(pp,0);
+  await new Promise(r=>setTimeout(r,250));   // deja que rendericen KaTeX / imágenes
+  // Las imágenes del vault se sirven con sesión y el Chromium que IMPRIME no la
+  // tiene (corre con --disable-javascript y sin cookies), así que se incrustan
+  // como data-URI antes de mandar el HTML.
+  await Promise.all(Array.from(pp.querySelectorAll('img')).map(async img=>{
+    const src=img.getAttribute('src')||'';
+    if(!src || src.startsWith('data:')) return;
+    try{
+      const r=await fetch(src); if(!r.ok) return;
+      const blob=await r.blob();
+      img.setAttribute('src', await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);}));
+      // Cambiar `src` no actualiza `naturalWidth` al momento: hasta que el
+      // navegador decodifica la nueva `data:` URI, sigue devolviendo las
+      // medidas de la imagen ANTERIOR (comprobado). Con la misma imagen de
+      // siempre no se nota, pero si la carga original no había terminado a
+      // tiempo (250ms más arriba), `markWideBlocks` mediría 0 y una imagen
+      // grande de verdad se quedaría encogida en la columna en vez de
+      // ensancharse. `decode()` espera a que la nueva imagen esté lista.
+      if(!img.complete) await img.decode().catch(()=>{});
+    }catch(_){}
+  }));
+  if(opts.landscape) markWideBlocks(pp);
+  return pp.innerHTML;
+}
+
 // Exporta una nota a PDF imprimiendo su vista previa renderizada (máxima fidelidad:
 // KaTeX, código, imágenes, callouts…). `opts` = {dark, theme, landscape}:
 // `theme` es el id de una plantilla HTML+CSS propia, y manda sobre `dark`.
 async function exportNotePDF(it, opts){
   opts = opts || {};
-  if(!current || current.path!==it.path){ await openNote(it.path); await new Promise(r=>setTimeout(r,150)); }
   setStatus('Generando PDF…', false);
   const pp=$('print-pane');
-  pp.innerHTML=renderMarkdown(ED?ED.getValue():((current&&current.content)||'')); postProcess(pp,0);
-  await new Promise(r=>setTimeout(r,250));   // deja que rendericen KaTeX / imágenes
   try{
-    // Las imágenes del vault se sirven con sesión y el Chromium del servidor no
-    // la tiene, así que las incrustamos como data-URI antes de mandar el HTML.
-    await Promise.all(Array.from(pp.querySelectorAll('img')).map(async img=>{
-      const src=img.getAttribute('src')||'';
-      if(!src || src.startsWith('data:')) return;
-      try{
-        const r=await fetch(src); if(!r.ok) return;
-        const blob=await r.blob();
-        img.setAttribute('src', await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);}));
-        // Cambiar `src` no actualiza `naturalWidth` al momento: hasta que el
-        // navegador decodifica la nueva `data:` URI, sigue devolviendo las
-        // medidas de la imagen ANTERIOR (comprobado). Con la misma imagen de
-        // siempre no se nota, pero si la carga original no había terminado a
-        // tiempo (250ms más arriba), `markWideBlocks` mediría 0 y una imagen
-        // grande de verdad se quedaría encogida en la columna en vez de
-        // ensancharse. `decode()` espera a que la nueva imagen esté lista.
-        if(!img.complete) await img.decode().catch(()=>{});
-      }catch(_){}
-    }));
-    if(opts.landscape) markWideBlocks(pp);
+    const html = await prepareExportHtml(it, opts);
     const base=(((current&&current.name)||it.name||'nota')).replace(/\.md$/i,'');
     const res=await fetch('/api/notes/pdf',{method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-      body:JSON.stringify({html:pp.innerHTML, title:base, dark:!!opts.dark,
+      body:JSON.stringify({html, title:base, dark:!!opts.dark,
                            theme:opts.theme||null, landscape:!!opts.landscape})});
     if(!res.ok) throw new Error('http '+res.status);
     const blob=await res.blob();
@@ -808,6 +821,30 @@ async function exportNotePDF(it, opts){
   }finally{
     pp.innerHTML='';
   }
+}
+
+/* ════════════ Exportación headless (API pública, sin usuario detrás) ════════════
+   `apps/notes/pdf_headless.py` no puede ejecutar marked/KaTeX/Mermaid/highlight.js
+   en Python sin reimplementarlos (y divergir del render real), así que en vez de
+   eso navega AQUÍ (vía Playwright/CDP) con una sesión recién autenticada (login
+   de un solo uso, ver `pdf_headless.headless_login`) y dos parámetros en la URL:
+   `open=<ruta>` y `headless_pdf=1` (+ `landscape=1` opcional). El bootstrap de
+   abajo detecta ese modo y llama a esto en vez de abrir la nota en una pestaña.
+   El resultado viaja por un `console.log`, no por `window.algo` ni por el DOM:
+   la CSP de la app (`script-src` sin `unsafe-eval`, ver
+   `ContentSecurityPolicyMiddleware`) bloquea que Playwright compile y corra
+   NUEVO código en la página (`page.evaluate()`/`wait_for_function()` fallan
+   con "unsafe-eval" — comprobado). Un `console.log` de código YA cargado no
+   ejecuta nada nuevo, así que Playwright puede escucharlo (`expect_console_message`
+   en `pdf_headless.render_note_to_html`) sin tocar la CSP para nada. */
+async function runHeadlessPdfExport(path, opts){
+  opts = opts || {};
+  const name = path.split('/').pop().replace(/\.md$/i, '');
+  let html = '';
+  try{ html = await prepareExportHtml({path, name}, opts); }
+  catch(e){ html = ''; }
+  finally{ $('print-pane').innerHTML = ''; }
+  console.log('PDF_EXPORT_READY:' + html);
 }
 
 /* En apaisado el cuerpo va a dos columnas (~12,8 cm cada una). Lo que no cabe
@@ -2197,9 +2234,16 @@ $('vault-title').addEventListener('click',e=>{
 });
 (async ()=>{
   await loadTree(); await restoreTabsState();
+  const params=new URLSearchParams(location.search);
+  const openParam=params.get('open');
+  // Export headless por API: no es una visita real, así que ni se abre pestaña
+  // ni se limpia la URL (ver `runHeadlessPdfExport` arriba).
+  if(openParam && params.get('headless_pdf')){
+    await runHeadlessPdfExport(openParam, {landscape: params.get('landscape')==='1'});
+    return;
+  }
   // Deep-link desde fuera del vault (p.ej. "Abrir esta nota" en el modal de
   // Ajustes de otra página): /?open=<ruta> abre la nota y limpia la URL.
-  const openParam=new URLSearchParams(location.search).get('open');
   if(openParam){
     await openInNewTab(openParam);
     history.replaceState(null, '', location.pathname);

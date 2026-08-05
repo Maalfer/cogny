@@ -136,8 +136,14 @@ body.landscape .markdown-body>.pdf-wide>table{width:100%}
    izquierda con el hueco solo a la derecha.
    El número es el hueco más pequeño que deja cualquiera de los temas de
    fábrica tras su cabecera y su pie en A4 apaisado (297×210mm, @page de
-   12mm) — el ancho no importa aquí, todos usan el mismo alto de página. */
-body.landscape .markdown-body>.pdf-wide{text-align:center}
+   12mm) — el ancho no importa aquí, todos usan el mismo alto de página.
+   Sólo el envoltorio de una imagen/SVG cede ancho de verdad: si se centra
+   CUALQUIER `.pdf-wide` (la clase también cae en huecos cortos de título o
+   párrafo entre dos bloques anchos, ver `markWideBlocks` en notes.js), un
+   título como "## Código" sale centrado en vez de alineado a la izquierda
+   como el resto — inconsistente y feo (comprobado imprimiendo de verdad). */
+body.landscape .markdown-body>.pdf-wide:has(>img),
+body.landscape .markdown-body>.pdf-wide:has(>svg){text-align:center}
 body.landscape .markdown-body .pdf-wide img,
 body.landscape .markdown-body .pdf-wide svg{max-height:135mm}
 body.landscape .markdown-body h1{font-size:1.6rem;margin-top:0}

@@ -4,3 +4,11 @@ Django==6.0.7
 gunicorn==26.0.0
 whitenoise==6.12.0
 Pillow==12.3.0
+
+# Exportar PDF por la API (apps/notes/pdf_headless.py): CDP hacia el mismo
+# Chromium que ya usa pdf.py (`executable_path=pdf.CHROMIUM_BIN`), así que no
+# necesita `playwright install` — sólo el paquete Python y sus dependencias.
+playwright==1.62.0
+pyee==13.0.1
+greenlet==3.5.4
+typing_extensions==4.16.0
