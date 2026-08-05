@@ -188,6 +188,14 @@ class SharingTests(VaultTestCase):
         self.json_post("/api/notes/delete", {"path": "Carpeta"})
         self.assertEqual(SharedNote.objects.count(), 0)
 
+    def test_consultar_el_estado_no_publica_la_nota(self):
+        """`share/status` es de sólo lectura: abrir el modal de "Compartir"
+        (que primero consulta el estado) no debe crear el enlace por sí solo,
+        sólo pulsar "Guardar" (`share/create`) lo hace."""
+        resp = self.client.get("/api/notes/share/status?path=Carpeta/nota.md").json()
+        self.assertFalse(resp["shared"])
+        self.assertEqual(SharedNote.objects.count(), 0)
+
 
 class SharedAssetOwnershipTests(VaultTestCase):
     """El enlace público sólo debe resolver imágenes/PDFs que la propia nota
@@ -272,6 +280,12 @@ class ReadOnlyRoleTests(VaultTestCase):
         ):
             self.assertEqual(self.json_post(url, payload).status_code, 403, url)
         self.assertEqual((self.vault_dir / "nota.md").read_text(encoding="utf-8"), "original")
+
+    def test_no_puede_listar_los_enlaces_compartidos(self):
+        """El token de un enlace público abre la nota sin autenticar: listar
+        enlaces exige el mismo permiso que crearlos/revocarlos, no basta con
+        estar logueado."""
+        self.assertEqual(self.client.get("/api/notes/share/list").status_code, 403)
 
     def test_no_puede_tocar_las_claves_de_api(self):
         self.assertEqual(self.client.get("/api/apikeys/list").status_code, 403)

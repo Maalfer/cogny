@@ -698,6 +698,16 @@ def shares(request):
     root = vault.root()
 
     if request.method == "GET":
+        # `api_view` exime a GET/HEAD del chequeo de sólo lectura porque en
+        # esta API ningún GET modifica nada — pero aquí el cuerpo de la
+        # respuesta ES una credencial (el token abre la nota sin autenticar),
+        # no un dato de lectura normal. Sin este chequeo explícito, una clave
+        # marcada `read_only` recuperaba el token de cualquier nota
+        # compartida de la bóveda igual que una de escritura.
+        if request.api_key.read_only:
+            return json_error("Esta clave es de sólo lectura", 403)
+        if not request.user.can_write:
+            return json_error("Tu acceso es de sólo lectura", 403)
         return JsonResponse({"shares": [{
             "path": s.path,
             "name": Path(s.path).stem,

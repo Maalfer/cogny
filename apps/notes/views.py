@@ -553,9 +553,16 @@ def share_status(request):
 
 
 @login_required
+@require_write
 @require_GET
 def share_list(request):
-    """Todos los enlaces públicos activos (panel "Enlaces compartidos")."""
+    """Todos los enlaces públicos activos (panel "Enlaces compartidos").
+
+    El token es la credencial que abre la nota sin autenticar, así que esta
+    vista necesita el mismo permiso que `share_create`/`share_revoke` — no
+    basta con estar logueado. Antes sólo llevaba `@login_required`, así que
+    un invitado de sólo lectura podía listar los tokens de toda la bóveda.
+    """
     return JsonResponse({"shares": [
         {
             "path": s.path,

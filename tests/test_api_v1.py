@@ -177,6 +177,25 @@ class FilesTests(ApiTestCase):
         self.assertTrue((self.vault_dir / "nota.md").exists())
 
 
+class SharesTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.api("post", "/api/v1/notes", {"path": "nota.md", "content": "hola"})
+        self.api("post", "/api/v1/shares", {"path": "nota.md"})
+
+    def test_clave_de_solo_lectura_no_ve_los_tokens(self):
+        """El token de `/api/v1/shares` abre la nota sin autenticar: aunque
+        GET normalmente sea "de sólo lectura" en esta API, aquí el cuerpo de
+        la respuesta ES una credencial, así que una clave `read_only` no
+        debe poder leerlo."""
+        _, raw = ApiKey.objects.create_key(self.user, "lectura", read_only=True)
+        self.assertEqual(self.api("get", "/api/v1/shares", raw=raw).status_code, 403)
+
+    def test_clave_de_escritura_si_los_ve(self):
+        data = self.api("get", "/api/v1/shares").json()
+        self.assertEqual([s["path"] for s in data["shares"]], ["nota.md"])
+
+
 class VaultTests(ApiTestCase):
     def test_stats(self):
         self.write_note("nota.md", "12345")
