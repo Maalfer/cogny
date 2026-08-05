@@ -3,7 +3,7 @@
 El cliente manda el HTML YA renderizado (KaTeX, Mermaid y highlight.js corren
 en el navegador, con las imágenes incrustadas como data-URI). Aquí lo saneamos,
 lo envolvemos en un documento autónomo y lo imprimimos. Chromium arranca con
-`--disable-javascript`: sólo tiene que maquetar e imprimir.
+`--blink-settings=scriptEnabled=false`: sólo tiene que maquetar e imprimir.
 
 La nota puede maquetarse con un "tema" (`themes.py`): una plantilla HTML+CSS
 escrita a mano que envuelve el contenido —cabecera con logo, portada, pie,
@@ -187,6 +187,12 @@ def _sanitize_css(value: str) -> str:
     return _CSS_IMPORT_STR_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
 
 
+def _escape_style_text(value: str) -> str:
+    """Neutraliza `<`/`>` sin tocar comillas ni `&` — ver el docstring de
+    `_NoteHTMLSanitizer` sobre por qué escapar de más rompe CSS legítima."""
+    return value.replace("<", "&lt;").replace(">", "&gt;")
+
+
 class _NoteHTMLSanitizer(HTMLParser):
     """Sanitiza el HTML de una nota antes de imprimirlo a PDF.
 
@@ -199,9 +205,30 @@ class _NoteHTMLSanitizer(HTMLParser):
     Chromium en modo headless podrían leer notas de otros usuarios o el .env
     del servidor). `<style>` sobrevive (Mermaid lo usa para el tema del SVG)
     pero su contenido pasa por el mismo saneado de CSS que el atributo
-    `style=`: html.parser lo entrega tal cual por `handle_data` (modo CDATA),
-    así que sin esto un `@import url(...)`/`background:url(...)` dentro de
-    la etiqueta se colaría intacto pese a estar bloqueado en el atributo.
+    `style=`: html.parser lo entrega tal cual por `handle_data` (modo CDATA).
+
+    mXSS vía `<style>` (corregido): html.parser cree que todo lo que sigue a
+    `<style>` es CSS literal hasta un `</style>` real — igual que Blink, EXCEPTO
+    dentro de un punto de integración de texto MathML (`<math><mtext><mglyph>`).
+    Ahí Blink sale del contenido foráneo en `</math>` y parsea lo que venga
+    después como HTML normal, mientras que `html.parser` sigue creyendo que
+    sigue "dentro" del `<style>` y entrega ese HTML tal cual por `handle_data`
+    (`<img onerror=...>` intacto, sin pasar por `_clean_attrs`). Por eso el
+    texto de `<style>` no basta con sanearlo como CSS: hay que escaparlo como
+    HTML también, para que ningún byte que salga de aquí pueda interpretarse
+    como una etiqueta nueva pase lo que pase con cómo Blink decida trocear el
+    documento alrededor. `_sanitize_css` sigue aplicándose antes de escapar,
+    para seguir recortando `url()`/`@import` de la CSS legítima.
+
+    Ese escapado sólo toca `<`/`>` (ver `_escape_style_text`), no comillas ni
+    `&`: un `<style>` real nunca decodifica entidades (es "raw text" en el
+    HTML5 real, igual que `<script>`), así que escapar comillas rompía CSS
+    legítima de Mermaid con valores entre comillas (`font-family:"trebuchet
+    ms"` salía como `font-family:&quot;trebuchet ms&quot;`, letra literal
+    para el motor de CSS). `<`/`>` sí son seguros de tocar siempre: son los
+    únicos bytes que un tokenizador HTML usa para abrir una etiqueta nueva —
+    su forma escapada nunca se re-interpreta como marcado, entre en el modo
+    de parseo que entre.
     """
 
     def __init__(self):
@@ -229,7 +256,13 @@ class _NoteHTMLSanitizer(HTMLParser):
 
     def _emit_start(self, tag, attrs, self_closing):
         if tag in _UNSAFE_TAGS:
-            self._skip_depth += 1
+            # Autocerrado (`<script/>`): no hay contenido que saltar ni un
+            # `handle_endtag` que vaya a llegar nunca a bajar el contador —
+            # subirlo aquí lo dejaba atascado en 1 y silenciaba TODO el resto
+            # del documento. Sin cuerpo que ocultar, basta con no emitir la
+            # etiqueta (ya lo hace el `return` de más abajo).
+            if not self_closing:
+                self._skip_depth += 1
             return
         if self._skip_depth:
             return
@@ -260,7 +293,12 @@ class _NoteHTMLSanitizer(HTMLParser):
 
     def handle_data(self, data):
         if not self._skip_depth:
-            self.out.append(_sanitize_css(data) if self._in_style else data)
+            # Ver el docstring de la clase: escapar DESPUÉS de sanear como CSS,
+            # nunca al revés — así `_sanitize_css` sigue viendo `url(...)`/
+            # `@import` sin escapar (su regex los necesita tal cual) y lo que
+            # sale de aquí no puede convertirse en una etiqueta nueva ni
+            # aunque Blink decida que ya no está "dentro" de este `<style>`.
+            self.out.append(_escape_style_text(_sanitize_css(data)) if self._in_style else data)
 
     def handle_entityref(self, name):
         if not self._skip_depth:
@@ -386,7 +424,14 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
     # blanco alrededor del texto, muy visible al abrir el PDF a página completa).
     return (
         '<!doctype html><html class="' + ("print-dark" if dark else "") +
-        '"><head><meta charset="utf-8"><style>'
+        '"><head><meta charset="utf-8">'
+        # El HTML ya viene renderizado: esta página nunca necesita ejecutar
+        # nada. Es la red de seguridad real si algo se cuela pese a
+        # `sanitize_html` — a diferencia de los flags de línea de comandos de
+        # Chromium (ver `render`), una CSP en el propio documento no depende
+        # de qué build de Chromium hay instalada ni rompe `--print-to-pdf`.
+        '<meta http-equiv="Content-Security-Policy" content="script-src \'none\'">'
+        '<style>'
         + _styles() + page_css +
         '</style></head><body class="' + body_class + '">'
         + body + '</body></html>'
@@ -419,10 +464,22 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
             CHROMIUM_BIN, "--headless", "--no-sandbox", "--disable-gpu",
             "--disable-dev-shm-usage", "--disable-crash-reporter", "--disable-breakpad",
             "--no-zygote", "--single-process", "--allow-file-access-from-files",
-            # El HTML ya viene renderizado, Chromium sólo maqueta e imprime. Esto
-            # neutraliza cualquier handler on*/script que se hubiera colado pese
-            # al saneado de `sanitize_html`.
-            "--disable-javascript",
+            # El HTML ya viene renderizado, Chromium sólo maqueta e imprime.
+            #
+            # OJO: aquí NO va ningún flag de línea de comandos para apagar
+            # JavaScript. `--disable-javascript` (el switch de content-settings)
+            # fue retirado de Chromium hace años — un flag que Chromium no
+            # reconoce se ignora en silencio, así que este comentario mentía:
+            # el JS corría con normalidad (verificado). El reemplazo obvio,
+            # `--blink-settings=scriptEnabled=false`, SÍ apaga el motor de
+            # scripts, pero en el `chrome-headless-shell` que de verdad se usa
+            # aquí (ver `_resolve_chromium`) también rompe `--print-to-pdf` por
+            # completo: con ese flag Chromium termina con código 0 pero nunca
+            # llega a escribir el PDF (verificado, build 1223). La defensa real
+            # ahora es la CSP `script-src 'none'` que `_document()` mete en el
+            # propio HTML: no depende de qué build de Chromium hay instalada,
+            # y confirmado con el DevTools log que SÍ bloquea el `onerror` sin
+            # romper la impresión.
             "--user-data-dir=" + os.path.join(workdir, "ud"),
             "--no-pdf-header-footer", "--virtual-time-budget=8000",
             "--print-to-pdf=" + out_pdf, "file://" + in_html,

@@ -772,8 +772,9 @@ async function prepareExportHtml(it, opts){
   pp.innerHTML=renderMarkdown(ED?ED.getValue():((current&&current.content)||'')); postProcess(pp,0);
   await new Promise(r=>setTimeout(r,250));   // deja que rendericen KaTeX / imágenes
   // Las imágenes del vault se sirven con sesión y el Chromium que IMPRIME no la
-  // tiene (corre con --disable-javascript y sin cookies), así que se incrustan
-  // como data-URI antes de mandar el HTML.
+  // tiene (corre sin cookies y con `script-src 'none'` en el propio documento,
+  // ver `_document()` en pdf.py), así que se incrustan como data-URI antes de
+  // mandar el HTML.
   await Promise.all(Array.from(pp.querySelectorAll('img')).map(async img=>{
     const src=img.getAttribute('src')||'';
     if(!src || src.startsWith('data:')) return;

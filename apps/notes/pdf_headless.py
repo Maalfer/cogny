@@ -26,8 +26,9 @@ La sincronización va por Playwright (Chromium vía CDP) escuchando un
   confiable (`runHeadlessPdfExport`, en notes.js) no ejecuta nada nuevo en la
   página, así que la CSP no lo toca.
 
-Nada de esto toca el Chromium que IMPRIME (`pdf.render`): ese sigue con
-`--disable-javascript`, sin sesión y sin red, exactamente igual que antes.
+Nada de esto toca el Chromium que IMPRIME (`pdf.render`): ese sigue sin sesión
+y sin red, con la CSP `script-src 'none'` del propio documento impreso como
+única defensa contra JS (ver `_document()` en pdf.py), exactamente igual que antes.
 El HTML que sale de aquí pasa por el mismo `pdf.sanitize_html()` que ya
 usaba la web antes de llegar a imprimirse — lo aplica el llamante (la vista
 de la API), igual que `notes_pdf` hace con el HTML que manda el navegador.
@@ -113,7 +114,8 @@ def headless_login(request, token):
 
 # Flags mínimos para correr Chromium sin sandbox de kernel bajo www-data en el
 # VPS — los mismos que ya usa `pdf.render()` para el Chromium que imprime,
-# menos `--disable-javascript` (aquí es justo lo que necesitamos) y menos
+# menos `--allow-file-access-from-files` (no hace falta: se navega por HTTP a
+# `INTERNAL_ORIGIN`, no se carga ningún `file://`) y menos
 # `--single-process`/`--no-zygote` (Playwright ya gestiona el ciclo de vida
 # del proceso por su cuenta; forzar single-process le estorbaría).
 _LAUNCH_ARGS = [
