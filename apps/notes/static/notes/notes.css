@@ -644,3 +644,26 @@
 :root[data-theme="gold"] .seg-pill button.active,
 :root[data-theme="gold"] .format-bar button:hover,
 :root[data-theme="gold"] .btn-primary{ color:#17150c; }
+
+/* ─────────────── Tema Dark Cristal (oscuro + superficies de cristal) ───────────────
+   Mismo material que el resto de la app en este tema: fondo con degradado,
+   paneles translúcidos con desenfoque en vez de bloques opacos. Las reglas de
+   partida de este fichero ya están escritas para fondo oscuro, así que solo
+   hace falta cambiar las cuatro variables de las que cuelga la bóveda y darle
+   el desenfoque a los paneles. */
+:root[data-theme="dark-cristal"]{
+  --vault-bg:     rgba(255,255,255,0.06);
+  --vault-side:   rgba(255,255,255,0.04);
+  --vault-line:   rgba(255,255,255,0.12);
+  --vault-accent: #4da3ff;
+}
+:root[data-theme="dark-cristal"] .vault-side,
+:root[data-theme="dark-cristal"] .vault-main{
+  backdrop-filter: saturate(170%) blur(20px);
+  -webkit-backdrop-filter: saturate(170%) blur(20px);
+}
+:root[data-theme="dark-cristal"] .tree-row.active{
+  background: rgba(77,163,255,0.22);
+  color: #eaf3ff;
+  font-weight: 600;
+}

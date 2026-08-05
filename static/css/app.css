@@ -1321,7 +1321,177 @@ a{ touch-action: manipulation; }
   color: #17150c;
   border: 1px solid #3a2f12;
 }
-/* Picker grid: 5 themes — 2 cols on phones,
+
+/* =============================================
+   DARK CRISTAL — superficies de cristal sobre fondo oscuro.
+
+   Mismo lenguaje en toda la app: fondo con degradado, paneles translúcidos
+   con desenfoque, reflejo en el canto superior y esquinas generosas, en vez
+   de los bloques opacos del resto de temas. El blanco translúcido se queda
+   muy tenue (6-10%) sobre gris azulado: subirlo más lo convierte en niebla
+   gris y se pierde el efecto — sobre fondo oscuro el ojo lee el cristal por
+   el brillo del borde, no por la transparencia del cuerpo.
+   ============================================= */
+:root[data-theme="dark-cristal"]{
+  --bg:  #131a24;
+  --bg2: rgba(255,255,255,0.07);
+  --bg3: rgba(255,255,255,0.11);
+  --bg4: rgba(255,255,255,0.16);
+  --text:  #dbe6f4;
+  --text2: rgba(219,230,244,0.68);
+  --text3: rgba(219,230,244,0.42);
+  --border: rgba(255,255,255,0.14);
+  --cyan: #4da3ff;
+  --cyan-hover: #6cb6ff;
+  --cyan-dim: rgba(77,163,255,0.16);
+  --cyan-border: rgba(77,163,255,0.42);
+  --red: #ff6b60;
+}
+:root[data-theme="dark-cristal"] body,
+:root[data-theme="dark-cristal"] body.subapp-body{
+  background:
+    radial-gradient(1200px 700px at 12% -5%, #1e2c40 0%, transparent 60%),
+    radial-gradient(900px 600px at 95% 8%, #1a2b45 0%, transparent 55%),
+    linear-gradient(170deg, #16202c 0%, #0d131b 100%);
+  background-attachment: fixed;
+  color: var(--text);
+}
+:root[data-theme="dark-cristal"] ::selection{ background: rgba(77,163,255,.30); }
+:root[data-theme="dark-cristal"] ::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.18); }
+:root[data-theme="dark-cristal"] ::-webkit-scrollbar-thumb:hover{ background: rgba(255,255,255,.28); }
+
+/* ── Barras fijas ── */
+:root[data-theme="dark-cristal"] .bh-header{
+  background: rgba(19,26,36,0.66);
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+}
+:root[data-theme="dark-cristal"] #bottom-nav{
+  background: rgba(19,26,36,0.78);
+  border-top: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+}
+:root[data-theme="dark-cristal"] #sidebar{
+  background: rgba(255,255,255,0.04);
+  border-right: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+}
+:root[data-theme="dark-cristal"] .bh-brand:hover{ background: rgba(255,255,255,.10); }
+:root[data-theme="dark-cristal"] .bh-version{
+  color: var(--cyan);
+  background: rgba(77,163,255,0.16);
+  border-color: rgba(77,163,255,0.34);
+}
+
+/* ── Tarjetas ── */
+:root[data-theme="dark-cristal"] .app-card{
+  background: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.07) 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 6px 22px rgba(0,0,0,.32);
+}
+:root[data-theme="dark-cristal"] .app-card:hover{
+  background: linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.08) 45%, rgba(255,255,255,0.12) 100%);
+  border-color: rgba(255,255,255,0.20);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 10px 30px rgba(0,0,0,.40);
+}
+
+/* ── Formularios ── */
+:root[data-theme="dark-cristal"] input,
+:root[data-theme="dark-cristal"] textarea,
+:root[data-theme="dark-cristal"] select{
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  border-color: rgba(255,255,255,0.14);
+}
+:root[data-theme="dark-cristal"] input::placeholder,
+:root[data-theme="dark-cristal"] textarea::placeholder{ color: var(--text3); }
+:root[data-theme="dark-cristal"] input:focus,
+:root[data-theme="dark-cristal"] textarea:focus,
+:root[data-theme="dark-cristal"] select:focus{
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+  outline: none;
+}
+
+:root[data-theme="dark-cristal"] .cal-day.today{ color: #08192b; }
+:root[data-theme="dark-cristal"] .cal-day.today.selected{
+  box-shadow: 0 0 0 3px #131a24, 0 0 0 5px var(--cyan);
+}
+
+/* ── Botones ── */
+:root[data-theme="dark-cristal"] .btn-primary{
+  background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 52%), var(--cyan);
+  color: #08192b;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.40), 0 2px 12px rgba(77,163,255,.30);
+}
+:root[data-theme="dark-cristal"] .btn-primary:hover{
+  background: linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 52%), var(--cyan-hover);
+}
+:root[data-theme="dark-cristal"] .btn-secondary{
+  background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%);
+  color: var(--cyan);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+}
+:root[data-theme="dark-cristal"] .btn-secondary:hover{ background: rgba(255,255,255,0.18); }
+
+/* ── Chat y flotantes ── */
+:root[data-theme="dark-cristal"] .chat-bubble.me{ background: var(--cyan); color: #08192b; }
+:root[data-theme="dark-cristal"] .chat-bubble.them{ background: rgba(255,255,255,0.10); color: var(--text); }
+:root[data-theme="dark-cristal"] .pf-toast,
+:root[data-theme="dark-cristal"] .bh-toast,
+:root[data-theme="dark-cristal"] .vault-settings-menu{
+  background: linear-gradient(135deg, rgba(38,50,66,0.94) 0%, rgba(28,38,52,0.90) 100%);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 14px 36px rgba(0,0,0,.50);
+}
+:root[data-theme="dark-cristal"] .vsm-item{ color: var(--text); }
+:root[data-theme="dark-cristal"] .vsm-item:hover{ background: rgba(77,163,255,.18); color: #fff; }
+:root[data-theme="dark-cristal"] .vsm-sep{ background: rgba(255,255,255,.12); }
+
+/* ── Ventana modal ── */
+:root[data-theme="dark-cristal"] .modal-back{ background: rgba(6,11,18,0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+:root[data-theme="dark-cristal"] .modal-back .modal{
+  background: linear-gradient(135deg, rgba(35,47,63,0.96) 0%, rgba(24,33,45,0.94) 100%);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 20px 50px rgba(0,0,0,.55);
+}
+
+/* ── Selector de tema (dentro de la propia ventana de ajustes) ── */
+:root[data-theme="dark-cristal"] .pf-theme-btn{
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.13);
+  color: var(--text);
+}
+:root[data-theme="dark-cristal"] .pf-theme-btn:hover{ background: rgba(255,255,255,0.14); }
+:root[data-theme="dark-cristal"] .pf-theme-btn.active{
+  background: rgba(77,163,255,0.18);
+  border-color: rgba(77,163,255,0.42);
+}
+/* El swatch de "Oscuro" se ve sobre este mismo fondo de cristal: necesita su
+   propio contraste en vez del negro puro por defecto. */
+:root[data-theme="dark-cristal"] .pf-theme-dark{ background: #161824; color: #c5cbe3; }
+
+/* Muestra del tema en el selector: gris azulado con su reflejo, para
+   distinguirlo de un vistazo del resto de temas oscuros. */
+.pf-theme-dark-cristal{
+  background: linear-gradient(140deg, #26364a 0%, #0d131b 100%);
+  color: #4da3ff;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+/* Picker grid: 6 themes — 2 cols on phones,
 3 on wider screens */
 .pf-theme-row{ grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 540px) {.pf-theme-row{ grid-template-columns: repeat(3, 1fr); }
