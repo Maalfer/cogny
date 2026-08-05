@@ -7,6 +7,7 @@
 <p align="center"><a href="https://cogny.es">cogny.es</a></p>
 <p align="center">
   <a href="https://github.com/Maalfer/cogny/releases/tag/v1.0.4"><img src="https://img.shields.io/github/v/tag/Maalfer/cogny?label=versi%C3%B3n&color=06b6d4" alt="Versión"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-GPL--3.0-06b6d4" alt="Licencia GPL-3.0"></a>
 </p>
 
 <p align="center"><img src="assets/screenshots/demo1.png" width="850" alt="Bóveda de notas"></p>
@@ -70,3 +71,7 @@ docker compose exec web python manage.py createsuperuser
 ## Despliegue
 
 `scripts/cogny.service` es la referencia de la unidad systemd usada en producción (gunicorn detrás de un proxy inverso con TLS). Tras cualquier cambio en los estáticos, ejecuta `collectstatic`, sube `ASSET_VERSION` en `.env` y reinicia el servicio para invalidar la caché.
+
+## Licencia
+
+Cogny es software libre bajo los términos de la [GNU General Public License v3.0](LICENSE) (GPL-3.0-or-later).
