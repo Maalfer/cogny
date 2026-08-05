@@ -9,8 +9,26 @@ def make_existing_users_owners(apps, schema_editor):
     El default del campo es `viewer` (lo prudente para un alta nueva), pero
     aplicado tal cual dejaría al propietario sin permiso de escritura en su
     propia bóveda: todo lo anterior a esta migración es suyo.
+
+    Limitación conocida: si en el momento de aplicarse esta migración ya
+    había cuentas invitadas además de la del propietario, TODAS se
+    promocionan a `owner` por igual — el rol histórico (`admin`/`user` de
+    `0001_initial`) ya no existe en este punto (se borró un día antes en
+    `0003_remove_user_role`), así que no hay nada de lo que distinguirlas.
+    El aviso de abajo lo deja visible en el log de `migrate` para cualquier
+    base de datos donde esta migración corra a partir de ahora; para una que
+    ya la aplicó, usa `manage.py audit_owner_roles`.
     """
-    apps.get_model("accounts", "User").objects.update(role="owner")
+    User = apps.get_model("accounts", "User")
+    count = User.objects.count()
+    if count > 1:
+        print(
+            f"\n[0005_user_role] AVISO: {count} cuentas existentes se "
+            "promocionan a 'owner' por igual, sin distinguir cuál era la "
+            "legítima. Revisa con 'manage.py audit_owner_roles' cuando "
+            "termine la migración.\n"
+        )
+    User.objects.update(role="owner")
 
 
 def noop(apps, schema_editor):
