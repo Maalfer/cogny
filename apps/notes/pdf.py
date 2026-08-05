@@ -2,8 +2,10 @@
 
 El cliente manda el HTML YA renderizado (KaTeX, Mermaid y highlight.js corren
 en el navegador, con las imágenes incrustadas como data-URI). Aquí lo saneamos,
-lo envolvemos en un documento autónomo y lo imprimimos. Chromium arranca con
-`--blink-settings=scriptEnabled=false`: sólo tiene que maquetar e imprimir.
+lo envolvemos en un documento autónomo y lo imprimimos: sólo tiene que
+maquetar e imprimir, sin JavaScript (CSP `script-src 'none'`, ver `render()`
+para por qué no es un flag de arranque) ni acceso a red que no pase por el
+proxy validador de `_egress_guard` (también en `render()`).
 
 La nota puede maquetarse con un "tema" (`themes.py`): una plantilla HTML+CSS
 escrita a mano que envuelve el contenido —cabecera con logo, portada, pie,
@@ -13,11 +15,14 @@ bóveda, aquí dentro un `file://` seguiría siendo lectura de ficheros del
 servidor.
 """
 import glob
+import http.client
+import http.server
 import ipaddress
 import os
 import re
 import shutil
 import socket
+import socketserver
 import subprocess
 import tempfile
 import threading
@@ -139,12 +144,19 @@ def _is_safe_http_host(hostname: str) -> bool:
     """Descarta hosts loopback/privados/link-local (incluye el endpoint de
     metadata de nube 169.254.169.254) para esquemas http(s).
 
-    Chromium arranca sin proxy ni `--host-resolver-rules`, así que cualquier
-    URL http(s) que sobreviva al saneado dispara una petición de red real
-    desde el servidor; `file://` ya estaba bloqueado pero las direcciones
-    internas para http(s) no lo estaban. Resuelve el host (soporta también
-    IPs en hex/octal/decimal, que `ipaddress` por sí solo no reconoce pero
-    el resolver del sistema sí normaliza) y rechaza si el fallo de DNS o
+    Defensa en profundidad, NO la barrera real: esto resuelve y valida la URL
+    UNA VEZ, aquí en Python, antes de que el HTML se escriba a disco. Chromium
+    hace su propia resolución DNS y su propia conexión, en un proceso aparte,
+    segundos después — un host público que redirija a una dirección interna,
+    o un dominio con TTL bajo que cambie de IP entre este chequeo y esa
+    petición, pasan de largo sin que este código vuelva a mirarlos. La
+    barrera real es el proxy validador de `_start_egress_guard()` (usado en
+    `render()`), que obliga a Chromium a pasar por él y valida el destino de
+    CADA conexión que abre, incluidas las de una redirección o un rebinding
+    de DNS — `--host-resolver-rules` no basta, ver el comentario de más abajo
+    junto a `_validated_target()`. Resuelve el host (soporta también IPs en
+    hex/octal/decimal, que `ipaddress` por sí solo no reconoce pero el
+    resolver del sistema sí normaliza) y rechaza si el fallo de DNS o
     cualquier IP resuelta cae en un rango no público.
     """
     try:
@@ -169,6 +181,158 @@ def _is_safe_uri(value: str) -> bool:
     if split.scheme.lower() in ("http", "https"):
         return bool(split.hostname) and _is_safe_http_host(split.hostname)
     return True
+
+
+# ── Proxy validador de salida para el Chromium que imprime ──────────────────
+#
+# `_is_safe_http_host()` de arriba resuelve y valida la URL UNA VEZ, en
+# Python, antes de escribir el HTML a disco. Chromium hace su PROPIA
+# resolución DNS y su PROPIA conexión, en un proceso aparte, segundos después
+# — así que ese chequeo no ve ni redirecciones (un host público que sanea
+# bien puede responder con un 302 a 127.0.0.1/RFC1918/169.254.169.254) ni DNS
+# rebinding (un dominio con TTL bajo que cambie de IP entre el chequeo y la
+# petición real). Confirmado en vivo: con sólo el chequeo de arriba, un
+# `<img src>` a un host público que redirige a un "servidor interno" en
+# 127.0.0.1 hace que Chromium llegue a ese servidor interno igualmente, y su
+# respuesta queda incrustada en el PDF.
+#
+# `--host-resolver-rules` NO basta como solución: sólo remapea resoluciones
+# por NOMBRE, no intercepta conexiones a una IP ya literal (que es
+# exactamente lo que hay en una `Location: http://127.0.0.1:.../` o en
+# `169.254.169.254`) — confirmado también en vivo, con ese flag puesto el
+# mismo PoC seguía llegando al servidor interno.
+#
+# La única forma de validar el destino REAL de cada conexión, incluidas las
+# que Chromium abre por su cuenta al seguir una redirección, es obligarlo a
+# pasar por un proxy que decida — no adivine — a qué IP se conecta cada
+# petición. Este proxy corre en el mismo proceso, sólo mientras dura un
+# `render()`, y por cada CONNECT (https) o GET (http) resuelve el host UNA
+# vez y se conecta a esa IP concreta (nunca vuelve a resolver el hostname),
+# así que tampoco queda margen para DNS rebinding aquí dentro.
+def _validated_target(host: str, port: int):
+    """IP pública validada para conectar a `host:port`, o `None` si no es segura.
+
+    Resuelve una única vez: el llamante debe conectar a la IP que devuelve,
+    no volver a resolver `host` — ver el comentario de más arriba.
+    """
+    try:
+        candidates = [ipaddress.ip_address(host)]
+    except ValueError:
+        infos = _resolve_host(host)
+        if infos is None:
+            return None
+        candidates = [ipaddress.ip_address(info[4][0]) for info in infos]
+    for ip in candidates:
+        if not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return str(ip)
+    return None
+
+
+class _EgressGuardHandler(http.server.BaseHTTPRequestHandler):
+    """Proxy HTTP/HTTPS mínimo: sólo dejar pasar destinos públicos.
+
+    Sin caché de "ya validé este host": cada petición —incluida la que
+    Chromium reissues al seguir una redirección o al reconectar tras un
+    rebinding de DNS— pasa por `_validated_target()` desde cero.
+    """
+
+    protocol_version = "HTTP/1.1"
+    timeout = 15
+
+    def log_message(self, *a):
+        pass  # Corre en cada export a PDF: silencioso, no es tráfico de la app.
+
+    def do_CONNECT(self):
+        host, _, port_s = self.path.partition(":")
+        ip = _validated_target(host, int(port_s or 443))
+        if ip is None:
+            self.send_error(403, "Destino no permitido")
+            return
+        try:
+            upstream = socket.create_connection((ip, int(port_s or 443)), timeout=10)
+        except OSError:
+            self.send_error(502, "No se pudo conectar")
+            return
+        self.send_response(200, "Connection Established")
+        self.end_headers()
+        self._relay_both_ways(upstream)
+
+    def do_GET(self):
+        split = urlsplit(self.path)
+        if not split.hostname:
+            self.send_error(400)
+            return
+        port = split.port or 80
+        ip = _validated_target(split.hostname, port)
+        if ip is None:
+            self.send_error(403, "Destino no permitido")
+            return
+        path = split.path or "/"
+        if split.query:
+            path += "?" + split.query
+        try:
+            conn = http.client.HTTPConnection(ip, port, timeout=10)
+            headers = {k: v for k, v in self.headers.items()
+                      if k.lower() not in ("proxy-connection", "connection", "host")}
+            headers["Host"] = split.hostname if port == 80 else f"{split.hostname}:{port}"
+            conn.request("GET", path, headers=headers)
+            resp = conn.getresponse()
+            body = resp.read()
+        except OSError:
+            self.send_error(502, "No se pudo conectar")
+            return
+        self.send_response(resp.status)
+        for k, v in resp.getheaders():
+            if k.lower() in ("connection", "transfer-encoding", "proxy-connection"):
+                continue
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _relay_both_ways(self, upstream):
+        client = self.connection
+        client.settimeout(30)
+        upstream.settimeout(30)
+
+        def relay(src, dst):
+            try:
+                while True:
+                    data = src.recv(65536)
+                    if not data:
+                        break
+                    dst.sendall(data)
+            except OSError:
+                pass
+            finally:
+                try:
+                    dst.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+
+        t = threading.Thread(target=relay, args=(client, upstream), daemon=True)
+        t.start()
+        relay(upstream, client)
+        t.join(2)
+        upstream.close()
+
+
+class _EgressGuardServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+def _start_egress_guard():
+    """Arranca el proxy validador en un puerto efímero de loopback.
+
+    Devuelve `(servidor, puerto)`; el llamante debe llamar a
+    `servidor.shutdown()` cuando termine el render.
+    """
+    srv = _EgressGuardServer(("127.0.0.1", 0), _EgressGuardHandler)
+    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread.start()
+    return srv, srv.server_address[1]
 
 
 def _sanitize_srcset(value: str) -> str:
@@ -455,6 +619,7 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
     doc = _document(body_html, dark, theme, title, landscape, theme_html)
 
     workdir = tempfile.mkdtemp(prefix="notepdf_")
+    guard, guard_port = _start_egress_guard()
     try:
         in_html = os.path.join(workdir, "in.html")
         out_pdf = os.path.join(workdir, "out.pdf")
@@ -463,7 +628,50 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
         cmd = [
             CHROMIUM_BIN, "--headless", "--no-sandbox", "--disable-gpu",
             "--disable-dev-shm-usage", "--disable-crash-reporter", "--disable-breakpad",
-            "--no-zygote", "--single-process", "--allow-file-access-from-files",
+            "--no-zygote", "--single-process",
+            # La defensa real contra SSRF no es `_is_safe_http_host()`: ese
+            # chequeo resuelve y valida la URL UNA VEZ, en Python, antes de
+            # escribir el HTML a disco — pero Chromium hace su PROPIA
+            # resolución DNS y su PROPIA conexión, segundos después, en un
+            # proceso aparte. Una URL que apunte a un host público normal
+            # (pasa el chequeo) pero responda con un 302 hacia
+            # 127.0.0.1/RFC1918/169.254.169.254 se sirve igual: el saneador
+            # nunca ve la URL de destino de la redirección, sólo la original.
+            # Lo mismo con DNS rebinding (TTL bajo, la resolución cambia entre
+            # el chequeo y la petición real). Confirmado en vivo: un
+            # redirector en una IP pública hace que Chromium llegue igual a
+            # un "servidor interno", con su respuesta incrustada en el PDF.
+            #
+            # `--host-resolver-rules=MAP * 0.0.0.0` NO sirve para esto: sólo
+            # remapea resoluciones por NOMBRE, y una redirección a una IP ya
+            # literal (127.0.0.1, 169.254.169.254...) no pasa por el
+            # resolver — confirmado también en vivo, con ese flag puesto el
+            # mismo PoC seguía llegando al servidor interno.
+            #
+            # `_start_egress_guard()` (arriba, en el módulo) es la barrera
+            # real: un proxy que corre en este mismo proceso y por el que se
+            # obliga a pasar TODA la red de Chromium, incluida la que abre
+            # por su cuenta al seguir una redirección. Cada CONNECT/GET se
+            # valida contra el destino de verdad, resuelto una única vez.
+            # `<-loopback>` en la lista de exclusiones es necesario porque
+            # Chromium, por defecto, NO manda a un proxy configurado las
+            # peticiones a localhost/127.0.0.1 — justo el destino que hay que
+            # poder interceptar aquí.
+            f"--proxy-server=127.0.0.1:{guard_port}",
+            "--proxy-bypass-list=<-loopback>",
+            # El cliente legítimo (`prepareExportHtml` en notes.js) ya
+            # incrusta todas las imágenes como `data:` URI antes de mandar el
+            # HTML, así que Chromium no necesita red para ningún caso de uso
+            # real — el proxy de arriba sólo entra en juego si algo se cuela
+            # pese al saneado.
+            #
+            # Ya no hace falta `--allow-file-access-from-files`: sólo servía
+            # para que el documento accediera a OTROS ficheros locales aparte
+            # de sí mismo, y no hay ningún caso de uso legítimo para eso (las
+            # imágenes de nota y de tema llegan como `data:` URI, nunca como
+            # ruta). Era, además, la mitad que convertía el bypass mXSS
+            # corregido en 17a9719 en lectura de fichero en vez de sólo XSS.
+            #
             # El HTML ya viene renderizado, Chromium sólo maqueta e imprime.
             #
             # OJO: aquí NO va ningún flag de línea de comandos para apagar
@@ -497,4 +705,5 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
         with open(out_pdf, "rb") as fh:
             return fh.read()
     finally:
+        guard.shutdown()
         shutil.rmtree(workdir, ignore_errors=True)
