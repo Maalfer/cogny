@@ -204,7 +204,15 @@ def _is_safe_uri(value: str) -> bool:
     value = value.strip()
     if not _SAFE_URI_RE.match(value):
         return False
-    split = urlsplit(value)
+    # `urlsplit` (RFC 3986) no le da ningún significado especial a `\` y lo
+    # deja dentro del netloc, pero el parser WHATWG URL que usa Chromium para
+    # hacer la petición real trata `\` exactamente igual que `/` como
+    # terminador de la autoridad en esquemas "especiales" (http/https entre
+    # ellos): "http://127.0.0.1:9999\@example.com/x" parece apuntar a
+    # "example.com" para `urlsplit`, pero Chromium conecta a 127.0.0.1:9999.
+    # Se normaliza aquí para que el host que valida este chequeo sea el mismo
+    # que el que Chromium va a contactar de verdad.
+    split = urlsplit(value.replace("\\", "/"))
     if split.scheme.lower() in ("http", "https"):
         return bool(split.hostname) and _is_safe_http_host(split.hostname)
     return True

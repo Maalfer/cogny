@@ -102,3 +102,26 @@ class SanitizeHtmlTests(SimpleTestCase):
         out = pdf.sanitize_html(
             '<style>div{background:\\75rl(https://example.com/a.png)}</style>')
         self.assertIn("https://example.com/a.png", out)
+
+    def test_barra_invertida_en_autoridad_disfraza_el_host_para_urlsplit(self):
+        """Regresión: `urlsplit` (RFC 3986) no le da ningún significado
+        especial a `\\` y lo deja dentro del netloc, pero el parser WHATWG
+        URL que usa Chromium para la petición real trata `\\` igual que `/`
+        como terminador de la autoridad en esquemas especiales (http/https
+        entre ellos). `http://127.0.0.1:9999\\@example.com/x` parece apuntar
+        a "example.com" (público, pasaría el chequeo) para `_is_safe_uri`,
+        pero Chromium conecta de verdad a 127.0.0.1:9999 — confirmado en vivo
+        con Chromium real, ver el commit de este fix."""
+        self.assertFalse(
+            pdf._is_safe_uri('http://127.0.0.1:9999\\@example.com/x'))
+        self.assertFalse(pdf._is_safe_uri(
+            'http://169.254.169.254\\@example.com/latest/meta-data/'))
+        out = pdf.sanitize_html(
+            '<img src="http://127.0.0.1:9999\\@example.com/x">')
+        self.assertNotIn("127.0.0.1", out)
+
+    def test_barra_invertida_en_url_publica_legitima_no_se_rompe(self):
+        # La barra invertida no es en sí misma el problema: una URL pública
+        # normal (sin intención de disfrazar el host) debe seguir validando
+        # igual tanto si aparece antes como después de normalizar `\` a `/`.
+        self.assertTrue(pdf._is_safe_uri('https://example.com/a.png'))
