@@ -348,6 +348,19 @@
   </div>
 </div>
 
+<!-- Mover nota: elegir carpeta de destino, con buscador -->
+<div class="modal-back" id="move-modal" role="dialog" aria-modal="true" aria-labelledby="move-modal-title">
+  <div class="modal move-modal">
+    <h3 id="move-modal-title">Mover nota</h3>
+    <p>Elige la carpeta de destino para «<span id="move-modal-note-name"></span>».</p>
+    <input type="text" class="vault-input-field" id="move-search-input" placeholder="Buscar carpeta…" autocomplete="off" aria-label="Buscar carpeta de destino">
+    <div id="move-folder-list" class="move-folder-list" role="listbox" aria-label="Carpetas de la bóveda"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="move-cancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Exportar a PDF: elegir estilo (base, oscuro o un tema propio en HTML+CSS) -->
 <input type="file" id="theme-img-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style="display:none">
 <div class="modal-back" id="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">

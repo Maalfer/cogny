@@ -592,7 +592,7 @@ async function openNote(path, terms, opts){
   current={path:res.path, name:res.name, content:res.content}; dirty=false;
   $('vault-empty').style.display='none'; $('vault-toolbar').style.display='flex'; $('vault-body').style.display='flex';
   const parts=res.path.split('/');
-  const noteCrumb='<span class="crumb-note" title="Ir al inicio de la nota">'+esc(res.name)+'</span>';
+  const noteCrumb='<span class="crumb-note" data-path="'+esc(res.path)+'" title="Localizar en el árbol">'+esc(res.name)+'</span>';
   if(parts.length>1){const fp=parts.slice(0,-1);const ch=fp.map((seg,i)=>{const p=fp.slice(0,i+1).join('/');return '<span class="crumb crumb-link" data-path="'+esc(p)+'">'+esc(seg)+'</span>';}).join('<span class="crumb"> / </span>');$('vault-title').innerHTML=ch+'<span class="crumb"> / </span>'+noteCrumb;}else{$('vault-title').innerHTML=noteCrumb;}
   if(ED) ED.set(res.content.replace(/\n+$/, '') + '\n\n\n\n\n');  // 5 blank lines → clickable space below last block
   dirty=false; clearTimeout(saveTimer);   // ED.set dispara onChange: ignora ese "cambio" inicial (no es edición del usuario)
@@ -1521,7 +1521,8 @@ function showCtxMenu(e,it){
     html+=`<button data-act="open-new-tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>Abrir en nueva pestaña</button><div class="ctx-sep"></div>`;
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
-    ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}<div class="ctx-sep"></div>`;
+    ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}
+    ${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
   }
   if(CAN_WRITE){
   html+=`<button data-act="rename"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>Renombrar</button>`;
@@ -1548,6 +1549,7 @@ function showCtxMenu(e,it){
       else if(a==='open-new-tab') openInNewTab(it.path);
       else if(a==='pdf') openPdfModal(it);
       else if(a==='share') openShareModal(it);
+      else if(a==='move') openMoveModal(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };
   });
   setTimeout(()=>_ctxBtns[0]?.focus(),20);
@@ -1645,6 +1647,66 @@ $('share-stop').addEventListener('click', async ()=>{
 
 $('share-cancel').addEventListener('click', closeShareModal);
 $('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
+
+/* ════════════ Mover nota a otra carpeta (modal con buscador) ════════════
+   Reutiliza moveItem() (la misma función que ya usa el arrastrar-y-soltar del
+   árbol) — este modal es sólo una forma alternativa de elegir el destino. */
+let moveModalItem = null;
+function closeMoveModal(){ $('move-modal').classList.remove('show'); moveModalItem=null; }
+function openMoveModal(it){
+  moveModalItem = it;
+  $('move-modal-note-name').textContent = it.name;
+  $('move-search-input').value = '';
+  renderMoveFolderList('');
+  $('move-modal').classList.add('show');
+  setTimeout(()=>$('move-search-input').focus(), 20);
+}
+function renderMoveFolderList(filter){
+  const wrap = $('move-folder-list');
+  const currentParent = moveModalItem.path.split('/').slice(0,-1).join('/');
+  const folders = [{path:'', label:'Raíz de la bóveda'}]
+    .concat(allFolderPaths(TREE, []).sort((a,b)=>a.localeCompare(b,'es')).map(p=>({path:p, label:p.split('/').join(' / ')})));
+  const q = filter.trim().toLowerCase();
+  const filtered = q ? folders.filter(f=>f.label.toLowerCase().includes(q)) : folders;
+  wrap.innerHTML='';
+  if(!filtered.length){ wrap.innerHTML='<div class="tree-empty">Sin carpetas que coincidan</div>'; return; }
+  const frag=document.createDocumentFragment();
+  filtered.forEach(f=>{
+    const isCurrent = f.path===currentParent;
+    const row=document.createElement('div');
+    row.className='tree-row move-folder-row'+(isCurrent?' active':'');
+    row.setAttribute('role','option');
+    row.setAttribute('tabindex','0');
+    row.dataset.path=f.path;
+    row.innerHTML = iconFolder(false) + '<span class="label">'+esc(f.label)+'</span>' + (isCurrent ? '<span class="move-folder-current">Carpeta actual</span>' : '');
+    row.addEventListener('click', ()=>moveToFolder(f.path));
+    row.addEventListener('keydown', e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); moveToFolder(f.path); }
+    });
+    frag.appendChild(row);
+  });
+  wrap.appendChild(frag);
+}
+async function moveToFolder(targetPath){
+  const it = moveModalItem;
+  if(!it) return;
+  closeMoveModal();
+  const currentParent = it.path.split('/').slice(0,-1).join('/');
+  if(targetPath===currentParent) return;   // ya está ahí: nada que hacer
+  const newPath = await moveItem(it, targetPath);
+  if(!newPath) return;
+  await loadTree(); renderTabs();
+  // Mismo aviso visual que el resto de acciones de localizar/mover en el árbol.
+  setTimeout(()=>{
+    const row=document.querySelector('.tree-row[data-path="'+cssEsc(newPath)+'"]');
+    if(!row) return;
+    row.scrollIntoView({behavior:'smooth', block:'nearest'});
+    row.classList.remove('flash-locate'); void row.offsetWidth; row.classList.add('flash-locate');
+  }, 60);
+}
+$('move-search-input').addEventListener('input', e=>renderMoveFolderList(e.target.value));
+$('move-cancel').addEventListener('click', closeMoveModal);
+$('move-modal').addEventListener('click', e=>{ if(e.target===$('move-modal')) closeMoveModal(); });
 
 /* Nota: el panel "Enlaces compartidos" vive en el modal global de Ajustes
    (templates/base.html), accesible desde el icono de la cabecera — el botón
@@ -1959,6 +2021,7 @@ document.addEventListener('keydown', e=>{
     return;
   }
   if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
+  if($('move-modal').classList.contains('show')){ closeMoveModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
 });
@@ -2225,14 +2288,13 @@ if(localStorage.getItem('vault-side-hidden')==='1'&&window.innerWidth>=760){
 }
 initEditor();
 $('vault-title').addEventListener('click',e=>{
-  // Clic en el nombre de la NOTA (último elemento): ir al inicio del contenido (panel derecho).
-  if(e.target.closest('.crumb-note')){
-    if(ED){ try{ED.view.scrollDOM.scrollTo({top:0,behavior:'smooth'});}catch(_){ED.view.scrollDOM.scrollTop=0;} try{ED.view.focus();}catch(_){} }
-    return;
-  }
-  // Clic en una CARPETA: expandirla, hacer scroll hasta ella en el árbol (panel izquierdo) y resaltarla.
-  const link=e.target.closest('.crumb-link');if(!link)return;const fp=link.dataset.path;if(!fp)return;
-  fp.split('/').forEach((_,i,a)=>expanded.add(a.slice(0,i+1).join('/')));persistExpanded();renderTree();
+  // Clic en cualquier segmento de la ruta (carpeta o nombre de nota): localizarlo en el
+  // árbol (panel izquierdo) — misma mecánica para las dos, sólo cambia qué carpetas expandir.
+  const crumb=e.target.closest('.crumb-link,.crumb-note');if(!crumb)return;
+  const fp=crumb.dataset.path;if(!fp)return;
+  const isNote=crumb.classList.contains('crumb-note');
+  const folderParts=isNote?fp.split('/').slice(0,-1):fp.split('/');
+  folderParts.forEach((_,i,a)=>expanded.add(a.slice(0,i+1).join('/')));persistExpanded();renderTree();
   if(window.innerWidth<760)$('vault').classList.remove('side-hidden');
   setTimeout(()=>{const row=document.querySelector('.tree-row[data-path="'+cssEsc(fp)+'"]');if(!row)return;row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.remove('flash-locate');void row.offsetWidth;row.classList.add('flash-locate');},60);
 });

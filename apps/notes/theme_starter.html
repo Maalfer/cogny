@@ -14,7 +14,8 @@
        {{ fecha }}         la fecha de hoy en largo — 3 de agosto de 2026
        {{ img:NOMBRE }}    una imagen del tema, incrustada en el PDF
 
-     TRES COSAS QUE CONVIENE SABER (son rarezas del Chromium que imprime)
+     CUATRO COSAS QUE CONVIENE SABER (tres rarezas del Chromium que imprime
+     y una del saneador)
 
      1. Cabecera y pie se repiten en todas las páginas porque van en el
         <thead> y el <tfoot> de la tabla de abajo: es lo único que Chromium
@@ -30,6 +31,14 @@
 
      3. Los estilos base de la nota (títulos, código, tablas, fórmulas) ya
         están cargados: aquí sólo hace falta lo que quieras cambiar.
+
+     4. En el CSS NO uses el combinador de hijo directo (el signo de mayor
+        que): el saneador lo escapa y el navegador tira la regla ENTERA sin
+        avisar. Y cuidado con cambiarlo por un descendiente a lo bruto —
+        `.hoja tbody td` también alcanzaría las celdas de las tablas de la
+        propia nota y las dejaría sin bordes ni relleno. Para apuntar sólo a
+        las celdas de la tabla de abajo, márcalas con una clase: es lo que
+        hace `.celda`.
      ══════════════════════════════════════════════════════════════════════════ -->
 
 <style>
@@ -43,9 +52,9 @@
 
   /* ── Estructura que repite cabecera y pie ─────────────────────────────── */
   .hoja{ width:100%; border-collapse:collapse; table-layout:fixed; }
-  .hoja > thead > tr > td,
-  .hoja > tfoot > tr > td,
-  .hoja > tbody > tr > td{ padding:0; border:0; vertical-align:top; }
+  /* Las celdas de la tabla que repite cabecera y pie, marcadas con una
+     clase: ver el punto 4 del comentario de arriba. */
+  .hoja .celda{ padding:0; border:0; vertical-align:top; }
 
   .cabecera{
     display:flex; align-items:flex-end; justify-content:space-between; gap:6mm;
@@ -86,7 +95,7 @@
 
 <table class="hoja">
   <thead>
-    <tr><td>
+    <tr><td class="celda">
       <header class="cabecera">
         <img src="{{ img:logo }}" alt="">
         <b>Mi empresa</b>
@@ -95,11 +104,11 @@
   </thead>
 
   <tfoot>
-    <tr><td><div class="hueco-pie"></div></td></tr>
+    <tr><td class="celda"><div class="hueco-pie"></div></td></tr>
   </tfoot>
 
   <tbody>
-    <tr><td>
+    <tr><td class="celda">
 
       {{ contenido }}
 

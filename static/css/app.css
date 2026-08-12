@@ -1209,10 +1209,10 @@ a{ touch-action: manipulation; }
    amarillo claro. Cálido, minimalista y elegante.
    ============================================= */
 :root[data-theme="gold"]{
-  --bg:  #110f0a;
-  --bg2: #18150e;
-  --bg3: #211d13;
-  --bg4: #2c2619;
+  --bg:  #17150e;
+  --bg2: #1e1b12;
+  --bg3: #272317;
+  --bg4: #332c1d;
   --text:  #f2f1ec;
   --text2: #b3b2ab;
   --text3: #78766e;

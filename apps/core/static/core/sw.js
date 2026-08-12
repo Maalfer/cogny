@@ -56,6 +56,18 @@ self.addEventListener('fetch', e => {
   // van a red: cachearlas serviría notas desactualizadas tras editar.
   if (url.pathname.startsWith('/api/')) return;
 
+  // /conocimiento/: la puerta de la bóveda pública decide por el Referer real
+  // de la navegación (apps/knowledge/access.py). No se puede reenviar esa
+  // navegación con fetch(e.request, {...}) y conservarlo: el getter
+  // `Request.referrer` SIEMPRE devuelve "about:client" para JS (es
+  // deliberado, por privacidad -- no hay forma de leer el Referer real desde
+  // aquí ni de volver a ponerlo), así que cualquier fetch reconstruido pierde
+  // el origen externo y el visitante que sí tenía permiso acaba viendo la
+  // página de bloqueo. La única forma de que llegue intacto es no interceptar
+  // esta ruta: dejar que la resuelva el navegador directamente, sin pasar por
+  // el SW.
+  if (url.pathname === '/conocimiento/') return;
+
   const isHtml = e.request.headers.get('Accept')?.includes('text/html');
 
   if (isHtml) {
