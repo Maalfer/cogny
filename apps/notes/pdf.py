@@ -109,6 +109,33 @@ _SRCSET_SPLIT_RE = re.compile(r",\s+")
 _CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)(.*?)\1\s*\)""", re.IGNORECASE)
 _CSS_IMPORT_STR_RE = re.compile(r"""@import\s+(['"])(.*?)\1""", re.IGNORECASE)
 
+# La sintaxis CSS permite escapar CUALQUIER carácter de un identificador o
+# nombre de función con `\XX` (1-6 dígitos hex, con un espacio de separación
+# opcional que también se consume) o `\<carácter>` — es el mecanismo estándar
+# que, entre otras cosas, permite selectores con caracteres especiales. Un
+# navegador conforme al estándar (Chromium incluido) decodifica esos escapes
+# ANTES de interpretar el nombre de la función: `\75rl(...)` es `url(...)`
+# para Chromium exactamente igual que sin escapar. `_CSS_URL_RE`/
+# `_CSS_IMPORT_STR_RE` buscan la subcadena literal sin decodificar nada, así
+# que `\75rl(http://...)` no hace match: el saneado nunca detecta que hay
+# algo que validar y la URL peligrosa sobrevive intacta. Por eso `_sanitize_css`
+# decodifica los escapes con esta regex antes de aplicar las de arriba —
+# opera sobre el mismo texto "canónico" que va a ver Chromium, no sobre el
+# texto crudo tal como llegó.
+_CSS_ESCAPE_RE = re.compile(r"\\(?:([0-9a-fA-F]{1,6})[ \t\n\f\r]?|(.))", re.DOTALL)
+
+
+def _css_unescape(value: str) -> str:
+    def repl(m):
+        hexdigits, literal = m.group(1), m.group(2)
+        if hexdigits is not None:
+            codepoint = int(hexdigits, 16)
+            if codepoint == 0 or 0xD800 <= codepoint <= 0xDFFF or codepoint > 0x10FFFF:
+                return "�"  # mismo carácter de reemplazo que usa la spec CSS
+            return chr(codepoint)
+        return literal
+    return _CSS_ESCAPE_RE.sub(repl, value)
+
 
 _DNS_TIMEOUT_S = 3
 
@@ -347,6 +374,13 @@ def _sanitize_srcset(value: str) -> str:
 
 
 def _sanitize_css(value: str) -> str:
+    # Decodificar primero: `_CSS_URL_RE`/`_CSS_IMPORT_STR_RE` deben ver el
+    # mismo `url(`/`@import` que va a ver Chromium, escapado o no (ver el
+    # docstring de `_CSS_ESCAPE_RE`). A partir de aquí se trabaja siempre
+    # sobre el texto ya decodificado — también en la salida, para que no
+    # quede ningún escape a medio-filtrar que un navegador pueda seguir
+    # interpretando de forma distinta a como lo hizo este saneado.
+    value = _css_unescape(value)
     value = _CSS_URL_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
     return _CSS_IMPORT_STR_RE.sub(lambda m: m.group(0) if _is_safe_uri(m.group(2)) else "", value)
 

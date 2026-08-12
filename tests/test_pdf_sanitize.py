@@ -72,3 +72,33 @@ class SanitizeHtmlTests(SimpleTestCase):
     def test_svg_de_mermaid_sobrevive(self):
         svg = '<svg viewBox="0 0 10 10"><rect width="5" height="5"/></svg>'
         self.assertIn("viewBox", pdf.sanitize_html(svg))
+
+    def test_url_con_escape_hex_css_en_style_tag_se_bloquea(self):
+        """Regresión: `\\75rl(...)` es `url(...)` para cualquier navegador
+        conforme al estándar (CSS decodifica `\\XX` antes de interpretar el
+        nombre de la función), pero `_CSS_URL_RE` buscaba la subcadena
+        literal "url(" sin decodificar nada — el saneado nunca detectaba
+        que había algo que validar y la URL sobrevivía intacta. Reabría el
+        SSRF/LFI que este mismo saneado ya cerraba para la forma sin
+        escapar (ver `test_file_uri_en_style_se_bloquea`)."""
+        out = pdf.sanitize_html(
+            '<style>div{background:\\75rl(file:///etc/passwd)}</style>')
+        self.assertNotIn("file://", out)
+        self.assertNotIn("etc/passwd", out)
+
+    def test_url_con_escape_hex_css_en_atributo_style_se_bloquea(self):
+        out = pdf.sanitize_html(
+            '<div style="background:\\75rl(file:///etc/passwd)">')
+        self.assertNotIn("file://", out)
+
+    def test_import_con_escape_css_se_bloquea(self):
+        out = pdf.sanitize_html(
+            '<style>\\40 import "http://169.254.169.254/";</style>')
+        self.assertNotIn("169.254.169.254", out)
+
+    def test_url_http_valida_con_escape_css_sobrevive(self):
+        # El escape no es en sí mismo el problema: una URL que ya pasaría
+        # sin escapar debe seguir sobreviviendo (decodificada).
+        out = pdf.sanitize_html(
+            '<style>div{background:\\75rl(https://example.com/a.png)}</style>')
+        self.assertIn("https://example.com/a.png", out)
