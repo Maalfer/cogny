@@ -128,10 +128,25 @@ def safe_path(base: Path, rel) -> Path:
 
     Resuelve `base` y `target` para neutralizar symlinks; comparamos por string
     para que la pertenencia siga siendo válida incluso si `target == base`.
+
+    Cada segmento se recorta de espacios (`" vía /tr.md"` -> `"vía/tr.md"`), no
+    sólo los extremos de la ruta completa: si no se hiciera, una nota creada con
+    un espacio final justo antes de una "/" (p.ej. pegando un título con espacio
+    de más) deja en disco una carpeta intermedia con espacio final en el nombre.
+    Esa carpeta se sigue listando con normalidad (`iterdir`/`rglob` no filtran
+    por nombre), pero cualquier operación posterior que reciba la ruta por API
+    -incluido su propio borrado- pasa por `.strip()` sobre la ruta completa
+    (ej. en la vista de carpetas), que sólo recorta el espacio si cae en el
+    extremo de toda la cadena; en cuanto ese segmento deja de ser el último
+    (o la comparación no hace ese strip), el nombre ya no coincide con el que
+    hay en disco y la carpeta queda huérfana e imposible de referenciar por
+    nombre — vacía o no.
     """
     base = base.resolve()
     rel = (rel if isinstance(rel, str) else "").strip().lstrip("/")
-    parts = [p for p in rel.replace("\\", "/").split("/") if p not in ("", ".")]
+    parts = [p for p in
+             (segment.strip() for segment in rel.replace("\\", "/").split("/"))
+             if p not in ("", ".")]
     if any(p == ".." for p in parts):
         raise VaultError("Ruta inválida")
     if len(parts) > MAX_PATH_DEPTH:

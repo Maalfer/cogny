@@ -40,6 +40,21 @@ class SafePathTests(VaultTestCase):
         self.assertEqual(vault.safe_path(root, None), root)
         self.assertEqual(vault.safe_path(root, 42), root)
 
+    def test_recorta_espacios_de_cada_segmento_no_solo_los_extremos(self):
+        """Regresión: una nota con espacio antes de la "/" dejaba en disco una
+        carpeta intermedia con espacio final en el nombre, que el `.strip()` de
+        la ruta completa en la vista de borrado nunca volvía a encontrar —
+        carpeta huérfana, vacía y sin forma de referenciarla por API."""
+        root = vault.root()
+        self.assertEqual(
+            vault.safe_path(root, "Carpeta con espacio /nota.md"),
+            root / "Carpeta con espacio" / "nota.md",
+        )
+        self.assertEqual(
+            vault.safe_path(root, " Carpeta / Sub / nota.md "),
+            root / "Carpeta" / "Sub" / "nota.md",
+        )
+
 
 class SanitizeNameTests(VaultTestCase):
     def test_quita_separadores_y_control(self):
