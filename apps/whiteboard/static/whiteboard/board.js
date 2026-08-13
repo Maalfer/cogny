@@ -151,7 +151,7 @@
     if (toFix.length) {
       snapshot();
       toFix.forEach((el) => { el.color = ensureContrast(el.color, bg); });
-      selectElement(selectedId);
+      syncSelectionUi();
     }
     const newDefault = ensureContrast(color, bg);
     if (newDefault !== color) {
@@ -193,7 +193,7 @@
 
   /* ════════════ Estado ════════════ */
   let elements = (BOOT.scene && BOOT.scene.elements) || [];
-  let selectedId = null;
+  let selectedIds = new Set();
   let tool = 'select';
   let pendingIcon = null;
   let strokeWidth = 3;
@@ -203,7 +203,7 @@
   let offsetX = savedAppState.offsetX || 0;
   let offsetY = savedAppState.offsetY || 0;
   let bgColor = savedAppState.bgColor || '#15181f';
-  let clipboardEl = null;
+  let clipboardEls = null;
   let lastCtxWorldPos = null;
   // El color por defecto del pincel se calcula contra el fondo GUARDADO, no
   // se hereda de una sesión anterior: si el board se quedó con fondo claro,
@@ -358,7 +358,7 @@
     ctx.restore();
   }
 
-  function drawSelection(el) {
+  function drawSelection(el, showHandles) {
     const b = bbox(el);
     ctx.save();
     ctx.strokeStyle = '#22d3ee';
@@ -366,7 +366,9 @@
     ctx.setLineDash([4 / zoom, 3 / zoom]);
     ctx.strokeRect(b.x - 4 / zoom, b.y - 4 / zoom, b.w + 8 / zoom, b.h + 8 / zoom);
     ctx.setLineDash([]);
-    if (CAN_WRITE && el.type !== 'pencil') {
+    // Las asas de redimensión sólo tienen sentido con un único elemento
+    // seleccionado — con varios, arrastrar sólo los mueve en bloque.
+    if (CAN_WRITE && showHandles && el.type !== 'pencil') {
       ctx.fillStyle = '#22d3ee';
       handlesFor(el).forEach((h) => {
         ctx.beginPath();
@@ -374,6 +376,19 @@
         ctx.fill();
       });
     }
+    ctx.restore();
+  }
+
+  function drawMarquee() {
+    if (!marqueeRect) return;
+    const mx = Math.min(marqueeRect.x0, marqueeRect.x1), my = Math.min(marqueeRect.y0, marqueeRect.y1);
+    const mw = Math.abs(marqueeRect.x1 - marqueeRect.x0), mh = Math.abs(marqueeRect.y1 - marqueeRect.y0);
+    ctx.save();
+    ctx.fillStyle = 'rgba(34,211,238,.1)';
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 1 / zoom;
+    ctx.fillRect(mx, my, mw, mh);
+    ctx.strokeRect(mx, my, mw, mh);
     ctx.restore();
   }
 
@@ -423,8 +438,11 @@
 
     elements.forEach(drawElement);
     if (draftElement) drawElement(draftElement);
-    const sel = elements.find((e) => e.id === selectedId);
-    if (sel) drawSelection(sel);
+    if (selectedIds.size) {
+      const showHandles = selectedIds.size === 1;
+      elements.forEach((e) => { if (selectedIds.has(e.id)) drawSelection(e, showHandles); });
+    }
+    drawMarquee();
     ctx.restore();
   }
 
@@ -464,8 +482,15 @@
     return null;
   }
 
+  function singleSelected() {
+    if (selectedIds.size !== 1) return null;
+    return elements.find((e) => selectedIds.has(e.id)) || null;
+  }
+
   function handleAt(wx, wy) {
-    const sel = elements.find((e) => e.id === selectedId);
+    // Redimensionar por asas sólo tiene sentido con un único elemento
+    // seleccionado; con varios, las asas ni se dibujan (ver drawSelection).
+    const sel = singleSelected();
     if (!sel || !CAN_WRITE || sel.type === 'pencil') return null;
     const pad = (HANDLE_R + 3) / zoom;
     return handlesFor(sel).find((h) => Math.hypot(wx - h.x, wy - h.y) <= pad) || null;
@@ -486,27 +511,61 @@
     if (t !== 'icon') pendingIcon = null;
   }
 
-  function selectElement(id) {
-    selectedId = id;
+  function syncSelectionUi() {
     const del = document.getElementById('pz-delete');
-    del.disabled = !CAN_WRITE || !id;
-    if (id) {
-      const el = elements.find((e) => e.id === id);
+    del.disabled = !CAN_WRITE || selectedIds.size === 0;
+    // El swatch de color/grosor sólo refleja un valor concreto cuando hay UN
+    // único elemento elegido — con varios, mostrar el de cualquiera de ellos
+    // sería engañoso (parecería que todos comparten ese color).
+    if (selectedIds.size === 1) {
+      const el = elements.find((e) => selectedIds.has(e.id));
       if (el) {
         document.getElementById('pz-color').value = el.color || color;
         if (el.strokeWidth) document.getElementById('pz-stroke').value = String(el.strokeWidth);
       }
     }
+  }
+
+  function selectElement(id) {
+    selectedIds = id ? new Set([id]) : new Set();
+    syncSelectionUi();
+    render();
+  }
+
+  function selectMany(ids) {
+    selectedIds = new Set(ids);
+    syncSelectionUi();
+    render();
+  }
+
+  function toggleSelect(id) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    selectedIds = next;
+    syncSelectionUi();
     render();
   }
 
   let draftElement = null;
-  let dragMode = null; // 'draw' | 'move' | 'resize' | 'pan' | 'pencil'
+  let dragMode = null; // 'draw' | 'move' | 'resize' | 'pan' | 'marquee'
   let dragHandle = null;
   let dragStartWorld = null;
   let dragOrig = null;
+  let dragOrigMap = null;
+  let marqueeStart = null;
+  let marqueeBase = null;
+  let marqueeRect = null;
   let panStart = null;
   let spaceHeld = false;
+
+  // El navegador puede negarse a capturar un puntero que no reconoce como
+  // "activo" (algún caso raro de entrada táctil/stylus, o un pointerId ya
+  // liberado a mitad de un gesto); no es un fallo del que el usuario deba
+  // enterarse — el arrastre en curso sigue funcionando igual sin captura,
+  // sólo deja de seguir al puntero si sale fuera del lienzo.
+  function safeSetCapture(pointerId) {
+    try { canvas.setPointerCapture(pointerId); } catch (_e) { /* noop */ }
+  }
 
   function pointerDown(e) {
     if (e.button === 2) return;
@@ -518,7 +577,7 @@
       dragMode = 'pan';
       panStart = { sx, sy, offsetX, offsetY };
       wrap.classList.add('panning');
-      canvas.setPointerCapture(e.pointerId);
+      safeSetCapture(e.pointerId);
       return;
     }
     if (!CAN_WRITE) return;
@@ -527,21 +586,42 @@
       const h = handleAt(w.x, w.y);
       if (h) {
         dragMode = 'resize'; dragHandle = h.pos; dragStartWorld = w;
-        dragOrig = JSON.parse(JSON.stringify(elements.find((el) => el.id === selectedId)));
+        dragOrig = JSON.parse(JSON.stringify(singleSelected()));
         snapshot();
-        canvas.setPointerCapture(e.pointerId);
+        safeSetCapture(e.pointerId);
         return;
       }
       const hit = hitElement(w.x, w.y);
       if (hit) {
-        selectElement(hit.id);
+        if (e.shiftKey) {
+          // Mayús+clic sólo cambia la pertenencia al grupo — no arrastra, para
+          // no mover el elemento sin querer al intentar sumarlo a la selección.
+          toggleSelect(hit.id);
+          safeSetCapture(e.pointerId);
+          return;
+        }
+        // Clic normal sobre un elemento YA seleccionado (dentro de una
+        // selección múltiple): se conserva el grupo entero y se mueve junto.
+        // Sobre uno nuevo: la selección se reemplaza por él, como antes.
+        if (!selectedIds.has(hit.id)) selectElement(hit.id);
         dragMode = 'move'; dragStartWorld = w;
-        dragOrig = JSON.parse(JSON.stringify(hit));
+        dragOrigMap = new Map();
+        selectedIds.forEach((id) => {
+          const el = elements.find((e2) => e2.id === id);
+          if (el) dragOrigMap.set(id, JSON.parse(JSON.stringify(el)));
+        });
         snapshot();
-      } else {
-        selectElement(null);
+        safeSetCapture(e.pointerId);
+        return;
       }
-      canvas.setPointerCapture(e.pointerId);
+      // Lienzo vacío: sin Mayús se reemplaza la selección (se arma con lo que
+      // toque el marco); con Mayús se conserva la que ya había y se le suma.
+      marqueeBase = e.shiftKey ? new Set(selectedIds) : new Set();
+      if (!e.shiftKey) selectElement(null);
+      dragMode = 'marquee';
+      marqueeStart = w;
+      marqueeRect = { x0: w.x, y0: w.y, x1: w.x, y1: w.y };
+      safeSetCapture(e.pointerId);
       return;
     }
 
@@ -580,7 +660,7 @@
     } else {
       draftElement = { id: genId(), type: tool, x: w.x, y: w.y, w: 0, h: 0, color, strokeWidth };
     }
-    canvas.setPointerCapture(e.pointerId);
+    safeSetCapture(e.pointerId);
   }
 
   function pointerMove(e) {
@@ -606,16 +686,33 @@
       render();
       return;
     }
-    if (dragMode === 'move' && dragOrig) {
+    if (dragMode === 'move' && dragOrigMap) {
       const dx = w.x - dragStartWorld.x, dy = w.y - dragStartWorld.y;
-      const el = elements.find((e2) => e2.id === selectedId);
-      applyMove(el, dragOrig, dx, dy);
+      dragOrigMap.forEach((origEl, id) => {
+        const el = elements.find((e2) => e2.id === id);
+        if (el) applyMove(el, origEl, dx, dy);
+      });
       render();
       return;
     }
     if (dragMode === 'resize' && dragOrig) {
-      const el = elements.find((e2) => e2.id === selectedId);
+      const el = singleSelected();
       applyResize(el, dragOrig, dragHandle, w);
+      render();
+      return;
+    }
+    if (dragMode === 'marquee') {
+      marqueeRect = { x0: marqueeStart.x, y0: marqueeStart.y, x1: w.x, y1: w.y };
+      const mx0 = Math.min(marqueeRect.x0, marqueeRect.x1), mx1 = Math.max(marqueeRect.x0, marqueeRect.x1);
+      const my0 = Math.min(marqueeRect.y0, marqueeRect.y1), my1 = Math.max(marqueeRect.y0, marqueeRect.y1);
+      const within = elements
+        .filter((el) => {
+          const b = bbox(el);
+          return b.x < mx1 && b.x + b.w > mx0 && b.y < my1 && b.y + b.h > my0;
+        })
+        .map((el) => el.id);
+      selectedIds = new Set([...marqueeBase, ...within]);
+      syncSelectionUi();
       render();
       return;
     }
@@ -687,8 +784,10 @@
       draftElement = null;
     } else if (dragMode === 'move' || dragMode === 'resize') {
       scheduleSave();
+    } else if (dragMode === 'marquee') {
+      marqueeRect = null; marqueeBase = null;
     }
-    dragMode = null; dragOrig = null; dragHandle = null;
+    dragMode = null; dragOrig = null; dragOrigMap = null; dragHandle = null;
     try { canvas.releasePointerCapture(e.pointerId); } catch (_e) { /* noop */ }
     render();
   }
@@ -862,9 +961,9 @@
     scheduleSave();
   }
   function deleteSelected() {
-    if (!selectedId) return;
+    if (!selectedIds.size) return;
     snapshot();
-    elements = elements.filter((e) => e.id !== selectedId);
+    elements = elements.filter((e) => !selectedIds.has(e.id));
     selectElement(null);
     scheduleSave();
   }
@@ -887,43 +986,47 @@
   }
 
   function copySelected() {
-    const el = elements.find((e) => e.id === selectedId);
-    if (el) clipboardEl = JSON.parse(JSON.stringify(el));
+    const sels = elements.filter((e) => selectedIds.has(e.id));
+    if (sels.length) clipboardEls = JSON.parse(JSON.stringify(sels));
   }
 
   function duplicateSelected() {
-    const el = elements.find((e) => e.id === selectedId);
-    if (!el || !CAN_WRITE) return;
+    const sels = elements.filter((e) => selectedIds.has(e.id));
+    if (!sels.length || !CAN_WRITE) return;
     snapshot();
-    const copy = cloneElementWithOffset(el, 20, 20);
-    elements.push(copy);
-    selectElement(copy.id);
+    const copies = sels.map((el) => cloneElementWithOffset(el, 20, 20));
+    elements.push(...copies);
+    selectMany(copies.map((c) => c.id));
     scheduleSave();
   }
 
   function pasteClipboard(worldPos) {
-    if (!clipboardEl || !CAN_WRITE) return;
+    if (!clipboardEls || !clipboardEls.length || !CAN_WRITE) return;
     snapshot();
-    let copy;
+    let dx = 20, dy = 20;
     if (worldPos) {
-      const b = bbox(clipboardEl);
-      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
-      copy = cloneElementWithOffset(clipboardEl, worldPos.x - cx, worldPos.y - cy);
-    } else {
-      copy = cloneElementWithOffset(clipboardEl, 20, 20);
+      // Ancla al centro del BLOQUE copiado (no de cada elemento por
+      // separado), para que el grupo se pegue conservando su forma relativa.
+      const boxes = clipboardEls.map(bbox);
+      const gx0 = Math.min(...boxes.map((b) => b.x)), gy0 = Math.min(...boxes.map((b) => b.y));
+      const gx1 = Math.max(...boxes.map((b) => b.x + b.w)), gy1 = Math.max(...boxes.map((b) => b.y + b.h));
+      dx = worldPos.x - (gx0 + gx1) / 2;
+      dy = worldPos.y - (gy0 + gy1) / 2;
     }
-    elements.push(copy);
-    selectElement(copy.id);
+    const copies = clipboardEls.map((el) => cloneElementWithOffset(el, dx, dy));
+    elements.push(...copies);
+    selectMany(copies.map((c) => c.id));
     scheduleSave();
   }
 
   function reorderSelected(dir) {
-    if (!selectedId || !CAN_WRITE) return;
-    const idx = elements.findIndex((e) => e.id === selectedId);
-    if (idx < 0) return;
+    if (!selectedIds.size || !CAN_WRITE) return;
     snapshot();
-    const [el] = elements.splice(idx, 1);
-    if (dir > 0) elements.push(el); else elements.unshift(el);
+    // El orden relativo DENTRO del grupo seleccionado se conserva (el filter
+    // no reordena); sólo se mueve el bloque entero al principio o al final.
+    const selected = elements.filter((e) => selectedIds.has(e.id));
+    const rest = elements.filter((e) => !selectedIds.has(e.id));
+    elements = dir > 0 ? [...rest, ...selected] : [...selected, ...rest];
     render();
     scheduleSave();
   }
@@ -956,13 +1059,13 @@
 
   document.getElementById('pz-color').addEventListener('input', (e) => {
     color = e.target.value;
-    const sel = elements.find((el) => el.id === selectedId);
-    if (sel) { sel.color = color; render(); scheduleSave(); }
+    const sels = elements.filter((el) => selectedIds.has(el.id));
+    if (sels.length) { sels.forEach((el) => { el.color = color; }); render(); scheduleSave(); }
   });
   document.getElementById('pz-stroke').addEventListener('change', (e) => {
     strokeWidth = parseFloat(e.target.value);
-    const sel = elements.find((el) => el.id === selectedId);
-    if (sel && 'strokeWidth' in sel) { sel.strokeWidth = strokeWidth; render(); scheduleSave(); }
+    const sels = elements.filter((el) => selectedIds.has(el.id) && 'strokeWidth' in el);
+    if (sels.length) { sels.forEach((el) => { el.strokeWidth = strokeWidth; }); render(); scheduleSave(); }
   });
 
   /* ════════════ Teclado ════════════ */
@@ -975,18 +1078,22 @@
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-      if (selectedId) { copySelected(); }
+      if (selectedIds.size) { copySelected(); }
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-      if (clipboardEl) { e.preventDefault(); pasteClipboard(null); }
+      if (clipboardEls && clipboardEls.length) { e.preventDefault(); pasteClipboard(null); }
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-      if (selectedId) { e.preventDefault(); duplicateSelected(); }
+      if (selectedIds.size) { e.preventDefault(); duplicateSelected(); }
       return;
     }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { e.preventDefault(); deleteSelected(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      if (tool === 'select' && elements.length) { e.preventDefault(); selectMany(elements.map((el) => el.id)); }
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size) { e.preventDefault(); deleteSelected(); return; }
     if (!CAN_WRITE) return;
     const map = { v: 'select', h: 'pan', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', p: 'pencil', t: 'text' };
     const k = e.key.toLowerCase();
@@ -998,7 +1105,7 @@
 
   canvas.addEventListener('dblclick', () => {
     if (!CAN_WRITE || tool !== 'select') return;
-    const el = elements.find((x) => x.id === selectedId);
+    const el = singleSelected();
     if (el && el.type === 'text') startTextInput({ x: el.x, y: el.y }, el);
   });
 
@@ -1132,11 +1239,14 @@
     const w = screenToWorld(sx, sy);
     lastCtxWorldPos = w;
     const hit = hitElement(w.x, w.y);
-    if (hit) selectElement(hit.id);
+    // Clic derecho sobre un elemento que YA forma parte de una selección
+    // múltiple: se conserva el grupo (para poder duplicar/eliminar todos a
+    // la vez). Sobre uno nuevo, la selección se reemplaza por él solo.
+    if (hit && !selectedIds.has(hit.id)) selectElement(hit.id);
     ctxMenu.querySelectorAll('[data-need-target]').forEach((el) => {
       el.style.display = hit ? '' : 'none';
     });
-    document.getElementById('pz-ctx-paste').disabled = !clipboardEl;
+    document.getElementById('pz-ctx-paste').disabled = !clipboardEls || !clipboardEls.length;
 
     ctxMenu.classList.remove('hidden');
     ctxMenu.style.left = '0px'; ctxMenu.style.top = '0px';
