@@ -34,9 +34,25 @@ Cogny es una aplicación web de notas al estilo Obsidian construida con Django. 
 - Editor con resaltado de sintaxis, fórmulas (KaTeX), diagramas (Mermaid) y callouts.
 - Exportación de notas a PDF, con imágenes y estilos incrustados.
 - Búsqueda instantánea por nombre y por contenido.
+- Pizarra: lienzo de dibujo tipo Excalidraw, integrado en el editor (ver [Pizarra](#pizarra)).
 - Optimización de imágenes a WebP, al subirlas o en bloque para toda la bóveda, con backup ZIP previo opcional.
 - Importación y exportación de la bóveda completa en un único ZIP.
 - Progressive Web App instalable, con caché de estáticos para uso offline.
+
+## Pizarra
+
+<p align="center"><img src="assets/screenshots/pizarra.png" width="850" alt="Pizarra: lienzo de dibujo tipo Excalidraw"></p>
+
+Pizarra es un lienzo de dibujo estilo Excalidraw, construido desde cero (sin depender de la librería Excalidraw), integrado en el editor de notas. Se abre con el botón **Pizarra** desde la barra de una nota, y cada bóveda tiene una galería de pizarras guardadas entre las que moverse.
+
+Dentro de una pizarra:
+
+- Herramientas de selección y desplazamiento (pan), además de formas: rectángulo, elipse, línea, flecha y dibujo a mano alzada.
+- Texto con tamaño de fuente redimensionable.
+- Subida de imágenes.
+- Selector de iconos de dispositivos/elementos y una biblioteca de iconos por categorías (Personas, Red y sistemas, Oficina, Lugares, Apps y marcas, General) con decenas de iconos.
+- Selección múltiple, copiar/pegar y menú contextual (clic derecho).
+- Autoguardado: los cambios se persisten solos, sin necesidad de guardar manualmente.
 
 ## Stack
 
