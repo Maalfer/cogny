@@ -64,6 +64,12 @@
         <option value="3" selected>Medio</option>
         <option value="5">Grueso</option>
       </select>
+      <div class="pz-bg-wrap" id="pz-bg-wrap">
+        <button class="pz-tool" id="pz-bg-btn" title="Fondo del lienzo" aria-label="Fondo del lienzo" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.4 0 2.5-1.1 2.5-2.5 0-.65-.25-1.24-.65-1.69-.39-.44-.65-1.02-.65-1.66 0-1.38 1.12-2.5 2.5-2.5H17c2.76 0 5-2.24 5-5C22 6.5 17.5 2 12 2zM6.5 12A1.5 1.5 0 1 1 6.5 9a1.5 1.5 0 0 1 0 3zm3-4A1.5 1.5 0 1 1 9.5 5a1.5 1.5 0 0 1 0 3zm5 0A1.5 1.5 0 1 1 14.5 5a1.5 1.5 0 0 1 0 3zm3 4A1.5 1.5 0 1 1 17.5 9a1.5 1.5 0 0 1 0 3z"/></svg>
+        </button>
+        <div class="pz-bg-menu hidden" id="pz-bg-menu"></div>
+      </div>
     </div>
     <div class="pz-tool-sep"></div>
     <div class="pz-tool-group">
@@ -87,6 +93,15 @@
       <button id="pz-zoom-in" title="Acercar" aria-label="Acercar">+</button>
     </div>
   </div>
+</div>
+<div class="pz-ctx-menu hidden" id="pz-ctx-menu">
+  <button type="button" data-action="copy" data-need-target>Copiar<span>Ctrl+C</span></button>
+  <button type="button" data-action="duplicate" data-need-target>Duplicar</button>
+  <button type="button" data-action="front" data-need-target>Traer al frente</button>
+  <button type="button" data-action="back" data-need-target>Enviar atrás</button>
+  <button type="button" data-action="delete" data-need-target>Eliminar<span>Supr</span></button>
+  <div class="pz-ctx-sep" data-need-target></div>
+  <button type="button" data-action="paste" id="pz-ctx-paste">Pegar<span>Ctrl+V</span></button>
 </div>
 <span class="pz-save-status" id="pz-save-status"></span>
 <input type="file" id="pz-file-input" accept="image/*" class="pz-hidden-input">

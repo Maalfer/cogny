@@ -32,6 +32,57 @@
     bolt: 'M13 2 4 14h6l-1 8 9-12h-6z',
   };
 
+  /* ════════════ Fondo del lienzo ════════════ */
+  const BG_PRESETS = [
+    { name: 'Oscuro', value: '#15181f' },
+    { name: 'Gris', value: '#2b2d31' },
+    { name: 'Claro', value: '#ffffff' },
+    { name: 'Crema', value: '#fdf6e3' },
+    { name: 'Amarillo', value: '#fff3bf' },
+    { name: 'Rosa', value: '#ffe3ec' },
+    { name: 'Azul', value: '#dbe9ff' },
+    { name: 'Verde', value: '#dcf5e0' },
+  ];
+
+  function buildBgMenu() {
+    const bgMenu = document.getElementById('pz-bg-menu');
+    const swatches = document.createElement('div');
+    swatches.className = 'pz-bg-swatches';
+    BG_PRESETS.forEach((preset) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pz-bg-swatch';
+      b.title = preset.name;
+      b.style.background = preset.value;
+      b.dataset.value = preset.value;
+      b.addEventListener('click', () => setBgColor(preset.value));
+      swatches.appendChild(b);
+    });
+    bgMenu.appendChild(swatches);
+
+    const custom = document.createElement('div');
+    custom.className = 'pz-bg-custom';
+    custom.innerHTML = '<label for="pz-bg-custom-input">Personalizado</label>';
+    const input = document.createElement('input');
+    input.type = 'color'; input.id = 'pz-bg-custom-input'; input.value = bgColor;
+    input.addEventListener('input', (e) => setBgColor(e.target.value));
+    custom.appendChild(input);
+    bgMenu.appendChild(custom);
+  }
+
+  function syncBgUi(value) {
+    document.querySelectorAll('.pz-bg-swatch').forEach((b) => b.classList.toggle('active', b.dataset.value === value));
+    const customInput = document.getElementById('pz-bg-custom-input');
+    if (customInput) customInput.value = value;
+  }
+
+  function setBgColor(value) {
+    bgColor = value;
+    syncBgUi(value);
+    render();
+    scheduleSave();
+  }
+
   function buildIconMenu() {
     Object.keys(ICONS).forEach((name) => {
       const b = document.createElement('button');
@@ -60,6 +111,9 @@
   let zoom = savedAppState.zoom || 1;
   let offsetX = savedAppState.offsetX || 0;
   let offsetY = savedAppState.offsetY || 0;
+  let bgColor = savedAppState.bgColor || '#15181f';
+  let clipboardEl = null;
+  let lastCtxWorldPos = null;
 
   let undoStack = [];
   let redoStack = [];
@@ -239,22 +293,30 @@
     ];
   }
 
+  function isLightColor(hex) {
+    const c = (hex || '').replace('#', '');
+    if (c.length !== 6) return false;
+    const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
+  }
+
   function render() {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    ctx.fillStyle = '#15181f';
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(zoom, zoom);
 
-    // Puntos de fondo (referencia visual del lienzo infinito).
+    // Puntos de fondo (referencia visual del lienzo infinito). El contraste
+    // se adapta al fondo elegido para que sigan visibles sobre uno claro.
     const rect = wrap.getBoundingClientRect();
     const step = 32;
     const tl = screenToWorld(0, 0), br = screenToWorld(rect.width, rect.height);
-    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    ctx.fillStyle = isLightColor(bgColor) ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
     const startX = Math.floor(tl.x / step) * step, startY = Math.floor(tl.y / step) * step;
     for (let x = startX; x < br.x; x += step) {
       for (let y = startY; y < br.y; y += step) {
@@ -510,24 +572,36 @@
 
   /* ════════════ Texto ════════════ */
   function startTextInput(worldPos, existing) {
-    const rectC = wrap.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
     const ta = document.createElement('textarea');
     ta.className = 'pz-text-input';
+    ta.setAttribute('wrap', 'off');
+    ta.spellcheck = false;
     ta.value = existing ? existing.text : '';
     const fontSize = (existing && existing.fontSize) || 20;
-    ta.style.font = `${fontSize * zoom}px "Assistant", sans-serif`;
+    const fontStr = `${fontSize * zoom}px "Assistant", sans-serif`;
+    ta.style.font = fontStr;
     ta.style.color = (existing && existing.color) || color;
-    const place = () => {
-      const sx = worldPos.x * zoom + offsetX, sy = worldPos.y * zoom + offsetY;
-      ta.style.left = sx + 'px'; ta.style.top = sy + 'px';
-    };
-    place();
-    wrap.appendChild(ta);
+    // `position:fixed` va relativo al viewport, así que basta con la posición
+    // en pantalla del punto del mundo — no hace falta restar scroll alguno.
+    const sx = canvasRect.left + worldPos.x * zoom + offsetX;
+    const sy = canvasRect.top + worldPos.y * zoom + offsetY;
+    ta.style.left = sx + 'px'; ta.style.top = sy + 'px';
+    document.body.appendChild(ta);
     ta.focus();
+    // El textarea envuelve por defecto (`wrap=off`/`white-space:pre` sólo
+    // evita el salto de línea automático, no cambia cómo mide el propio
+    // elemento su tamaño): medir el ancho por `scrollWidth` da el ancho de la
+    // caja, no del texto. Se mide con el mismo `ctx.font` que usa el lienzo,
+    // así el tamaño en pantalla mientras se escribe coincide con el que
+    // tendrá el texto ya dibujado.
     const autoSize = () => {
-      ta.style.height = 'auto'; ta.style.width = 'auto';
+      ctx.font = fontStr;
+      const lines = ta.value.split('\n');
+      const textW = Math.max(...lines.map((l) => ctx.measureText(l || ' ').width));
+      ta.style.width = (textW + 10) + 'px';
+      ta.style.height = 'auto';
       ta.style.height = ta.scrollHeight + 'px';
-      ta.style.width = Math.max(30, ta.scrollWidth + 8) + 'px';
     };
     ta.addEventListener('input', autoSize);
     autoSize();
@@ -664,6 +738,65 @@
     scheduleSave();
   }
 
+  /* ════════════ Copiar / duplicar / pegar / orden ════════════ */
+  function cloneElementWithOffset(el, dx, dy) {
+    const c = JSON.parse(JSON.stringify(el));
+    c.id = genId();
+    switch (c.type) {
+      case 'line': case 'arrow':
+        c.x1 += dx; c.y1 += dy; c.x2 += dx; c.y2 += dy;
+        break;
+      case 'pencil':
+        c.points = c.points.map((p) => [p[0] + dx, p[1] + dy]);
+        break;
+      default:
+        c.x += dx; c.y += dy;
+    }
+    return c;
+  }
+
+  function copySelected() {
+    const el = elements.find((e) => e.id === selectedId);
+    if (el) clipboardEl = JSON.parse(JSON.stringify(el));
+  }
+
+  function duplicateSelected() {
+    const el = elements.find((e) => e.id === selectedId);
+    if (!el || !CAN_WRITE) return;
+    snapshot();
+    const copy = cloneElementWithOffset(el, 20, 20);
+    elements.push(copy);
+    selectElement(copy.id);
+    scheduleSave();
+  }
+
+  function pasteClipboard(worldPos) {
+    if (!clipboardEl || !CAN_WRITE) return;
+    snapshot();
+    let copy;
+    if (worldPos) {
+      const b = bbox(clipboardEl);
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      copy = cloneElementWithOffset(clipboardEl, worldPos.x - cx, worldPos.y - cy);
+    } else {
+      copy = cloneElementWithOffset(clipboardEl, 20, 20);
+    }
+    elements.push(copy);
+    selectElement(copy.id);
+    scheduleSave();
+  }
+
+  function reorderSelected(dir) {
+    if (!selectedId || !CAN_WRITE) return;
+    const idx = elements.findIndex((e) => e.id === selectedId);
+    if (idx < 0) return;
+    snapshot();
+    const [el] = elements.splice(idx, 1);
+    if (dir > 0) elements.push(el); else elements.unshift(el);
+    render();
+    scheduleSave();
+  }
+
   document.getElementById('pz-undo').addEventListener('click', undo);
   document.getElementById('pz-redo').addEventListener('click', redo);
   document.getElementById('pz-delete').addEventListener('click', deleteSelected);
@@ -678,8 +811,12 @@
       setTool(btn.dataset.tool);
     });
   });
+  document.getElementById('pz-bg-btn').addEventListener('click', () => {
+    document.getElementById('pz-bg-menu').classList.toggle('hidden');
+  });
   document.addEventListener('click', (e) => {
     if (!document.getElementById('pz-icon-wrap').contains(e.target)) iconMenu.classList.add('hidden');
+    if (!document.getElementById('pz-bg-wrap').contains(e.target)) document.getElementById('pz-bg-menu').classList.add('hidden');
   });
 
   document.getElementById('pz-color').addEventListener('input', (e) => {
@@ -700,6 +837,18 @@
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       e.shiftKey ? redo() : undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      if (selectedId) { copySelected(); }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      if (clipboardEl) { e.preventDefault(); pasteClipboard(null); }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+      if (selectedId) { e.preventDefault(); duplicateSelected(); }
       return;
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { e.preventDefault(); deleteSelected(); return; }
@@ -738,7 +887,7 @@
         body: JSON.stringify({
           id: BOOT.id,
           elements,
-          appState: { zoom, offsetX, offsetY },
+          appState: { zoom, offsetX, offsetY, bgColor },
           files: {},
         }),
       });
@@ -772,7 +921,7 @@
     const off = document.createElement('canvas');
     off.width = tw; off.height = th;
     const octx = off.getContext('2d');
-    octx.fillStyle = '#15181f';
+    octx.fillStyle = bgColor;
     octx.fillRect(0, 0, tw, th);
     octx.translate((tw - cw * scale) / 2, (th - ch * scale) / 2);
     octx.scale(scale, scale);
@@ -833,13 +982,64 @@
     }
   }
 
+  /* ════════════ Menú contextual (clic derecho) ════════════ */
+  const ctxMenu = document.getElementById('pz-ctx-menu');
+
+  function hideContextMenu() {
+    ctxMenu.classList.add('hidden');
+  }
+
+  function showContextMenu(e) {
+    e.preventDefault();
+    if (!CAN_WRITE) return;
+    const rect = wrap.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    const w = screenToWorld(sx, sy);
+    lastCtxWorldPos = w;
+    const hit = hitElement(w.x, w.y);
+    if (hit) selectElement(hit.id);
+    ctxMenu.querySelectorAll('[data-need-target]').forEach((el) => {
+      el.style.display = hit ? '' : 'none';
+    });
+    document.getElementById('pz-ctx-paste').disabled = !clipboardEl;
+
+    ctxMenu.classList.remove('hidden');
+    ctxMenu.style.left = '0px'; ctxMenu.style.top = '0px';
+    const menuRect = ctxMenu.getBoundingClientRect();
+    const maxLeft = window.innerWidth - menuRect.width - 8;
+    const maxTop = window.innerHeight - menuRect.height - 8;
+    ctxMenu.style.left = Math.max(8, Math.min(e.clientX, maxLeft)) + 'px';
+    ctxMenu.style.top = Math.max(8, Math.min(e.clientY, maxTop)) + 'px';
+  }
+
+  ctxMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn || btn.disabled || btn.style.display === 'none') return;
+    hideContextMenu();
+    const action = btn.dataset.action;
+    if (action === 'copy') copySelected();
+    else if (action === 'duplicate') duplicateSelected();
+    else if (action === 'front') reorderSelected(1);
+    else if (action === 'back') reorderSelected(-1);
+    else if (action === 'delete') deleteSelected();
+    else if (action === 'paste') pasteClipboard(lastCtxWorldPos);
+  });
+  document.addEventListener('click', (e) => {
+    if (!ctxMenu.contains(e.target)) hideContextMenu();
+  });
+  window.addEventListener('blur', hideContextMenu);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
+
   /* ════════════ Arranque ════════════ */
   buildIconMenu();
+  buildBgMenu();
+  syncBgUi(bgColor);
   if (!CAN_WRITE) {
     document.querySelectorAll('.pz-toolbar .pz-tool[data-tool]:not([data-tool="select"]):not([data-tool="pan"])')
       .forEach((b) => { b.disabled = true; });
     document.getElementById('pz-color').disabled = true;
     document.getElementById('pz-stroke').disabled = true;
+    document.getElementById('pz-bg-btn').disabled = true;
     setTool('select');
   } else {
     setTool('select');
@@ -850,7 +1050,7 @@
   canvas.addEventListener('pointermove', pointerMove);
   window.addEventListener('pointerup', pointerUp);
   window.addEventListener('resize', resizeCanvas);
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('contextmenu', showContextMenu);
 
   resizeCanvas();
   render();

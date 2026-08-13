@@ -26,6 +26,16 @@
 .pz-icon-item:hover{ background:rgba(255,255,255,.1); color:#fff; }
 .pz-icon-item svg{ width:20px; height:20px; }
 
+.pz-bg-wrap{ position:relative; }
+.pz-bg-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:.6rem; display:flex; flex-direction:column; gap:.55rem; box-shadow:0 8px 24px rgba(0,0,0,.4); width:200px; }
+.pz-bg-menu.hidden{ display:none; }
+.pz-bg-swatches{ display:grid; grid-template-columns:repeat(4,1fr); gap:.4rem; }
+.pz-bg-swatch{ width:32px; height:32px; border-radius:8px; border:2px solid transparent; cursor:pointer; padding:0; }
+.pz-bg-swatch.active{ border-color:var(--cyan,#22d3ee); }
+.pz-bg-custom{ display:flex; align-items:center; gap:.5rem; padding-top:.5rem; border-top:1px solid var(--border); }
+.pz-bg-custom label{ font-size:.78rem; color:var(--text2); flex:1; }
+.pz-bg-custom input[type="color"]{ width:28px; height:28px; padding:0; border:1px solid var(--border); border-radius:6px; background:transparent; cursor:pointer; }
+
 .pz-canvas-wrap{ position:relative; flex:1; min-height:0; overflow:hidden; touch-action:none; }
 .pz-canvas-wrap canvas{ display:block; width:100%; height:100%; background:#15181f; cursor:crosshair; }
 .pz-canvas-wrap.tool-select canvas{ cursor:default; }
@@ -37,7 +47,19 @@
 .pz-zoom button:hover{ background:rgba(255,255,255,.1); }
 .pz-zoom span{ font-size:.78rem; color:var(--text2); min-width:3.2em; text-align:center; }
 
-.pz-text-input{ position:absolute; background:transparent; border:1px dashed var(--cyan,#22d3ee); outline:none; resize:none; overflow:hidden; padding:2px 4px; font-family:inherit; line-height:1.3; min-width:20px; }
+/* `position:fixed` (no `overflow:hidden` ancestor, a diferencia de un absolute
+   dentro de `.pz-canvas-wrap`) para que el cuadro de texto nunca se recorte
+   al escribir cerca del borde del lienzo. */
+.pz-text-input{ position:fixed; z-index:40; background:transparent; border:1px dashed var(--cyan,#22d3ee); outline:none; resize:none; overflow:hidden; padding:2px 4px; font-family:inherit; line-height:1.3; min-width:20px; white-space:pre; }
+
+.pz-ctx-menu{ position:fixed; z-index:50; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:.35rem; display:flex; flex-direction:column; min-width:180px; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+.pz-ctx-menu.hidden{ display:none; }
+.pz-ctx-menu button{ display:flex; align-items:center; justify-content:space-between; gap:1rem; background:transparent; border:none; color:var(--text); text-align:left; padding:.45rem .6rem; border-radius:6px; cursor:pointer; font-size:.85rem; }
+.pz-ctx-menu button:hover{ background:rgba(255,255,255,.1); }
+.pz-ctx-menu button:disabled{ opacity:.35; cursor:default; }
+.pz-ctx-menu button:disabled:hover{ background:transparent; }
+.pz-ctx-menu button span{ font-size:.72rem; color:var(--text2); }
+.pz-ctx-sep{ height:1px; background:var(--border); margin:.3rem .2rem; }
 
 .pz-save-status{ position:fixed; bottom:.6rem; right:.7rem; font-size:.72rem; color:var(--text2); background:var(--bg2); border:1px solid var(--border); padding:.2rem .55rem; border-radius:6px; pointer-events:none; z-index:30; opacity:0; transition:opacity .2s; }
 .pz-save-status.show{ opacity:1; }
