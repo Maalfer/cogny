@@ -76,9 +76,79 @@
     if (customInput) customInput.value = value;
   }
 
+  // ── Contraste automático: si al cambiar de fondo un trazo queda casi
+  // invisible (p.ej. un contorno blanco sobre un fondo blanco), se voltea su
+  // luminosidad manteniendo el tono — blanco->negro, azul claro->azul oscuro,
+  // etc. — en vez de forzar siempre blanco/negro puro.
+  function hexToRgb(hex) {
+    const c = (hex || '').replace('#', '');
+    return { r: parseInt(c.slice(0, 2), 16) || 0, g: parseInt(c.slice(2, 4), 16) || 0, b: parseInt(c.slice(4, 6), 16) || 0 };
+  }
+  function rgbToHex(r, g, b) {
+    const h = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+    return `#${h(r)}${h(g)}${h(b)}`;
+  }
+  function relLuminance(hex) {
+    const { r, g, b } = hexToRgb(hex);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0; const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return { h, s, l };
+  }
+  function hslToRgb(h, s, l) {
+    if (s === 0) return { r: l * 255, g: l * 255, b: l * 255 };
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    return { r: hue2rgb(p, q, h + 1 / 3) * 255, g: hue2rgb(p, q, h) * 255, b: hue2rgb(p, q, h - 1 / 3) * 255 };
+  }
+  function ensureContrast(colorHex, bgHex) {
+    const cl = relLuminance(colorHex), bl = relLuminance(bgHex);
+    if (Math.abs(cl - bl) >= 0.35) return colorHex;
+    const rgb = hexToRgb(colorHex);
+    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    const targetL = bl > 0.5 ? 0.16 : 0.92;
+    const out = hslToRgb(hsl.h, hsl.s, targetL);
+    return rgbToHex(out.r, out.g, out.b);
+  }
+
+  function autoContrastElements(bg) {
+    const toFix = elements.filter((el) => el.color && ensureContrast(el.color, bg) !== el.color);
+    if (toFix.length) {
+      snapshot();
+      toFix.forEach((el) => { el.color = ensureContrast(el.color, bg); });
+      selectElement(selectedId);
+    }
+    const newDefault = ensureContrast(color, bg);
+    if (newDefault !== color) {
+      color = newDefault;
+      const colorInput = document.getElementById('pz-color');
+      if (colorInput) colorInput.value = color;
+    }
+  }
+
   function setBgColor(value) {
     bgColor = value;
     syncBgUi(value);
+    if (CAN_WRITE) autoContrastElements(value);
     render();
     scheduleSave();
   }
