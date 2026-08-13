@@ -20,7 +20,7 @@
 .pz-select{ background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:.35rem .5rem; font-size:.8rem; cursor:pointer; }
 
 .pz-icon-wrap{ position:relative; }
-.pz-icon-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:.5rem; display:grid; grid-template-columns:repeat(6,1fr); gap:.25rem; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+.pz-icon-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:.5rem; display:grid; grid-template-columns:repeat(8,1fr); gap:.2rem; box-shadow:0 8px 24px rgba(0,0,0,.4); max-height:min(60vh,420px); max-width:min(90vw,340px); overflow-y:auto; }
 .pz-icon-menu.hidden{ display:none; }
 .pz-icon-item{ background:transparent; border:none; color:rgba(255,255,255,.8); cursor:pointer; padding:.4rem; border-radius:6px; display:flex; }
 .pz-icon-item:hover{ background:rgba(255,255,255,.1); color:#fff; }
