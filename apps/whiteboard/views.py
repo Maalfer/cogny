@@ -170,4 +170,9 @@ def thumb(request):
     path = storage.thumb_path(board.id)
     if not board.has_thumb or not path.exists():
         raise Http404
-    return FileResponse(open(path, "rb"), content_type="image/png")
+    # Sin validadores (ETag/Last-Modified) el archivo cambia bajo la misma
+    # URL cada vez que se edita el lienzo — sin esto el navegador puede
+    # servir de caché una miniatura vieja al volver a la galería.
+    resp = FileResponse(open(path, "rb"), content_type="image/png")
+    resp["Cache-Control"] = "no-store"
+    return resp

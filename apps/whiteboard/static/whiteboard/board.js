@@ -1302,36 +1302,41 @@
   }
 
   function saveThumb() {
-    if (!CAN_WRITE || !elements.length) return;
-    const pad = 40;
-    const boxes = elements.map(bbox);
-    const minX = Math.min(...boxes.map((b) => b.x)) - pad;
-    const minY = Math.min(...boxes.map((b) => b.y)) - pad;
-    const maxX = Math.max(...boxes.map((b) => b.x + b.w)) + pad;
-    const maxY = Math.max(...boxes.map((b) => b.y + b.h)) + pad;
-    const cw = Math.max(1, maxX - minX), ch = Math.max(1, maxY - minY);
+    if (!CAN_WRITE) return Promise.resolve();
     const tw = 480, th = 360;
-    const scale = Math.min(tw / cw, th / ch);
-
     const off = document.createElement('canvas');
     off.width = tw; off.height = th;
     const octx = off.getContext('2d');
     octx.fillStyle = bgColor;
     octx.fillRect(0, 0, tw, th);
-    octx.translate((tw - cw * scale) / 2, (th - ch * scale) / 2);
-    octx.scale(scale, scale);
-    octx.translate(-minX, -minY);
 
-    elements.forEach((el) => {
-      octx.save();
-      octx.strokeStyle = el.color || '#e9edf5';
-      octx.fillStyle = el.color || '#e9edf5';
-      octx.lineWidth = (el.strokeWidth || 2);
-      octx.lineCap = 'round'; octx.lineJoin = 'round';
-      drawElementOn(octx, el);
-      octx.restore();
-    });
-    fetch(BOOT.thumbUrl, {
+    // Un lienzo vacío (se borró todo) también debe subir una miniatura —
+    // si no, la galería se queda enseñando para siempre la última con
+    // contenido en vez de reflejar que ahora está en blanco.
+    if (elements.length) {
+      const pad = 40;
+      const boxes = elements.map(bbox);
+      const minX = Math.min(...boxes.map((b) => b.x)) - pad;
+      const minY = Math.min(...boxes.map((b) => b.y)) - pad;
+      const maxX = Math.max(...boxes.map((b) => b.x + b.w)) + pad;
+      const maxY = Math.max(...boxes.map((b) => b.y + b.h)) + pad;
+      const cw = Math.max(1, maxX - minX), ch = Math.max(1, maxY - minY);
+      const scale = Math.min(tw / cw, th / ch);
+      octx.translate((tw - cw * scale) / 2, (th - ch * scale) / 2);
+      octx.scale(scale, scale);
+      octx.translate(-minX, -minY);
+
+      elements.forEach((el) => {
+        octx.save();
+        octx.strokeStyle = el.color || '#e9edf5';
+        octx.fillStyle = el.color || '#e9edf5';
+        octx.lineWidth = (el.strokeWidth || 2);
+        octx.lineCap = 'round'; octx.lineJoin = 'round';
+        drawElementOn(octx, el);
+        octx.restore();
+      });
+    }
+    return fetch(BOOT.thumbUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: BOOT.id, dataUrl: off.toDataURL('image/png') }),
@@ -1450,6 +1455,23 @@
   window.addEventListener('pointerup', pointerUp);
   window.addEventListener('resize', resizeCanvas);
   canvas.addEventListener('contextmenu', showContextMenu);
+
+  // El guardado de escena/miniatura va debounced (900ms/4s): si el usuario
+  // borra algo y vuelve a la galería enseguida con "Volver", ese timer aún
+  // no ha saltado y la galería enseña la miniatura vieja. Si hay algo
+  // pendiente, lo forzamos ya y esperamos a que termine antes de navegar.
+  const backLink = document.querySelector('.pz-back');
+  if (backLink) {
+    backLink.addEventListener('click', (e) => {
+      if (!CAN_WRITE || (!saveTimer && !thumbTimer)) return;
+      e.preventDefault();
+      clearTimeout(saveTimer); saveTimer = null;
+      clearTimeout(thumbTimer); thumbTimer = null;
+      Promise.all([saveNow(), saveThumb()]).finally(() => {
+        window.location.href = backLink.href;
+      });
+    });
+  }
 
   resizeCanvas();
   render();
