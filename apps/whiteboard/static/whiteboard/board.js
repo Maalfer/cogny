@@ -12,6 +12,7 @@
   const zoomLabel = document.getElementById('pz-zoom-level');
   const fileInput = document.getElementById('pz-file-input');
   const iconMenu = document.getElementById('pz-icon-menu');
+  const elementsMenu = document.getElementById('pz-elements-menu');
 
   const HANDLE_R = 5;
   const HIT_PAD = 6;
@@ -31,6 +32,21 @@
     chat: 'M4 4.5h16v11H9.5L5 19.5v-4H4z',
     bolt: 'M13 2 4 14h6l-1 8 9-12h-6z',
   };
+
+  /* ════════════ Elementos (dispositivos, trazos propios) ════════════ */
+  const ELEMENT_ICONS = {
+    monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
+    desktop: 'M7 3h10v18H7zM9 7h6M9 11h.01M9 15h6',
+    laptop: 'M5 5h14v9H5zM2 18h20l-1.5-3h-17z',
+    server: 'M4 4h16v6H4zM4 12h16v6H4zM7 7h.01M7 15h.01',
+    printer: 'M7 9V4h10v5M4 9h16v7h-4v3H8v-3H4zM8 13h8',
+    phone: 'M8 2h8a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11.5 19h1',
+    tablet: 'M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2',
+    router: 'M3 18h18M5 18v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M8 9a5.7 5.7 0 0 1 8 0M10 12a2.7 2.7 0 0 1 4 0',
+    keyboard: 'M2 6h20v12H2zM5 9h.01M8 9h.01M11 9h.01M14 9h.01M17 9h.01M5 12h.01M8 12h8',
+    database: 'M12 4c3.9 0 7 1 7 2.2S15.9 8.4 12 8.4 5 7.4 5 6.2 8.1 4 12 4zM5 6.2v11.6c0 1.2 3.1 2.2 7 2.2s7-1 7-2.2V6.2M5 12c0 1.2 3.1 2.2 7 2.2s7-1 7-2.2',
+  };
+  const ALL_ICONS = Object.assign({}, ICONS, ELEMENT_ICONS);
 
   /* ════════════ Fondo del lienzo ════════════ */
   const BG_PRESETS = [
@@ -153,20 +169,26 @@
     scheduleSave();
   }
 
-  function buildIconMenu() {
-    Object.keys(ICONS).forEach((name) => {
+  function buildPickerMenu(menuEl, registry) {
+    Object.keys(registry).forEach((name) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'pz-icon-item';
       b.title = name;
-      b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[name]}"/></svg>`;
+      b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${registry[name]}"/></svg>`;
       b.addEventListener('click', () => {
         pendingIcon = name;
         setTool('icon');
-        iconMenu.classList.add('hidden');
+        menuEl.classList.add('hidden');
       });
-      iconMenu.appendChild(b);
+      menuEl.appendChild(b);
     });
+  }
+  function buildIconMenu() {
+    buildPickerMenu(iconMenu, ICONS);
+  }
+  function buildElementsMenu() {
+    buildPickerMenu(elementsMenu, ELEMENT_ICONS);
   }
 
   /* ════════════ Estado ════════════ */
@@ -320,7 +342,7 @@
         break;
       }
       case 'icon': {
-        const p = new Path2D(ICONS[el.name] || '');
+        const p = new Path2D(ALL_ICONS[el.name] || '');
         ctx.save();
         ctx.translate(el.x, el.y);
         ctx.scale(el.w / 24, el.h / 24);
@@ -344,7 +366,7 @@
     ctx.setLineDash([4 / zoom, 3 / zoom]);
     ctx.strokeRect(b.x - 4 / zoom, b.y - 4 / zoom, b.w + 8 / zoom, b.h + 8 / zoom);
     ctx.setLineDash([]);
-    if (CAN_WRITE && el.type !== 'pencil' && el.type !== 'text') {
+    if (CAN_WRITE && el.type !== 'pencil') {
       ctx.fillStyle = '#22d3ee';
       handlesFor(el).forEach((h) => {
         ctx.beginPath();
@@ -444,7 +466,7 @@
 
   function handleAt(wx, wy) {
     const sel = elements.find((e) => e.id === selectedId);
-    if (!sel || !CAN_WRITE || sel.type === 'pencil' || sel.type === 'text') return null;
+    if (!sel || !CAN_WRITE || sel.type === 'pencil') return null;
     const pad = (HANDLE_R + 3) / zoom;
     return handlesFor(sel).find((h) => Math.hypot(wx - h.x, wy - h.y) <= pad) || null;
   }
@@ -453,6 +475,12 @@
   function setTool(t) {
     tool = t;
     document.querySelectorAll('.pz-tool[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
+    // El botón "Elementos" no lleva data-tool (comparte tool='icon' con
+    // "Iconos") — se resalta a mano según de qué registro salió pendingIcon.
+    const elementsBtn = document.getElementById('pz-elements-btn');
+    const fromElements = t === 'icon' && pendingIcon && Object.prototype.hasOwnProperty.call(ELEMENT_ICONS, pendingIcon);
+    if (elementsBtn) elementsBtn.classList.toggle('active', fromElements);
+    if (fromElements) document.querySelector('[data-tool="icon"]').classList.remove('active');
     wrap.classList.toggle('tool-select', t === 'select');
     wrap.classList.toggle('tool-pan', t === 'pan');
     if (t !== 'icon') pendingIcon = null;
@@ -613,6 +641,10 @@
       if (handle === 'p1') { el.x1 = w.x; el.y1 = w.y; } else { el.x2 = w.x; el.y2 = w.y; }
       return;
     }
+    if (el.type === 'text') {
+      applyTextResize(el, orig, handle, w);
+      return;
+    }
     const ob = { x: orig.x, y: orig.y, w: orig.w, h: orig.h };
     let x = ob.x, y = ob.y, w2 = ob.w, h2 = ob.h;
     if (handle.includes('w')) { w2 = ob.x + ob.w - w.x; x = w.x; }
@@ -620,6 +652,23 @@
     if (handle.includes('n')) { h2 = ob.y + ob.h - w.y; y = w.y; }
     if (handle.includes('s')) { h2 = w.y - ob.y; }
     el.x = x; el.y = y; el.w = w2; el.h = h2;
+  }
+
+  // El texto no tiene ancho/alto propios (los deriva su contenido + tamaño de
+  // fuente), así que "redimensionar" reescala `fontSize` según la distancia
+  // arrastrada respecto a la esquina opuesta a la que se agarró — esa esquina
+  // opuesta se queda fija, igual que en un rectángulo normal.
+  function applyTextResize(el, orig, handle, w) {
+    const origSize = measureText(orig);
+    const anchorX = handle.includes('w') ? orig.x + origSize.w : orig.x;
+    const anchorY = handle.includes('n') ? orig.y + origSize.h : orig.y;
+    const dist0 = Math.hypot(origSize.w, origSize.h) || 1;
+    const dist1 = Math.hypot(w.x - anchorX, w.y - anchorY);
+    const scale = Math.max(0.2, Math.min(8, dist1 / dist0));
+    el.fontSize = Math.max(6, Math.round((orig.fontSize || 20) * scale));
+    const newSize = measureText(el);
+    el.x = handle.includes('w') ? anchorX - newSize.w : anchorX;
+    el.y = handle.includes('n') ? anchorY - newSize.h : anchorY;
   }
 
   function pointerUp(e) {
@@ -896,8 +945,12 @@
   document.getElementById('pz-bg-btn').addEventListener('click', () => {
     document.getElementById('pz-bg-menu').classList.toggle('hidden');
   });
+  document.getElementById('pz-elements-btn').addEventListener('click', () => {
+    elementsMenu.classList.toggle('hidden');
+  });
   document.addEventListener('click', (e) => {
     if (!document.getElementById('pz-icon-wrap').contains(e.target)) iconMenu.classList.add('hidden');
+    if (!document.getElementById('pz-elements-wrap').contains(e.target)) elementsMenu.classList.add('hidden');
     if (!document.getElementById('pz-bg-wrap').contains(e.target)) document.getElementById('pz-bg-menu').classList.add('hidden');
   });
 
@@ -1056,7 +1109,7 @@
         break;
       }
       case 'icon': {
-        const p = new Path2D(ICONS[el.name] || '');
+        const p = new Path2D(ALL_ICONS[el.name] || '');
         c.save(); c.translate(el.x, el.y); c.scale(el.w / 24, el.h / 24); c.lineWidth = 1.8;
         c.stroke(p); c.restore();
         break;
@@ -1114,6 +1167,7 @@
 
   /* ════════════ Arranque ════════════ */
   buildIconMenu();
+  buildElementsMenu();
   buildBgMenu();
   syncBgUi(bgColor);
   document.getElementById('pz-color').value = color;
@@ -1123,6 +1177,7 @@
     document.getElementById('pz-color').disabled = true;
     document.getElementById('pz-stroke').disabled = true;
     document.getElementById('pz-bg-btn').disabled = true;
+    document.getElementById('pz-elements-btn').disabled = true;
     setTool('select');
   } else {
     setTool('select');
