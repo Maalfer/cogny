@@ -6,7 +6,7 @@
 <p align="center">Bóveda de notas en Markdown, autoalojada y minimalista.</p>
 <p align="center"><a href="https://cogny.es">cogny.es</a></p>
 <p align="center">
-  <a href="https://github.com/Maalfer/cogny/releases/tag/v1.0.4"><img src="https://img.shields.io/github/v/tag/Maalfer/cogny?label=versi%C3%B3n&color=06b6d4" alt="Versión"></a>
+  <a href="https://github.com/Maalfer/cogny/releases/tag/v1.1.0"><img src="https://img.shields.io/github/v/tag/Maalfer/cogny?label=versi%C3%B3n&color=06b6d4" alt="Versión"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-GPL--3.0-06b6d4" alt="Licencia GPL-3.0"></a>
 </p>
 

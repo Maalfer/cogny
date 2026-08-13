@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Pizarra · Cogny{% endblock %}
+{% block body_class %}subapp-body pizarra-gallery-body{% endblock %}
+{% block header_title %}Pizarra{% endblock %}
+{% block wrapper_class %}pz-gallery-wrapper{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/whiteboard/gallery.css?v={{ ASSET_VERSION }}">
+{% endblock %}
+
+{% block content %}
+<div class="pz-gallery" id="pz-gallery">
+  <div class="pz-gallery-head">
+    <p class="pz-gallery-sub">Tus pizarras — elige una para abrirla, o crea una nueva.</p>
+    {% if can_write %}
+    <button class="btn-primary" id="pz-new">+ Nueva pizarra</button>
+    {% endif %}
+  </div>
+  <div class="pz-grid" id="pz-grid" aria-live="polite"></div>
+  <p class="pz-empty hidden" id="pz-empty">Todavía no hay ninguna pizarra{% if can_write %}. Crea la primera con «+ Nueva pizarra»{% endif %}.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">window.PIZARRA_CAN_WRITE = {{ can_write|yesno:"true,false" }};</script>
+<script src="/static/whiteboard/gallery.js?v={{ ASSET_VERSION }}" defer></script>
+{% endblock %}

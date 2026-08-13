@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ board.name }} · Pizarra{% endblock %}
+{% block body_class %}subapp-body pizarra-editor-body{% endblock %}
+
+{% block header_title %}
+<a href="/pizarra/" class="pz-back" title="Volver a la galería" aria-label="Volver a la galería">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+</a>
+<span class="pz-board-name" id="pz-board-name" title="{{ board.name }}">{{ board.name }}</span>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/whiteboard/board.css?v={{ ASSET_VERSION }}">
+{% endblock %}
+
+{% block wrapper_class %}pz-editor-wrapper{% endblock %}
+
+{% block content %}
+<div class="pz-board" id="pz-board">
+  <div class="pz-toolbar" id="pz-toolbar">
+    <div class="pz-tool-group">
+      <button class="pz-tool active" data-tool="select" title="Seleccionar (V)" aria-label="Seleccionar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 2l14 6-5.5 2.5L10 16z"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="pan" title="Mano — desplazar el lienzo (H)" aria-label="Mano">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 11.5V4.5a1.5 1.5 0 0 1 3 0v6M12 10.5V3a1.5 1.5 0 0 1 3 0v7.5M15 10.5V5a1.5 1.5 0 0 1 3 0v9c0 4-2.5 7-6.5 7S4.5 18 4.5 15v-3.8c0-.9.7-1.7 1.6-1.7.9 0 1.6.8 1.6 1.7"/></svg>
+      </button>
+    </div>
+    <div class="pz-tool-sep"></div>
+    <div class="pz-tool-group">
+      <button class="pz-tool" data-tool="rect" title="Rectángulo (R)" aria-label="Rectángulo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1.5"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="ellipse" title="Elipse (O)" aria-label="Elipse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="line" title="Línea (L)" aria-label="Línea">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19 19 5"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="arrow" title="Flecha (A)" aria-label="Flecha">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 19 5M19 5H10M19 5v9"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="pencil" title="Lápiz (P)" aria-label="Lápiz">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="text" title="Texto (T)" aria-label="Texto">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v3h5.5v12h3V7H19V4z"/></svg>
+      </button>
+      <button class="pz-tool" data-tool="image" title="Imagen" aria-label="Insertar imagen">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </button>
+      <div class="pz-icon-wrap" id="pz-icon-wrap">
+        <button class="pz-tool" data-tool="icon" title="Iconos" aria-label="Insertar icono" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+        </button>
+        <div class="pz-icon-menu hidden" id="pz-icon-menu"></div>
+      </div>
+    </div>
+    <div class="pz-tool-sep"></div>
+    <div class="pz-tool-group">
+      <input type="color" id="pz-color" class="pz-color" value="#e9edf5" title="Color">
+      <select id="pz-stroke" class="pz-select" title="Grosor del trazo">
+        <option value="1.5">Fino</option>
+        <option value="3" selected>Medio</option>
+        <option value="5">Grueso</option>
+      </select>
+    </div>
+    <div class="pz-tool-sep"></div>
+    <div class="pz-tool-group">
+      <button class="pz-tool" id="pz-undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+      </button>
+      <button class="pz-tool" id="pz-redo" title="Rehacer (Ctrl+Shift+Z)" aria-label="Rehacer" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.5 8C8.85 8 6.45 8.99 4.6 10.6L2.23 15.32l2.37.78C5.65 12.91 8.66 10.6 12.2 10.6c1.96 0 3.73.72 5.12 1.88L14 16h9V7l-3.6 3.6C17.55 8.99 15.15 8 12.5 8z"/></svg>
+      </button>
+      <button class="pz-tool" id="pz-delete" title="Eliminar seleccionado (Supr)" aria-label="Eliminar seleccionado" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="pz-canvas-wrap" id="pz-canvas-wrap">
+    <canvas id="pz-canvas"></canvas>
+    <div class="pz-zoom" id="pz-zoom">
+      <button id="pz-zoom-out" title="Alejar" aria-label="Alejar">−</button>
+      <span id="pz-zoom-level">100%</span>
+      <button id="pz-zoom-in" title="Acercar" aria-label="Acercar">+</button>
+    </div>
+  </div>
+</div>
+<span class="pz-save-status" id="pz-save-status"></span>
+<input type="file" id="pz-file-input" accept="image/*" class="pz-hidden-input">
+{% endblock %}
+
+{% block scripts %}
+{# window.COGNY.csrf (base.html) + csrf.js ya añaden X-CSRFToken a todo fetch() same-origin: no hace falta repetirlo aquí. #}
+<script nonce="{{ csp_nonce }}">window.PIZARRA_BOOT = Object.assign({{ boot_json|safe }}, {
+  canWrite: {{ can_write|yesno:"true,false" }},
+  saveUrl: "/api/pizarra/scene/save",
+  thumbUrl: "/api/pizarra/thumb/save",
+});</script>
+<script src="/static/whiteboard/board.js?v={{ ASSET_VERSION }}" defer></script>
+{% endblock %}

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.notes",
     "apps.knowledge",
+    "apps.whiteboard",
     "apps.api",
 ]
 
@@ -177,3 +178,4 @@ INTERNAL_ORIGIN = os.environ.get("INTERNAL_ORIGIN", "http://127.0.0.1:8000")
 DATA_ROOT = Path(os.environ.get("DATA_ROOT", BASE_DIR / "data"))
 VAULT_ROOT = Path(os.environ.get("VAULT_ROOT", DATA_ROOT / "vault"))
 AVATARS_ROOT = Path(os.environ.get("AVATARS_ROOT", BASE_DIR / "static" / "avatars"))
+WHITEBOARD_ROOT = Path(os.environ.get("WHITEBOARD_ROOT", DATA_ROOT / "pizarra"))

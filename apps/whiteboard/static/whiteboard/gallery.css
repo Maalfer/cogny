@@ -1,0 +1,20 @@
+.pz-gallery-wrapper{ display:flex; flex-direction:column; flex:1; min-height:0; width:100%; max-width:1160px; margin:0 auto; padding:1.4rem 1.25rem 2.5rem; overflow-y:auto; }
+.pz-gallery-head{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.1rem; flex-wrap:wrap; }
+.pz-gallery-sub{ color:var(--text2); font-size:.9rem; margin:0; }
+.pz-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:1rem; }
+.pz-card{ background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; cursor:pointer; display:flex; flex-direction:column; transition:border-color .15s,transform .15s; text-align:left; }
+.pz-card:hover{ border-color:var(--cyan,#22d3ee); transform:translateY(-2px); }
+.pz-card-thumb{ aspect-ratio:4/3; background:#fff; display:flex; align-items:center; justify-content:center; overflow:hidden; border-bottom:1px solid var(--border); }
+.pz-card-thumb img{ width:100%; height:100%; object-fit:contain; }
+.pz-card-thumb svg{ width:36px; height:36px; color:var(--text3,#666); }
+.pz-card-body{ padding:.65rem .75rem; display:flex; flex-direction:column; gap:.15rem; flex:1; }
+.pz-card-name{ font-weight:600; font-size:.92rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pz-card-date{ font-size:.75rem; color:var(--text3,var(--text2)); }
+.pz-card-actions{ display:flex; gap:.3rem; padding:0 .5rem .5rem; }
+.pz-card-actions button{ background:var(--bg3); border:none; color:var(--text2); cursor:pointer; padding:.35rem; border-radius:6px; display:flex; }
+.pz-card-actions button:hover{ background:var(--bg4); color:var(--text); }
+.pz-card-actions svg{ width:15px; height:15px; }
+.pz-card-new{ display:flex; align-items:center; justify-content:center; min-height:140px; border:2px dashed var(--border); background:transparent; color:var(--text2); font-weight:600; gap:.4rem; }
+.pz-card-new:hover{ border-color:var(--cyan,#22d3ee); color:var(--text); }
+.pz-empty{ color:var(--text2); text-align:center; margin-top:2rem; }
+.pz-empty.hidden{ display:none; }
