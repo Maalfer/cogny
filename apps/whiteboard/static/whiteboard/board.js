@@ -12,7 +12,6 @@
   const zoomLabel = document.getElementById('pz-zoom-level');
   const fileInput = document.getElementById('pz-file-input');
   const iconMenu = document.getElementById('pz-icon-menu');
-  const elementsMenu = document.getElementById('pz-elements-menu');
 
   const HANDLE_R = 5;
   const HIT_PAD = 6;
@@ -160,8 +159,7 @@
     }));
   }
 
-  // Categorías del selector "Iconos" (pestañas). "Elementos" (dispositivos)
-  // sigue siendo un botón aparte, sin tocar — éstas son las nuevas.
+  // Categorías del selector "Iconos" (pestañas).
   const ICON_CATEGORIES = [
     { id: 'general', label: 'General', items: Object.keys(ICONS).map((k) => ({ key: k, label: k, kind: 'path', d: ICONS[k] })) },
     { id: 'people', label: 'Personas', items: [
@@ -169,6 +167,7 @@
         { key: 'hacker', label: 'hacker', kind: 'path', d: HACKER_PATH },
         ...libItems('people'),
       ] },
+    { id: 'elements', label: 'Elementos', items: Object.keys(ELEMENT_ICONS).map((k) => ({ key: k, label: k, kind: 'path', d: ELEMENT_ICONS[k] })) },
     { id: 'network', label: 'Red y sistemas', items: libItems('network') },
     { id: 'office', label: 'Oficina', items: libItems('office') },
     { id: 'places', label: 'Lugares', items: libItems('places') },
@@ -296,25 +295,6 @@
     scheduleSave();
   }
 
-  function buildPickerMenu(menuEl, registry) {
-    Object.keys(registry).forEach((name) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'pz-icon-item';
-      b.title = name;
-      b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${registry[name]}"/></svg>`;
-      b.addEventListener('click', () => {
-        pendingPlacement = { kind: 'path', name };
-        setTool('icon');
-        menuEl.classList.add('hidden');
-      });
-      menuEl.appendChild(b);
-    });
-  }
-  function buildElementsMenu() {
-    buildPickerMenu(elementsMenu, ELEMENT_ICONS);
-  }
-
   // Picker "Iconos" con pestañas por categoría (General, Personas, Red y
   // sistemas, Oficina, Lugares, Apps y marcas) — a diferencia de "Elementos",
   // varias de estas categorías son imágenes PNG propias (ver LIBRARY_ICONS),
@@ -344,7 +324,7 @@
     cat.items.forEach((item) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'pz-icon-item';
+      b.className = item.kind === 'image' ? 'pz-icon-item is-image' : 'pz-icon-item';
       b.title = item.label;
       b.innerHTML = item.kind === 'image'
         ? `<img src="${item.url}" alt="" loading="lazy">`
@@ -671,13 +651,6 @@
   function setTool(t) {
     tool = t;
     document.querySelectorAll('.pz-tool[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
-    // El botón "Elementos" no lleva data-tool (comparte tool='icon' con
-    // "Iconos") — se resalta a mano según de qué registro salió pendingPlacement.
-    const elementsBtn = document.getElementById('pz-elements-btn');
-    const fromElements = t === 'icon' && pendingPlacement && pendingPlacement.kind === 'path'
-      && Object.prototype.hasOwnProperty.call(ELEMENT_ICONS, pendingPlacement.name);
-    if (elementsBtn) elementsBtn.classList.toggle('active', fromElements);
-    if (fromElements) document.querySelector('[data-tool="icon"]').classList.remove('active');
     wrap.classList.toggle('tool-select', t === 'select');
     wrap.classList.toggle('tool-pan', t === 'pan');
     if (t !== 'icon') pendingPlacement = null;
@@ -1232,12 +1205,8 @@
   document.getElementById('pz-bg-btn').addEventListener('click', () => {
     document.getElementById('pz-bg-menu').classList.toggle('hidden');
   });
-  document.getElementById('pz-elements-btn').addEventListener('click', () => {
-    elementsMenu.classList.toggle('hidden');
-  });
   document.addEventListener('click', (e) => {
     if (!document.getElementById('pz-icon-wrap').contains(e.target)) iconMenu.classList.add('hidden');
-    if (!document.getElementById('pz-elements-wrap').contains(e.target)) elementsMenu.classList.add('hidden');
     if (!document.getElementById('pz-bg-wrap').contains(e.target)) document.getElementById('pz-bg-menu').classList.add('hidden');
   });
 
@@ -1461,7 +1430,6 @@
 
   /* ════════════ Arranque ════════════ */
   buildIconTabs();
-  buildElementsMenu();
   buildBgMenu();
   syncBgUi(bgColor);
   document.getElementById('pz-color').value = color;
@@ -1471,7 +1439,6 @@
     document.getElementById('pz-color').disabled = true;
     document.getElementById('pz-stroke').disabled = true;
     document.getElementById('pz-bg-btn').disabled = true;
-    document.getElementById('pz-elements-btn').disabled = true;
     setTool('select');
   } else {
     setTool('select');

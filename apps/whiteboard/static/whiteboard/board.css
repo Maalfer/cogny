@@ -24,16 +24,21 @@
    iconos) un ancho "shrink-to-fit" deja que las pestañas colapsen a una
    columna vertical y aprieten la rejilla — un ancho fijo mantiene siempre
    la rejilla de 8 columnas y las pestañas en fila. */
-.pz-icon-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.4); width:min(90vw,320px); }
+.pz-icon-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.4); width:min(90vw,360px); }
 .pz-icon-menu.hidden{ display:none; }
-/* Rejilla plana: la usa .pz-flat-grid (#pz-elements-menu, sin pestañas) y
-   .pz-icon-grid dentro de #pz-icon-menu (con pestañas por categoría).
-   Debe ir en clase, no en #id: un selector de id tiene más especificidad
-   que ".pz-icon-menu.hidden" y anularía el display:none al ocultar el menú. */
-.pz-flat-grid, .pz-icon-grid{ display:grid; grid-template-columns:repeat(8,1fr); gap:.2rem; padding:.5rem; max-height:min(55vh,380px); overflow-y:auto; }
-.pz-icon-item{ background:transparent; border:none; color:rgba(255,255,255,.8); cursor:pointer; padding:.4rem; border-radius:6px; display:flex; }
+.pz-icon-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:.3rem; padding:.5rem; max-height:min(55vh,380px); overflow-y:auto; }
+.pz-icon-item{ background:transparent; border:none; color:rgba(255,255,255,.8); cursor:pointer; padding:.4rem; border-radius:6px; display:flex; align-items:center; justify-content:center; }
 .pz-icon-item:hover{ background:rgba(255,255,255,.1); color:#fff; }
-.pz-icon-item svg, .pz-icon-item img{ width:20px; height:20px; object-fit:contain; }
+.pz-icon-item svg{ width:30px; height:30px; }
+/* Los iconos importados (PNG de bibliotecas Excalidraw) suelen llevar trazo
+   oscuro por defecto — sobre el fondo oscuro del picker quedan casi
+   invisibles (ver icono "casa", el único con color propio que sí se ve).
+   Una tarjeta clara detrás les da contraste sin tener que reprocesar cada
+   PNG. Los iconos de trazo propio (SVG, currentColor) no la llevan: ya son
+   claros y se ven bien directamente sobre el fondo oscuro. */
+.pz-icon-item.is-image{ background:#f1f1f3; border-radius:8px; }
+.pz-icon-item.is-image:hover{ background:#e2e2e6; }
+.pz-icon-item img{ width:34px; height:34px; object-fit:contain; }
 .pz-icon-tabs{ display:flex; flex-wrap:wrap; gap:.2rem; padding:.5rem .5rem 0; border-bottom:1px solid var(--border); max-width:min(90vw,340px); }
 .pz-icon-tab{ background:transparent; border:none; color:var(--text2); font-size:.72rem; font-weight:600; padding:.3rem .5rem; border-radius:6px 6px 0 0; cursor:pointer; white-space:nowrap; }
 .pz-icon-tab:hover{ background:rgba(255,255,255,.08); color:var(--text); }
