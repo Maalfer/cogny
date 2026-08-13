@@ -174,7 +174,6 @@
   let selectedId = null;
   let tool = 'select';
   let pendingIcon = null;
-  let color = '#e9edf5';
   let strokeWidth = 3;
 
   const savedAppState = (BOOT.scene && BOOT.scene.appState) || {};
@@ -184,6 +183,10 @@
   let bgColor = savedAppState.bgColor || '#15181f';
   let clipboardEl = null;
   let lastCtxWorldPos = null;
+  // El color por defecto del pincel se calcula contra el fondo GUARDADO, no
+  // se hereda de una sesión anterior: si el board se quedó con fondo claro,
+  // recargar la página no debe volver a ofrecer un trazo casi blanco.
+  let color = ensureContrast('#e9edf5', bgColor);
 
   let undoStack = [];
   let redoStack = [];
@@ -1104,6 +1107,7 @@
   buildIconMenu();
   buildBgMenu();
   syncBgUi(bgColor);
+  document.getElementById('pz-color').value = color;
   if (!CAN_WRITE) {
     document.querySelectorAll('.pz-toolbar .pz-tool[data-tool]:not([data-tool="select"]):not([data-tool="pan"])')
       .forEach((b) => { b.disabled = true; });
