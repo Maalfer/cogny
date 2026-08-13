@@ -518,6 +518,7 @@
     }
 
     if (tool === 'text') {
+      e.preventDefault();
       startTextInput(w);
       return;
     }
@@ -661,7 +662,15 @@
     const sy = canvasRect.top + worldPos.y * zoom + offsetY;
     ta.style.left = sx + 'px'; ta.style.top = sy + 'px';
     document.body.appendChild(ta);
-    ta.focus();
+    // El propio clic que abre el cuadro de texto sigue su curso como mousedown
+    // nativo DESPUÉS de este handler (pointerdown y mousedown son eventos
+    // distintos para un ratón real, a diferencia de lo que simula un test) y
+    // su acción por defecto puede devolver el foco a otro sitio justo después
+    // de dársela aquí al textarea — history clásica de "no me deja escribir":
+    // el cuadro se crea y pierde el foco (blur -> commit con texto vacío ->
+    // se borra) antes de que dé tiempo a teclear nada. Aplazarlo a la
+    // siguiente vuelta del bucle de eventos hace que gane el foco correcto.
+    setTimeout(() => ta.focus(), 0);
     // El textarea envuelve por defecto (`wrap=off`/`white-space:pre` sólo
     // evita el salto de línea automático, no cambia cómo mide el propio
     // elemento su tamaño): medir el ancho por `scrollWidth` da el ancho de la
