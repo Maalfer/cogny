@@ -20,11 +20,24 @@
 .pz-select{ background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:.35rem .5rem; font-size:.8rem; cursor:pointer; }
 
 .pz-icon-wrap{ position:relative; }
-.pz-icon-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:.5rem; display:grid; grid-template-columns:repeat(8,1fr); gap:.2rem; box-shadow:0 8px 24px rgba(0,0,0,.4); max-height:min(60vh,420px); max-width:min(90vw,340px); overflow-y:auto; }
+/* width fijo (no max-width): con pocos items (p.ej. una categoría de 4
+   iconos) un ancho "shrink-to-fit" deja que las pestañas colapsen a una
+   columna vertical y aprieten la rejilla — un ancho fijo mantiene siempre
+   la rejilla de 8 columnas y las pestañas en fila. */
+.pz-icon-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.4); width:min(90vw,320px); }
 .pz-icon-menu.hidden{ display:none; }
+/* Rejilla plana: la usa .pz-flat-grid (#pz-elements-menu, sin pestañas) y
+   .pz-icon-grid dentro de #pz-icon-menu (con pestañas por categoría).
+   Debe ir en clase, no en #id: un selector de id tiene más especificidad
+   que ".pz-icon-menu.hidden" y anularía el display:none al ocultar el menú. */
+.pz-flat-grid, .pz-icon-grid{ display:grid; grid-template-columns:repeat(8,1fr); gap:.2rem; padding:.5rem; max-height:min(55vh,380px); overflow-y:auto; }
 .pz-icon-item{ background:transparent; border:none; color:rgba(255,255,255,.8); cursor:pointer; padding:.4rem; border-radius:6px; display:flex; }
 .pz-icon-item:hover{ background:rgba(255,255,255,.1); color:#fff; }
-.pz-icon-item svg{ width:20px; height:20px; }
+.pz-icon-item svg, .pz-icon-item img{ width:20px; height:20px; object-fit:contain; }
+.pz-icon-tabs{ display:flex; flex-wrap:wrap; gap:.2rem; padding:.5rem .5rem 0; border-bottom:1px solid var(--border); max-width:min(90vw,340px); }
+.pz-icon-tab{ background:transparent; border:none; color:var(--text2); font-size:.72rem; font-weight:600; padding:.3rem .5rem; border-radius:6px 6px 0 0; cursor:pointer; white-space:nowrap; }
+.pz-icon-tab:hover{ background:rgba(255,255,255,.08); color:var(--text); }
+.pz-icon-tab.active{ background:var(--bg3); color:var(--cyan,#22d3ee); }
 
 .pz-bg-wrap{ position:relative; }
 .pz-bg-menu{ position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:.6rem; display:flex; flex-direction:column; gap:.55rem; box-shadow:0 8px 24px rgba(0,0,0,.4); width:200px; }

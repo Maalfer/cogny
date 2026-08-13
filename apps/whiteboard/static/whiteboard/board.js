@@ -88,7 +88,92 @@
     powerplug: 'M9 2.5v5.5M15 2.5v5.5M6 8h12v3.5a6 6 0 0 1-12 0zM12 17.5v4',
     smartwatch: 'M8 8h8v8H8zM9 8V5.3h6V8M9 16v2.7h6V16M6 11h2M16 11h2',
   };
-  const ALL_ICONS = Object.assign({}, ICONS, ELEMENT_ICONS);
+  // No forma parte del set "General" (aparece sólo en la pestaña "Personas"
+  // del picker), pero necesita estar en la tabla de búsqueda de trazos para
+  // que un elemento type:'icon' con name:'hacker' se pueda dibujar.
+  const HACKER_PATH = 'M12 3a5 5 0 0 0-5 5c0 1.9.9 3.6 2.3 4.6L8 15h8l-1.3-2.4A5 5 0 0 0 17 8a5 5 0 0 0-5-5z M8.3 9.3h7.4 M4 21c1.1-4.3 4.2-6.5 8-6.5s6.9 2.2 8 6.5';
+  const ALL_ICONS = Object.assign({}, ICONS, ELEMENT_ICONS, { hacker: HACKER_PATH });
+
+  /* ════════════ Biblioteca de iconos importados (PNG propios, ver
+   * apps/whiteboard/static/whiteboard/library/) ════════════ */
+  const LIBRARY_ICONS = {
+    brands: [
+      { key: 'slack', label: 'Slack', w: 84.5, h: 84.4 },
+      { key: 'docker', label: 'Docker', w: 84.5, h: 84.4 },
+      { key: 'github', label: 'GitHub', w: 84.5, h: 84.4 },
+    ],
+    network: [
+      { key: 'vpc', label: 'VPC', w: 289.5, h: 184.5 },
+      { key: 'device', label: 'dispositivo', w: 64.9, h: 88.7 },
+      { key: 'server2', label: 'servidor 2', w: 57.3, h: 89.6 },
+      { key: 'computer-kb', label: 'ordenador (teclado)', w: 93.9, h: 100.5 },
+      { key: 'computer-kb-mouse', label: 'ordenador (teclado+ratón)', w: 103.4, h: 107.6 },
+      { key: 'computer', label: 'ordenador', w: 83.3, h: 96.5 },
+      { key: 'vpn', label: 'VPN', w: 141.2, h: 51.6 },
+      { key: 'firewall', label: 'firewall', w: 73.6, h: 112.7 },
+      { key: 'server', label: 'servidor', w: 89.3, h: 107.8 },
+      { key: 'switch', label: 'switch', w: 98.1, h: 76.3 },
+      { key: 'hub', label: 'hub', w: 101.5, h: 75.5 },
+      { key: 'router', label: 'router', w: 88.0, h: 74.8 },
+      { key: 'client', label: 'cliente', w: 88.3, h: 72.4 },
+    ],
+    people: [
+      { key: 'user', label: 'usuario', w: 71.6, h: 87.0 },
+      { key: 'users', label: 'usuarios', w: 103.6, h: 79.8 },
+    ],
+    office: [
+      { key: 'email', label: 'email', w: 82.5, h: 61.8 },
+      { key: 'parcel', label: 'paquete', w: 91.8, h: 75.5 },
+      { key: 'mail', label: 'correo', w: 51.4, h: 38.1 },
+      { key: 'letter', label: 'carta', w: 70.6, h: 88.0 },
+      { key: 'colour-pen', label: 'rotuladores', w: 77.8, h: 62.7 },
+      { key: 'pencil', label: 'lápiz', w: 67.0, h: 63.0 },
+      { key: 'screen', label: 'pantalla', w: 130.8, h: 106.6 },
+      { key: 'microphone', label: 'micrófono', w: 46.6, h: 60.5 },
+      { key: 'headphone-mic', label: 'auriculares+mic', w: 66.6, h: 73.2 },
+      { key: 'headphone', label: 'auriculares', w: 66.6, h: 57.8 },
+      { key: 'usb-stick', label: 'memoria USB', w: 52.3, h: 101.3 },
+      { key: 'cd', label: 'CD', w: 65.4, h: 64.2 },
+      { key: 'stamp', label: 'sello', w: 55.7, h: 61.1 },
+      { key: 'folder', label: 'carpeta', w: 70.7, h: 131.1 },
+      { key: 'paperclip', label: 'clip', w: 36.9, h: 69.5 },
+      { key: 'eraser', label: 'goma', w: 75.3, h: 49.5 },
+      { key: 'disc', label: 'disquete', w: 58.2, h: 61.1 },
+      { key: 'folder2', label: 'carpeta 2', w: 76.7, h: 62.1 },
+    ],
+    places: [
+      { key: 'hq', label: 'oficina central', w: 187, h: 202 },
+      { key: 'office', label: 'oficina', w: 78, h: 201 },
+      { key: 'city', label: 'ciudad', w: 241.5, h: 204 },
+      { key: 'house', label: 'casa', w: 154, h: 181.5 },
+      { key: 'datacenter', label: 'centro de datos', w: 264.5, h: 170 },
+    ],
+  };
+
+  function libraryUrl(cat, key) {
+    const v = (window.COGNY && window.COGNY.assetVersion) || 'v1';
+    return `/static/whiteboard/library/${cat}/${key}.png?v=${v}`;
+  }
+  function libItems(cat) {
+    return (LIBRARY_ICONS[cat] || []).map((it) => ({
+      key: it.key, label: it.label, kind: 'image', url: libraryUrl(cat, it.key), w: it.w, h: it.h,
+    }));
+  }
+
+  // Categorías del selector "Iconos" (pestañas). "Elementos" (dispositivos)
+  // sigue siendo un botón aparte, sin tocar — éstas son las nuevas.
+  const ICON_CATEGORIES = [
+    { id: 'general', label: 'General', items: Object.keys(ICONS).map((k) => ({ key: k, label: k, kind: 'path', d: ICONS[k] })) },
+    { id: 'people', label: 'Personas', items: [
+        { key: 'person', label: 'persona', kind: 'path', d: ICONS.person },
+        { key: 'hacker', label: 'hacker', kind: 'path', d: HACKER_PATH },
+        ...libItems('people'),
+      ] },
+    { id: 'network', label: 'Red y sistemas', items: libItems('network') },
+    { id: 'office', label: 'Oficina', items: libItems('office') },
+    { id: 'places', label: 'Lugares', items: libItems('places') },
+    { id: 'brands', label: 'Apps y marcas', items: libItems('brands') },
+  ];
 
   /* ════════════ Fondo del lienzo ════════════ */
   const BG_PRESETS = [
@@ -219,25 +304,69 @@
       b.title = name;
       b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${registry[name]}"/></svg>`;
       b.addEventListener('click', () => {
-        pendingIcon = name;
+        pendingPlacement = { kind: 'path', name };
         setTool('icon');
         menuEl.classList.add('hidden');
       });
       menuEl.appendChild(b);
     });
   }
-  function buildIconMenu() {
-    buildPickerMenu(iconMenu, ICONS);
-  }
   function buildElementsMenu() {
     buildPickerMenu(elementsMenu, ELEMENT_ICONS);
+  }
+
+  // Picker "Iconos" con pestañas por categoría (General, Personas, Red y
+  // sistemas, Oficina, Lugares, Apps y marcas) — a diferencia de "Elementos",
+  // varias de estas categorías son imágenes PNG propias (ver LIBRARY_ICONS),
+  // no trazos, así que el render de cada botón depende de item.kind.
+  let activeIconCategory = ICON_CATEGORIES[0].id;
+  function buildIconTabs() {
+    const tabsEl = document.getElementById('pz-icon-tabs');
+    ICON_CATEGORIES.forEach((cat) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pz-icon-tab';
+      b.textContent = cat.label;
+      b.dataset.cat = cat.id;
+      b.addEventListener('click', () => { activeIconCategory = cat.id; renderIconGrid(); });
+      tabsEl.appendChild(b);
+    });
+    renderIconGrid();
+  }
+  function renderIconGrid() {
+    const gridEl = document.getElementById('pz-icon-grid');
+    gridEl.innerHTML = '';
+    document.querySelectorAll('#pz-icon-tabs .pz-icon-tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.cat === activeIconCategory);
+    });
+    const cat = ICON_CATEGORIES.find((c) => c.id === activeIconCategory);
+    if (!cat) return;
+    cat.items.forEach((item) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pz-icon-item';
+      b.title = item.label;
+      b.innerHTML = item.kind === 'image'
+        ? `<img src="${item.url}" alt="" loading="lazy">`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${item.d}"/></svg>`;
+      b.addEventListener('click', () => {
+        pendingPlacement = item.kind === 'image'
+          ? { kind: 'image', url: item.url, w: item.w, h: item.h }
+          : { kind: 'path', name: item.key };
+        setTool('icon');
+        iconMenu.classList.add('hidden');
+      });
+      gridEl.appendChild(b);
+    });
   }
 
   /* ════════════ Estado ════════════ */
   let elements = (BOOT.scene && BOOT.scene.elements) || [];
   let selectedIds = new Set();
   let tool = 'select';
-  let pendingIcon = null;
+  // { kind: 'path', name } para un icono de trazo propio, o
+  // { kind: 'image', url, w, h } para uno de la biblioteca importada.
+  let pendingPlacement = null;
   let strokeWidth = 3;
 
   const savedAppState = (BOOT.scene && BOOT.scene.appState) || {};
@@ -543,14 +672,15 @@
     tool = t;
     document.querySelectorAll('.pz-tool[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
     // El botón "Elementos" no lleva data-tool (comparte tool='icon' con
-    // "Iconos") — se resalta a mano según de qué registro salió pendingIcon.
+    // "Iconos") — se resalta a mano según de qué registro salió pendingPlacement.
     const elementsBtn = document.getElementById('pz-elements-btn');
-    const fromElements = t === 'icon' && pendingIcon && Object.prototype.hasOwnProperty.call(ELEMENT_ICONS, pendingIcon);
+    const fromElements = t === 'icon' && pendingPlacement && pendingPlacement.kind === 'path'
+      && Object.prototype.hasOwnProperty.call(ELEMENT_ICONS, pendingPlacement.name);
     if (elementsBtn) elementsBtn.classList.toggle('active', fromElements);
     if (fromElements) document.querySelector('[data-tool="icon"]').classList.remove('active');
     wrap.classList.toggle('tool-select', t === 'select');
     wrap.classList.toggle('tool-pan', t === 'pan');
-    if (t !== 'icon') pendingIcon = null;
+    if (t !== 'icon') pendingPlacement = null;
   }
 
   function syncSelectionUi() {
@@ -680,9 +810,21 @@
     }
 
     if (tool === 'icon') {
-      const name = pendingIcon || Object.keys(ICONS)[0];
-      const size = 48;
-      const el = { id: genId(), type: 'icon', name, x: w.x - size / 2, y: w.y - size / 2, w: size, h: size, color };
+      let el;
+      if (pendingPlacement && pendingPlacement.kind === 'image') {
+        // Icono de la biblioteca importada: un elemento 'image' normal (misma
+        // ruta de dibujo/redimensión/miniatura que una imagen subida), sólo
+        // que su src apunta a un PNG propio de la app, no a un dataURL.
+        const maxDim = 72;
+        const ar = pendingPlacement.w && pendingPlacement.h ? pendingPlacement.w / pendingPlacement.h : 1;
+        const iw = ar >= 1 ? maxDim : maxDim * ar;
+        const ih = ar >= 1 ? maxDim / ar : maxDim;
+        el = { id: genId(), type: 'image', x: w.x - iw / 2, y: w.y - ih / 2, w: iw, h: ih, src: pendingPlacement.url };
+      } else {
+        const name = (pendingPlacement && pendingPlacement.name) || Object.keys(ICONS)[0];
+        const size = 48;
+        el = { id: genId(), type: 'icon', name, x: w.x - size / 2, y: w.y - size / 2, w: size, h: size, color };
+      }
       snapshot();
       elements.push(el);
       selectElement(el.id);
@@ -1318,7 +1460,7 @@
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
 
   /* ════════════ Arranque ════════════ */
-  buildIconMenu();
+  buildIconTabs();
   buildElementsMenu();
   buildBgMenu();
   syncBgUi(bgColor);
