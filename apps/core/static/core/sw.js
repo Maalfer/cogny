@@ -1,5 +1,5 @@
 /* cogny Service Worker (app-shell precaching + stale-while-revalidate) */
-const CACHE = 'cogny-v3';
+const CACHE = 'cogny-v4';
 const AV = '__ASSET_VERSION__'; // inyectado por Django service_worker view
 
 // App shell: activos críticos precacheados en install.
@@ -54,7 +54,14 @@ self.addEventListener('fetch', e => {
 
   // Las APIs del vault (árbol, contenido de notas, búsqueda, assets) siempre
   // van a red: cachearlas serviría notas desactualizadas tras editar.
-  if (url.pathname.startsWith('/api/')) return;
+  // OJO: no basta con `startsWith('/api/')` — la API v1 cuelga de ahí, pero
+  // la bóveda comunitaria usa `/comunidad/api/...` y la pública de sólo
+  // lectura `/conocimiento/api/...`; ninguna de las dos empieza por `/api/`.
+  // Sin este `includes`, esas rutas caían en la rama "activo estático" de
+  // abajo (cache-first) y el árbol/contenido se quedaba pegado a la primera
+  // respuesta cacheada aunque el POST de guardar sí llegara al servidor —
+  // los cambios se guardaban de verdad pero la UI seguía enseñando lo viejo.
+  if (url.pathname.includes('/api/')) return;
 
   // /conocimiento/: la puerta de la bóveda pública decide por el Referer real
   // de la navegación (apps/knowledge/access.py). No se puede reenviar esa
