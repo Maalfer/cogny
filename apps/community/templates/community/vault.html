@@ -13,9 +13,12 @@
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
 <link rel="stylesheet" href="/static/vendor/highlight-github-dark.min.css?v={{ ASSET_VERSION }}">
-{# Comparte el CSS con la bóveda privada (apps/notes) a propósito: es el
-   mismo editor de vault, con la misma UX — mantener dos copias del CSS
-   sólo serviría para que se desincronizaran en el primer retoque visual. #}
+{% comment %}
+  Comparte el CSS con la bóveda privada (apps/notes) a propósito: es el
+  mismo editor de vault, con la misma UX — mantener dos copias del CSS sólo
+  serviría para que se desincronizaran en el primer retoque visual.
+  (Ojo: {# #} NO admite varias líneas — se colaría como texto en la página.)
+{% endcomment %}
 <link rel="stylesheet" href="/static/notes/notes.css?v={{ ASSET_VERSION }}">
 {% endblock %}
 
