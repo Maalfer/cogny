@@ -36,6 +36,26 @@ configuración de la bóveda pública.
   de acceso real) o por enlace maestro (`MasterLink`, token UUID4 revocable).
   El permiso se firma en una cookie (`django.core.signing`) para no depender
   del `Referer` en cada navegación.
+- `apps/community` — bóveda comunitaria de lectura Y ESCRITURA en `/comunidad`,
+  con su propio `settings.COMMUNITY_VAULT_ROOT` (nunca `VAULT_ROOT`: son dos
+  bóvedas en disco totalmente separadas). Se entra por sesión del propietario
+  o por un `CommunityLink` (token UUID4, revocable, se pueden tener varios
+  activos a la vez) — quien entra por cualquiera de las dos vías tiene
+  lectura y escritura completas, sin distinción de roles. El contenido pasa
+  por `apps.notes.vault` igual que la bóveda privada, apuntando a la otra
+  raíz. Ojo: `rename`/`move`/`delete` de esta app NO llaman a
+  `vault.move_shares`/`vault.drop_shares` (esas tocan `SharedNote`, que indexa
+  por `path` sin distinguir de qué bóveda es — llamarlas aquí podría afectar
+  al enlace público de una nota de la bóveda PRIVADA con la misma ruta). Por
+  la misma tabla-global-compartida (`PdfTheme`), la exportación a PDF de la
+  comunitaria (`views.api_pdf`) sólo ofrece los estilos base/oscuro, nunca
+  temas personalizados — así nadie con un enlace puede tocar un tema que el
+  dueño usa de verdad en su bóveda privada. `vault.copy_across` (en
+  `apps/notes/vault.py`, la usan las vistas `copy_to_community`/
+  `api_copy_to_private` de las dos apps) deja que el propietario duplique una
+  nota o carpeta de una bóveda a la otra trayendo consigo los adjuntos que
+  referencie, aunque vivan en el `Adjuntos/` raíz fuera de lo copiado — nunca
+  sobrescribe nada en destino, un nombre repetido se resuelve con ' 2', ' 3'…
 - `apps/api` — API pública v1 autenticada por clave (`apps/api/auth.py`) +
   Swagger en `/api/docs/` (`apps/api/openapi.py`).
 
@@ -50,15 +70,17 @@ de servicio y la exponen las dos capas.
 `config/settings/base.py` + `dev.py` (DEBUG, sin HTTPS) + `prod.py` (cookies
 seguras, HSTS, detrás de nginx). `.env` en la raíz se carga a mano en
 `base.py` (sin `python-dotenv`); variables clave: `DJANGO_SECRET_KEY`,
-`DJANGO_ALLOWED_HOSTS`, `DATA_ROOT`/`VAULT_ROOT`/`AVATARS_ROOT`/`DB_PATH`,
-`ASSET_VERSION` (cache-busting de estáticos), `UPLOAD_HOST`. `VERSION` es un
+`DJANGO_ALLOWED_HOSTS`, `DATA_ROOT`/`VAULT_ROOT`/`COMMUNITY_VAULT_ROOT`/
+`AVATARS_ROOT`/`DB_PATH`, `ASSET_VERSION` (cache-busting de estáticos),
+`UPLOAD_HOST`. `VERSION` es un
 fichero en la raíz, no una variable — súbelo en cada release junto al tag de
 git (`VERSION` + badge de `README.md` + tag `vX.Y.Z`).
 
 ## Tests
 
 `tests/` a nivel de raíz, uno por área (`test_vault.py`, `test_notes_web.py`,
-`test_api_v1.py`, `test_knowledge.py`). Usan un `DATA_ROOT` propio y aislado
+`test_api_v1.py`, `test_knowledge.py`, `test_community.py`). Usan un
+`DATA_ROOT` propio y aislado
 (no `/tmp` compartido) para no interferir entre tests ni con una bóveda real.
 
 ## Docker / despliegue

@@ -68,6 +68,11 @@
     return 'usada el ' + new Date(iso).toLocaleDateString('es-ES',
       { day: '2-digit', month: 'short', year: 'numeric' });
   }
+  function createdOn(iso) {
+    if (!iso) return '';
+    return 'creado el ' + new Date(iso).toLocaleDateString('es-ES',
+      { day: '2-digit', month: 'short', year: 'numeric' });
+  }
 
   /* ════════════════════════════ Tema ════════════════════════════ */
   const themePicker = $('settings-theme-picker');
@@ -406,8 +411,94 @@
     }
   }
 
+  /* ═══════════════ Bóveda comunitaria (/comunidad) ═══════════════ */
+
+  const cmCard = $('cm-card');
+
+  function cmRenderLinks(links) {
+    const list = $('cm-links');
+    if (!links.length) {
+      list.innerHTML = '';
+      $('cm-links-empty').style.display = 'flex';
+      return;
+    }
+    $('cm-links-empty').style.display = 'none';
+    list.innerHTML = links.map(l => `
+      <div class="stx-item" data-id="${l.id}" data-url="${esc(l.url)}">
+        <div class="stx-item-info">
+          <div class="stx-item-name"><span>${esc(l.name || l.url)}</span></div>
+          <div class="stx-item-meta">${iconKey}<span>${l.visits} ${l.visits === 1 ? 'visita' : 'visitas'} · ${createdOn(l.created_at)} · ${lastUsed(l.last_used_at)}</span></div>
+        </div>
+        <div class="stx-item-actions">
+          <button class="stx-btn cm-link-copy" title="Copiar enlace" aria-label="Copiar el enlace de ${esc(l.name || 'este enlace')}">${iconCopyLink}</button>
+          <button class="stx-btn stx-revoke cm-link-revoke" title="Revocar" aria-label="Revocar el enlace de ${esc(l.name || 'este enlace')}">${iconTrash}</button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function cmLoadLinks() {
+    const loading = $('cm-links-loading');
+    loading.style.display = '';
+    $('cm-links').innerHTML = '';
+    $('cm-links-empty').style.display = 'none';
+    try {
+      const res = await fetch('/api/community/links').then(r => r.json());
+      cmRenderLinks(res.links || []);
+    } catch (_) {
+      $('cm-links-empty').style.display = 'flex';
+      toast('No se han podido cargar los enlaces de la bóveda comunitaria', false);
+    }
+    loading.style.display = 'none';
+  }
+
+  if (cmCard) {
+    $('cm-link-create').addEventListener('click', async () => {
+      const btn = $('cm-link-create'), label = btn.querySelector('span');
+      const prev = label.textContent;
+      btn.disabled = true; label.textContent = 'Creando…';
+      try {
+        const res = await api('/api/community/links/create', { name: $('cm-link-name').value.trim() });
+        if (res.error) { toast(res.error, false); return; }
+        $('cm-link-name').value = '';
+        await cmLoadLinks();
+        await copyToClipboard(res.link.url);
+        toast('Enlace creado y copiado');
+      } catch (_) {
+        toast('No se pudo crear el enlace', false);
+      } finally {
+        btn.disabled = false; label.textContent = prev;
+      }
+    });
+    $('cm-link-name').addEventListener('keydown', e => { if (e.key === 'Enter') $('cm-link-create').click(); });
+
+    $('cm-links').addEventListener('click', async e => {
+      const item = e.target.closest('.stx-item');
+      if (!item) return;
+      if (e.target.closest('.cm-link-copy')) {
+        const btn = e.target.closest('.cm-link-copy');
+        await copyToClipboard(item.dataset.url);
+        flashCopied(btn, iconCopyLink);
+        toast('Enlace copiado');
+      } else if (e.target.closest('.cm-link-revoke')) {
+        if (!confirm('¿Revocar este enlace? Dejará de funcionar al instante, ' +
+                     'también para quien ya hubiera entrado con él.')) return;
+        const res = await api('/api/community/links/revoke', { id: Number(item.dataset.id) });
+        if (res.error) { toast(res.error, false); return; }
+        item.remove();
+        if (!$('cm-links').children.length) $('cm-links-empty').style.display = 'flex';
+        toast('Enlace revocado');
+      }
+    });
+  }
+
+  function cmLoad() {
+    if (!cmCard) return;
+    cmLoadLinks();
+  }
+
   /* ── Arranque ── */
   loadSharedLinks();
   loadApiKeys();
   knLoad();
+  cmLoad();
 })();

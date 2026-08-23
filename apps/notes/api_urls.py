@@ -17,6 +17,7 @@ urlpatterns = [
     path("asset", views.asset, name="asset"),
     path("export", views.export_vault, name="export"),
     path("import", views.import_vault, name="import"),
+    path("copy-to-community", views.copy_to_community, name="copy_to_community"),
     path("storage", views.storage, name="storage"),
     path("pdf", views.notes_pdf, name="pdf"),
     path("themes", views.themes_list, name="themes"),

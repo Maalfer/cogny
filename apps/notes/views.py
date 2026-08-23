@@ -20,7 +20,7 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse, Strea
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.accounts.permissions import require_write
+from apps.accounts.permissions import require_owner, require_write
 from apps.core.api import as_int, as_text, error_response as _err, json_body
 
 from . import pdf, themes, vault
@@ -166,12 +166,10 @@ def move(request):
         return err
     if not src.exists() or src == root:
         return _err("No existe", 404)
-    if src == root / vault.ATTACHMENTS_DIR:
-        # Los adjuntos cuelgan SIEMPRE de esta ruta fija: moverla no rompe nada
-        # (los embeds resuelven por nombre en todo el vault), pero la próxima
-        # subida crearía una "Adjuntos" nueva y vacía en la raíz, duplicando la
-        # carpeta. El frontend ya no deja arrastrarla; esto cierra el endpoint.
-        return _err("La carpeta de adjuntos no se puede mover")
+    try:
+        vault.reject_attachments_root(root, src, "mover")
+    except VaultError as exc:
+        return _err(str(exc), exc.status)
     if not dst_dir.exists() or not dst_dir.is_dir():
         return _err("Carpeta destino no encontrada", 404)
     if src.is_dir():
@@ -332,6 +330,30 @@ def import_vault(request):
     except VaultError as exc:
         return _err(str(exc), exc.status)
     return JsonResponse({"success": True})
+
+
+# ════════════ Copiar a la bóveda comunitaria ════════════
+
+@login_required
+@require_owner
+@require_POST
+@json_body
+def copy_to_community(request):
+    """Duplica una nota o carpeta de la bóveda privada a la comunitaria.
+
+    Sólo el propietario (no un rol de sólo-lectura invitado a la privada, ni
+    quien sólo tenga un enlace comunitario) puede sacar contenido privado
+    hacia la bóveda comunitaria — es a todos los efectos publicarlo a quien
+    tenga cualquier enlace comunitario vivo.
+    """
+    from apps.community.views import community_root
+    try:
+        new_rel = vault.copy_across(vault.root(),
+                                    as_text(request.data.get("path")).strip(),
+                                    community_root())
+    except VaultError as exc:
+        return _err(str(exc), exc.status)
+    return JsonResponse({"success": True, "path": new_rel})
 
 
 # ════════════ Exportar nota a PDF ════════════

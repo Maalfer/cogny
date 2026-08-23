@@ -25,12 +25,17 @@ urlpatterns = [
     # Bóveda pública de sólo lectura (sin login; filtrada por dominio de origen).
     path("", include("apps.knowledge.urls")),
 
+    # Bóveda comunitaria: lectura y escritura sin login, por enlace (o sesión
+    # del propietario). Bóveda propia en disco, separada de la privada.
+    path("", include("apps.community.urls")),
+
     # Pizarra: galería + lienzo tipo Excalidraw (con sesión).
     path("", include("apps.whiteboard.urls")),
 
     # APIs JSON internas (sesión + CSRF) — las consume el frontend.
     path("api/notes/", include("apps.notes.api_urls")),
     path("api/knowledge/", include("apps.knowledge.api_urls")),
+    path("api/community/", include("apps.community.api_urls")),
     path("api/pizarra/", include("apps.whiteboard.api_urls")),
 
     # API pública v1 (clave de API) + Swagger en /api/docs/.

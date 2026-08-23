@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.notes",
     "apps.knowledge",
+    "apps.community",
     "apps.whiteboard",
     "apps.api",
 ]
@@ -179,3 +180,7 @@ DATA_ROOT = Path(os.environ.get("DATA_ROOT", BASE_DIR / "data"))
 VAULT_ROOT = Path(os.environ.get("VAULT_ROOT", DATA_ROOT / "vault"))
 AVATARS_ROOT = Path(os.environ.get("AVATARS_ROOT", BASE_DIR / "static" / "avatars"))
 WHITEBOARD_ROOT = Path(os.environ.get("WHITEBOARD_ROOT", DATA_ROOT / "pizarra"))
+# Bóveda comunitaria (/comunidad): raíz separada a propósito de VAULT_ROOT —
+# es escribible por cualquiera con un enlace (ver apps.community), nunca debe
+# compartir directorio con la bóveda privada.
+COMMUNITY_VAULT_ROOT = Path(os.environ.get("COMMUNITY_VAULT_ROOT", DATA_ROOT / "community_vault"))

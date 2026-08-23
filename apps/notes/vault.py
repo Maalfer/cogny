@@ -18,6 +18,7 @@ valores de Python y, cuando algo va mal de una forma que el usuario debe leer,
 levanta `VaultError` con el mensaje ya redactado.
 """
 import fcntl
+import filecmp
 import io
 import json
 import logging
@@ -730,3 +731,168 @@ def _extract(zf, targets) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         with open(target, "wb") as fp:
             fp.write(zf.read(info))
+
+
+# ── Copiar entre bóvedas (privada ↔ comunitaria) ─────────────────────────────
+# El dueño puede duplicar una nota o carpeta de una bóveda a la otra. Son dos
+# `VAULT_ROOT` distintos en disco (ver `apps.community.views.community_root`),
+# así que copiar es literalmente copiar ficheros — la parte no trivial es que
+# los adjuntos de una nota (`![[nombre]]`) aterrizan SIEMPRE en `Adjuntos/` en
+# la RAÍZ de la bóveda (ver `save_upload`), no junto a la nota, así que copiar
+# sólo la nota (o sólo la carpeta) los dejaría atrás. Por eso, tras copiar,
+# `copy_across` rastrea esas referencias y trae también los ficheros que
+# falten al `Adjuntos/` de destino.
+
+_EMBED_RE = re.compile(r'!\[\[([^\]\n]+?)\]\]')
+
+
+def _embed_ref(raw: str):
+    """`(nombre, resto)` de un embed `![[nombre|display]]` / `![[nombre#Sección]]`.
+
+    `resto` es todo lo que vaya desde el primer `|` o `#` (incluidos), tal
+    cual estaba escrito — así un renombrado por colisión sólo toca el nombre
+    y no se arriesga a perder o deformar el `|display`/`#Sección` original.
+    """
+    cut = len(raw)
+    for ch in ("|", "#"):
+        i = raw.find(ch)
+        if i >= 0:
+            cut = min(cut, i)
+    return raw[:cut].strip(), raw[cut:]
+
+
+def _embed_names(content: str) -> list:
+    """Nombres de adjuntos que una nota referencia con `![[nombre]]`."""
+    names = []
+    for m in _EMBED_RE.finditer(content):
+        name, _ = _embed_ref(m.group(1))
+        if name and not name.lower().endswith(".md"):
+            names.append(name)
+    return names
+
+
+def _iter_files_named(base: Path, name: str):
+    """Ficheros de `base` (recursivo) cuyo nombre es EXACTAMENTE `name`.
+
+    A propósito no se le pasa `name` a `rglob()` como patrón: `name` sale de
+    un embed `![[nombre]]` escrito por quien sea que tenga permiso de
+    escritura en la bóveda (el dueño en la privada, cualquiera con enlace en
+    la comunitaria), y `rglob` trata `*`/`?`/`[...]` como comodines. Un embed
+    `![[*]]` con `rglob(name)` casaría con CUALQUIER fichero del árbol y
+    `copy_across` acabaría copiando uno cualquiera —ajeno a la nota— a la
+    otra bóveda. `rglob("*")` es un patrón fijo (no depende de `name`); el
+    filtrado por nombre es una comparación de igualdad, no un patrón.
+    """
+    for p in base.rglob("*"):
+        if p.is_file() and p.name == name:
+            yield p
+
+
+def _find_by_basename(base: Path, name: str):
+    """Busca un fichero por nombre exacto en toda la bóveda.
+
+    Primero en `Adjuntos/` (donde caen todas las subidas desde la web: el
+    caso común, y barato); si no está ahí, en el resto del árbol (bóvedas
+    importadas pueden tener imágenes en cualquier carpeta) — mismo criterio
+    de resolución "por nombre, en toda la bóveda" que usa el frontend
+    (`findFileByName` en `notes.js`) al renderizar `![[nombre]]`.
+    """
+    candidate = base / ATTACHMENTS_DIR / name
+    if candidate.is_file():
+        return candidate
+    return next(_iter_files_named(base, name), None)
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    """`True` si `a` y `b` tienen el mismo contenido byte a byte.
+
+    El tamaño es sólo un descarte barato: dos adjuntos DISTINTOS de bóvedas
+    distintas pueden coincidir en bytes por azar (sobre todo con nombres
+    genéricos tipo "captura.png"), y compararlos sólo por tamaño daría por
+    buena una imagen que no es la que la nota necesita.
+    """
+    return (a.stat().st_size == b.stat().st_size
+            and filecmp.cmp(a, b, shallow=False))
+
+
+def _bring_attachments(src_base: Path, dst_base: Path, copied_root: Path, md_files: list) -> None:
+    """Trae a `dst_base/Adjuntos/` los adjuntos que referencien `md_files`
+    y que no hayan viajado ya dentro de `copied_root` (p.ej. una imagen que
+    vivía en una subcarpeta propia de la nota/carpeta copiada).
+
+    Si en destino ya hay un fichero con ese nombre pero de OTRO contenido
+    (colisión real entre las dos bóvedas — p.ej. las dos tienen una
+    "captura.png" distinta), se copia con un nombre libre (mismo criterio que
+    `free_path` usa en todas partes) y se reescribe la referencia en la nota
+    copiada para que siga apuntando a la imagen correcta.
+    """
+    for md in md_files:
+        try:
+            content = md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        renames = {}
+        for name in _embed_names(content):
+            if (copied_root / name).is_file() or any(
+                    True for _ in _iter_files_named(copied_root, name)):
+                continue  # ya vino dentro de lo copiado
+            src_file = _find_by_basename(src_base, name)
+            if not src_file:
+                continue  # referencia ya rota en origen: se deja tal cual
+            dst_attach = dst_base / ATTACHMENTS_DIR
+            dst_attach.mkdir(parents=True, exist_ok=True)
+            target = dst_attach / name
+            if target.exists():
+                if _same_file(target, src_file):
+                    continue  # ya hay uno igual de verdad: no duplicar
+                target = free_path(dst_attach, target.stem, target.suffix)
+                renames[name] = target.name
+            shutil.copy2(src_file, target)
+        if renames:
+            def repl(m):
+                name, rest = _embed_ref(m.group(1))
+                return "![[" + renames.get(name, name) + rest + "]]"
+            write_text_atomic(md, _EMBED_RE.sub(repl, content))
+
+
+def reject_attachments_root(base: Path, target: Path, verb: str) -> None:
+    """Corta operaciones sobre la carpeta `Adjuntos/` de la RAÍZ de la bóveda.
+
+    Es la única carpeta con ruta fija que el backend impone (`save_upload`
+    sube ahí siempre): moverla, copiarla o renombrarla dejaría subidas
+    futuras creando una "Adjuntos" nueva y vacía en la raíz, duplicando la
+    carpeta y rompiendo la resolución de adjuntos existentes. Un único punto
+    para las tres operaciones (mover en `apps.notes.views`/`apps.community.
+    views`, copiar en `copy_across`) evita que una cuarta llamada futura se
+    olvide de repetir el guardia.
+    """
+    if target == base / ATTACHMENTS_DIR:
+        raise VaultError(f"La carpeta de adjuntos no se puede {verb}")
+
+
+def copy_across(src_base: Path, src_rel: str, dst_base: Path) -> str:
+    """Copia una nota o carpeta de `src_base` a la raíz de `dst_base`.
+
+    Nunca sobrescribe nada en destino: un nombre ya usado se resuelve con
+    ' 2', ' 3'… (mismo criterio que `free_path` usa para notas nuevas), así
+    que esto nunca falla por colisión de nombre — sólo por ruta de origen
+    inválida. Devuelve la ruta relativa (en `dst_base`) de lo copiado.
+    """
+    src = safe_path(src_base, src_rel)
+    if not src.exists() or src == src_base:
+        raise VaultError("No existe", 404)
+    dst_base.mkdir(parents=True, exist_ok=True)
+    if src.is_dir():
+        reject_attachments_root(src_base, src, "copiar")
+        dst = free_path(dst_base, src.name, "")
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(
+            ORDER_FILE, _IMPORT_LOCK_NAME, _ATTACHMENT_OWNERS_FILE, _ATTACHMENT_OWNERS_LOCK))
+        md_files = [p for p in dst.rglob("*.md")]
+    else:
+        if src.suffix.lower() != ".md":
+            raise VaultError("Sólo se pueden copiar notas o carpetas")
+        dst = free_path(dst_base, src.stem, ".md")
+        shutil.copy2(src, dst)
+        md_files = [dst]
+    _bring_attachments(src_base, dst_base, dst, md_files)
+    return rel_of(dst_base, dst)

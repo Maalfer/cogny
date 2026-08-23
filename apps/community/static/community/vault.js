@@ -1,13 +1,9 @@
-/* Editor del vault de notas (cogny). Extraído de notes.html a fichero
-   estático: se lintea/versiona como código y no lo re-parsea el motor de
-   plantillas en cada render. Los valores de servidor llegan por window.COGNY
-   (definido inline en la plantilla). */
+/* Editor de la bóveda COMUNITARIA (cogny). Adaptado de apps/notes/static/notes/notes.js
+   (el editor del vault privado) recortando lo que esa bóveda no ofrece: exportar/
+   importar ZIP, exportar a PDF (temas incluidos), "Compartir nota" y el panel de
+   Almacenamiento — ver apps/community/views.py para qué endpoints existen de verdad.
+   Los valores de servidor llegan por window.COGNY (definido inline en la plantilla). */
 const CSRF = window.COGNY.csrf;
-// Las subidas grandes (import de bóvedas) van por un subdominio DNS-only fuera de
-// Cloudflare, para esquivar su límite de 100 MB por request. El host lo inyecta el
-// servidor (UPLOAD_HOST en .env); si está vacío, se sube al mismo origen.
-const UPLOAD_HOST = window.COGNY.uploadHost;
-const UPLOAD_BASE = UPLOAD_HOST ? ('https://' + UPLOAD_HOST) : '';
 let TREE = [];
 let FLAT = [];             // flattened list of notes+files for name lookup
 let current = null;        // {path, name, content}
@@ -25,22 +21,25 @@ let dropTargetEl = null;    // elemento con el resaltado de "voy a soltar aquí"
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['png','jpg','jpeg','gif','webp','svg','bmp','ico'];
 
-/* Permiso de escritura del acceso en curso. La UI se apaga en consecuencia
-   (botones ocultos por CSS con .role-readonly, acciones cortadas aquí), pero
-   quien manda es el servidor: cada endpoint que muta lleva @require_write. */
-const CAN_WRITE = window.COGNY.canWrite !== false;
-function guardWrite(){
-  if(CAN_WRITE) return true;
-  alert('Tu acceso a esta bóveda es de sólo lectura.');
-  return false;
-}
+/* A diferencia del vault privado, aquí no existe un modo "sólo lectura": quien
+   llega a cargar esta página ya pasó `access.community_view`/`community_api`
+   (ver apps/community/access.py), que conceden lectura y escritura COMPLETAS
+   sin distinción de roles — por sesión de propietario o por enlace. `window.
+   COGNY.canWrite` refleja el rol de la sesión de USUARIO de la bóveda PRIVADA
+   (propietario/lector) y no tiene sentido aquí: un amigo sin cuenta entra solo
+   con el enlace y nunca tiene sesión, así que ese valor le vendría siempre a
+   `false` aunque el backend le deje escribir sin problema. Se deja la
+   constante (y `guardWrite`, invocado por el resto del código igual que en el
+   vault privado) para no tener que tocar cada punto de escritura una por una. */
+const CAN_WRITE = true;
+function guardWrite(){ return true; }
 
 function api(url, body) {
   return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(body)}).then(r => r.json());
 }
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function assetUrl(path){return '/api/notes/asset?path=' + encodeURIComponent(path);}
+function assetUrl(path){return '/comunidad/api/asset?path=' + encodeURIComponent(path);}
 
 /* ════════════ Obsidian-flavored Markdown ════════════ */
 (function setupMarked(){
@@ -227,7 +226,7 @@ function resolveEmbed(el, depth){
     const titleTxt = section ? `${f.name} › ${section.replace(/^\^/,'')}` : f.name;
     el.innerHTML=`<div class="embed-title" data-open="${esc(f.path)}">▣ ${esc(titleTxt)}</div><div class="embed-body">Cargando…</div>`;
     el.querySelector('.embed-title').onclick=()=>openNote(f.path);
-    fetch('/api/notes/file?path='+encodeURIComponent(f.path)).then(r=>r.json()).then(res=>{
+    fetch('/comunidad/api/file?path='+encodeURIComponent(f.path)).then(r=>r.json()).then(res=>{
       const bodyEl=el.querySelector('.embed-body'); if(!bodyEl)return;
       const md = section && !section.startsWith('^') ? extractSection(res.content||'', section) : (res.content||'');
       bodyEl.innerHTML=renderMarkdown(md); postProcess(bodyEl, depth+1);
@@ -443,11 +442,11 @@ async function dropItem(src, targetParent, anchorName, anchorSide){
     if(!moved) return;
     finalPath=moved;
   }
-  await api('/api/notes/reorder', {folder:targetParent, order:destNames});
+  await api('/comunidad/api/reorder', {folder:targetParent, order:destNames});
   if(!sameParent){
     const srcArr = sourceParent ? ((findNode(TREE, sourceParent)||{}).children||[]) : TREE;
     const srcNames = srcArr.map(n=>fsName(n.path)).filter(n=>n!==workingName);
-    await api('/api/notes/reorder', {folder:sourceParent, order:srcNames});
+    await api('/comunidad/api/reorder', {folder:sourceParent, order:srcNames});
     revealPath(finalPath);
   }
   await loadTree(); renderTabs();
@@ -466,7 +465,7 @@ async function dropItem(src, targetParent, anchorName, anchorSide){
 async function moveItem(it, targetParent){
   if(!guardWrite()) return;
   if(dirty) await saveNow();   // evita reescribir la ruta antigua si se autoguarda después de moverla
-  const res=await api('/api/notes/move', {path:it.path, target:targetParent});
+  const res=await api('/comunidad/api/move', {path:it.path, target:targetParent});
   if(res.error){ alert(res.error); return null; }
   const oldPath=it.path, newPath=res.path;
   const remap = p => (p===oldPath || p.startsWith(oldPath+'/')) ? newPath + p.slice(oldPath.length) : p;
@@ -479,7 +478,7 @@ async function moveItem(it, targetParent){
 }
 
 async function loadTree(){
-  const res=await fetch('/api/notes/tree').then(r=>r.json()).catch(()=>null);
+  const res=await fetch('/comunidad/api/tree').then(r=>r.json()).catch(()=>null);
   if(!res) return;
   TREE=res.tree; FLAT=[]; BY_PATH=new Map(); BY_BASE=new Map(); flatten(TREE);
   renderTree(); flashSync();
@@ -499,7 +498,7 @@ function renderTree(){
   tree.innerHTML='';
   if(q){ renderSearchResults(tree, q); return; }
   const visible=visibleTree(TREE);
-  if(!visible.length){ tree.innerHTML='<div class="tree-empty">Bóveda vacía.<br>Crea tu primera nota<br>o importa una bóveda.</div>'; return; }
+  if(!visible.length){ tree.innerHTML='<div class="tree-empty">Bóveda vacía.<br>Crea la primera nota<br>o carpeta.</div>'; return; }
   const frag=document.createDocumentFragment();
   buildTreeDOM(visible, frag, 0, '');
   tree.appendChild(frag);
@@ -555,7 +554,7 @@ async function searchContent(q, namePaths){
   const seq=++searchSeq;
   const terms=q.split(/\s+/).filter(Boolean);
   let data=null;
-  try{ data=await fetch('/api/notes/search?q='+encodeURIComponent(q)).then(r=>r.json()); }catch(e){}
+  try{ data=await fetch('/comunidad/api/search?q='+encodeURIComponent(q)).then(r=>r.json()); }catch(e){}
   if(seq!==searchSeq) return;                       // ignora respuestas obsoletas
   const wrap=$('content-results'); if(!wrap) return;
   const extra=((data&&data.results)||[]).filter(r=>!namePaths.has(r.path));
@@ -587,7 +586,7 @@ async function openNote(path, terms, opts){
     if(dup >= 0){ return switchToTab(dup); }
   }
   if(dirty) await saveNow();
-  const res=await fetch('/api/notes/file?path='+encodeURIComponent(path)).then(r=>r.json());
+  const res=await fetch('/comunidad/api/file?path='+encodeURIComponent(path)).then(r=>r.json());
   if(res.error){ if(opts.silent) return false; alert(res.error); loadTree(); return false; }
   current={path:res.path, name:res.name, content:res.content}; dirty=false;
   $('vault-empty').style.display='none'; $('vault-toolbar').style.display='flex'; $('vault-body').style.display='flex';
@@ -763,8 +762,10 @@ function jumpToMatch(terms){
 // Renderiza una nota en el pane oculto exactamente como la vería el Chromium
 // del servidor (KaTeX, código, imágenes incrustadas como data-URI, columnas
 // anchas marcadas si `opts.landscape`) y devuelve el HTML final. Separado de
-// `exportNotePDF` para que `runHeadlessPdfExport` (export headless por API,
-// ver más abajo) pueda reusar exactamente los mismos pasos sin duplicarlos.
+// `exportNotePDF` para que quede claro qué es "preparar el HTML" y qué es
+// "mandarlo a imprimir" (aquí no hay exportación headless: a diferencia del
+// vault privado, la bóveda comunitaria no tiene login de un solo uso interno
+// — se exporta siempre desde el propio navegador, con el botón normal).
 async function prepareExportHtml(it, opts){
   opts = opts || {};
   if(!current || current.path!==it.path){ await openNote(it.path); await new Promise(r=>setTimeout(r,150)); }
@@ -797,8 +798,8 @@ async function prepareExportHtml(it, opts){
 }
 
 // Exporta una nota a PDF imprimiendo su vista previa renderizada (máxima fidelidad:
-// KaTeX, código, imágenes, callouts…). `opts` = {dark, theme, landscape}:
-// `theme` es el id de una plantilla HTML+CSS propia, y manda sobre `dark`.
+// KaTeX, código, imágenes, callouts…). `opts` = {dark, landscape} — sin `theme`:
+// la bóveda comunitaria sólo ofrece los dos estilos de serie (ver el modal más abajo).
 async function exportNotePDF(it, opts){
   opts = opts || {};
   setStatus('Generando PDF…', false);
@@ -806,10 +807,9 @@ async function exportNotePDF(it, opts){
   try{
     const html = await prepareExportHtml(it, opts);
     const base=(((current&&current.name)||it.name||'nota')).replace(/\.md$/i,'');
-    const res=await fetch('/api/notes/pdf',{method:'POST',
+    const res=await fetch('/comunidad/api/pdf',{method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-      body:JSON.stringify({html, title:base, dark:!!opts.dark,
-                           theme:opts.theme||null, landscape:!!opts.landscape})});
+      body:JSON.stringify({html, title:base, dark:!!opts.dark, landscape:!!opts.landscape})});
     if(!res.ok) throw new Error('http '+res.status);
     const blob=await res.blob();
     const url=URL.createObjectURL(blob);
@@ -822,30 +822,6 @@ async function exportNotePDF(it, opts){
   }finally{
     pp.innerHTML='';
   }
-}
-
-/* ════════════ Exportación headless (API pública, sin usuario detrás) ════════════
-   `apps/notes/pdf_headless.py` no puede ejecutar marked/KaTeX/Mermaid/highlight.js
-   en Python sin reimplementarlos (y divergir del render real), así que en vez de
-   eso navega AQUÍ (vía Playwright/CDP) con una sesión recién autenticada (login
-   de un solo uso, ver `pdf_headless.headless_login`) y dos parámetros en la URL:
-   `open=<ruta>` y `headless_pdf=1` (+ `landscape=1` opcional). El bootstrap de
-   abajo detecta ese modo y llama a esto en vez de abrir la nota en una pestaña.
-   El resultado viaja por un `console.log`, no por `window.algo` ni por el DOM:
-   la CSP de la app (`script-src` sin `unsafe-eval`, ver
-   `ContentSecurityPolicyMiddleware`) bloquea que Playwright compile y corra
-   NUEVO código en la página (`page.evaluate()`/`wait_for_function()` fallan
-   con "unsafe-eval" — comprobado). Un `console.log` de código YA cargado no
-   ejecuta nada nuevo, así que Playwright puede escucharlo (`expect_console_message`
-   en `pdf_headless.render_note_to_html`) sin tocar la CSP para nada. */
-async function runHeadlessPdfExport(path, opts){
-  opts = opts || {};
-  const name = path.split('/').pop().replace(/\.md$/i, '');
-  let html = '';
-  try{ html = await prepareExportHtml({path, name}, opts); }
-  catch(e){ html = ''; }
-  finally{ $('print-pane').innerHTML = ''; }
-  console.log('PDF_EXPORT_READY:' + html);
 }
 
 /* En apaisado el cuerpo va a dos columnas (~12,8 cm cada una). Lo que no cabe
@@ -921,81 +897,53 @@ function markWideBlocks(pane){
   }
 }
 
-/* ════════════ Modal de exportación a PDF (estilos y temas propios) ════════════
-   Dos estilos de serie (claro y oscuro) y los temas que escriba el usuario: un
-   tema es una plantilla HTML+CSS con un `{{ contenido }}` donde entra la nota,
-   así que el aspecto del PDF no está limitado a las opciones que se nos hayan
-   ocurrido. Los temas viven en el servidor (`/api/notes/themes`), valen para
-   cualquier nota y desde cualquier dispositivo. */
-let PDF_THEMES = [];         // temas cargados del servidor (sin el HTML)
-let PDF_STARTER = '';        // plantilla de ejemplo que manda el servidor
+/* ════════════ Modal de exportación a PDF (sólo los dos estilos de serie) ════════════
+   A diferencia del vault privado, aquí NO hay temas propios (HTML+CSS que el
+   usuario pueda escribir/guardar): los `PdfTheme` viven en una tabla GLOBAL
+   compartida con la bóveda privada, y dejar que cualquiera con el enlace
+   cree/edite/borre temas podría cargarse uno que el propietario use de
+   verdad en su bóveda privada. Así que el radiogroup `#pdf-styles` sólo
+   ofrece las dos entradas fijas (claro/oscuro) — no hay `fetch` a temas ni
+   paso 2 de edición: `#pdf-pane-edit` ni siquiera existe en esta plantilla. */
 let pdfItem = null;          // nota que se va a exportar
 let pdfChoice = localStorage.getItem('cogny-pdf-style') || 'light';
+if(pdfChoice!=='light' && pdfChoice!=='dark') pdfChoice='light';   // por si venía de una elección de tema guardada antes
 let pdfLandscape = localStorage.getItem('cogny-pdf-orient') === 'landscape';
-let themeEditing = null;     // tema en edición (null = nuevo)
-
-function themeById(id){ return PDF_THEMES.find(t=>t.id===id) || null; }
-function themeImgSrc(img){ return '/api/notes/themes/image?image='+img.id; }
 
 // Miniatura de la página resultante (mismas proporciones que un A4, y en
-// apaisado con las dos columnas que de verdad va a llevar el PDF). Con tema,
-// `o.accent` (ver `accent_colors` en themes.py) pinta la cabecera y el
-// título con los colores reales de esa plantilla, para distinguir las
-// tarjetas de un vistazo en vez de que todas salgan iguales.
+// apaisado con las dos columnas que de verdad va a llevar el PDF).
 function pdfThumb(o){
   const col = '<i></i><i></i><i></i><i class="s"></i><i></i><i></i>';
   const body = pdfLandscape
     ? `<div class="pdf-thumb-body"><i class="t span"></i>
          <div class="pdf-thumb-cols"><div>${col}</div><div>${col}</div></div></div>`
     : `<div class="pdf-thumb-body"><i class="t"></i>${col}<i class="s"></i></div>`;
-  const chrome = o.themed ? '<div class="pdf-thumb-hd"><em></em></div>' : '';
-  const foot = o.themed ? '<div class="pdf-thumb-ft"></div>' : '';
-  const accent = o.accent || [];
-  const vars = accent.length
-    ? `--tacc:${esc(accent[0])};${accent[1]?`--tacc2:${esc(accent[1])};`:''}`
-    : '';
-  const style = vars ? ` style="${vars}"` : '';
-  return `<div class="pdf-thumb${o.dark?' dark':''}${pdfLandscape?' land':''}"${style}>
-    ${chrome}${body}${foot}</div>`;
+  return `<div class="pdf-thumb${o.dark?' dark':''}${pdfLandscape?' land':''}">
+    ${body}</div>`;
 }
-
-const ICO_PENCIL = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
 
 function renderPdfCards(){
   const cards = [
     {key:'light', name:'Original', sub:'Estilo base',  thumb:{}},
     {key:'dark',  name:'Oscuro',   sub:'Hoja negra',   thumb:{dark:true}},
   ];
-  PDF_THEMES.forEach(t=>cards.push({
-    key:'t'+t.id, name:t.name, theme:t,
-    sub: t.images.length ? t.images.length+(t.images.length===1?' imagen':' imágenes') : 'HTML + CSS',
-    thumb:{themed:true, dark:!!t.dark, accent:t.accent},
-  }));
-  if(!cards.some(c=>c.key===pdfChoice)) pdfChoice='light';
-  let html = cards.map(c=>`
+  const html = cards.map(c=>`
     <div class="pdf-card${c.key===pdfChoice?' sel':''}" data-style="${c.key}" role="radio"
          tabindex="${c.key===pdfChoice?'0':'-1'}" aria-checked="${c.key===pdfChoice}">
       ${pdfThumb(c.thumb)}
       <span class="pdf-card-name">${esc(c.name)}</span>
       <span class="pdf-card-sub">${esc(c.sub)}</span>
-      ${c.theme&&CAN_WRITE?`<button class="pdf-card-edit" data-edit="${c.theme.id}" title="Editar el tema" aria-label="Editar el tema ${esc(c.theme.name)}">${ICO_PENCIL}</button>`:''}
     </div>`).join('');
-  if(CAN_WRITE) html += `<button class="pdf-card pdf-card-new" id="pdf-new-theme">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Nuevo tema</button>`;
   const box = $('pdf-styles');
   box.innerHTML = html;
   box.querySelectorAll('.pdf-card[data-style]').forEach(el=>{
-    el.addEventListener('click', ev=>{
-      const edit = ev.target.closest('[data-edit]');
-      if(edit){ openThemeEditor(themeById(+edit.dataset.edit)); return; }
+    el.addEventListener('click', ()=>{
       pdfChoice = el.dataset.style; localStorage.setItem('cogny-pdf-style', pdfChoice); renderPdfCards();
     });
     el.addEventListener('keydown', ev=>{
       if(ev.key===' '||ev.key==='Enter'){ ev.preventDefault(); el.click(); }
     });
   });
-  const nt = $('pdf-new-theme');
-  if(nt) nt.addEventListener('click', ()=>openThemeEditor(null));
   renderPdfOrient();
 }
 
@@ -1008,156 +956,13 @@ function renderPdfOrient(){
   $('pdf-orient-hint').style.display = pdfLandscape ? '' : 'none';
 }
 
-async function loadThemes(){
-  try{
-    const res = await fetch('/api/notes/themes').then(r=>r.json());
-    PDF_THEMES = res.themes || [];
-    PDF_STARTER = res.starter || '';
-  }catch(e){ PDF_THEMES = []; }
-}
-
 function closePdfModal(){ $('pdf-modal').classList.remove('show'); pdfItem=null; }
 
-async function openPdfModal(it){
+function openPdfModal(it){
   pdfItem = it;
-  showPdfPane('pick');
   $('pdf-note-name').textContent = it && it.name ? '«'+it.name.replace(/\.md$/i,'')+'»' : '';
   $('pdf-modal').classList.add('show');
-  renderPdfCards();          // pinta ya con lo que hubiera cacheado
-  await loadThemes();
-  if(pdfItem) renderPdfCards();
-}
-
-function showPdfPane(which){
-  const editing = which==='edit';
-  $('pdf-pane-pick').style.display = editing ? 'none' : '';
-  $('pdf-pane-edit').style.display = editing ? '' : 'none';
-  $('pdf-modal').querySelector('.pdf-modal').classList.toggle('editing', editing);
-}
-
-/* ── Editor de temas (la plantilla HTML+CSS) ── */
-async function openThemeEditor(theme){
-  if(!guardWrite()) return;
-  themeError('');
-  themeEditing = theme || null;
-  $('pdf-edit-title').textContent = theme ? 'Editar tema' : 'Nuevo tema';
-  $('theme-name').value = theme ? theme.name : '';
-  $('theme-delete').style.display = theme ? '' : 'none';
-  $('theme-html').value = theme ? '' : PDF_STARTER;
-  showPdfPane('edit');
-  renderThemeImages();
-  if(theme){
-    // El HTML de la plantilla no viaja en el listado (son 120 KB por tema):
-    // se pide sólo al abrirla para editar.
-    try{
-      const res = await fetch('/api/notes/themes?id='+theme.id).then(r=>r.json());
-      if(res.theme){ themeEditing = res.theme; $('theme-html').value = res.theme.html || ''; renderThemeImages(); }
-    }catch(e){ themeError('No se pudo cargar la plantilla'); }
-  }
-  setTimeout(()=>$(theme ? 'theme-html' : 'theme-name').focus(), 30);
-}
-
-function renderThemeImages(){
-  const imgs = (themeEditing && themeEditing.images) || [];
-  const box = $('theme-imgs');
-  box.innerHTML = imgs.map(img=>`
-    <div class="theme-img" title="Insertar {{ img:${esc(img.name)} }}">
-      <img src="${esc(themeImgSrc(img))}" alt="">
-      <code data-ins="{{ img:${esc(img.name)} }}">${esc(img.name)}</code>
-      <button type="button" data-del="${img.id}" aria-label="Eliminar la imagen ${esc(img.name)}">&#215;</button>
-    </div>`).join('') || '<p class="theme-empty">Todavía no hay imágenes.</p>';
-  $('theme-img-count').textContent = imgs.length ? '('+imgs.length+')' : '';
-  const saved = !!(themeEditing && themeEditing.id);
-  $('theme-add-img').disabled = !saved;
-  $('theme-img-hint').textContent = saved
-    ? 'Se incrustan en el PDF. Pulsa el nombre para insertar su marcador.'
-    : 'Guarda el tema antes de subir imágenes.';
-  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
-    const res = await api('/api/notes/themes/image/delete', {image:+b.dataset.del});
-    if(res.theme){ themeEditing = Object.assign(themeEditing||{}, res.theme); renderThemeImages(); }
-  }));
-}
-
-// Inserta texto en la posición del cursor de la plantilla (marcadores).
-function insertInTemplate(text){
-  const ta = $('theme-html');
-  const start = ta.selectionStart, end = ta.selectionEnd;
-  ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
-  ta.selectionStart = ta.selectionEnd = start + text.length;
-  ta.focus();
-}
-
-function themeError(msg){
-  const box = $('theme-error');
-  box.textContent = msg || '';
-  box.style.display = msg ? '' : 'none';
-}
-
-async function saveTheme(){
-  const name = $('theme-name').value.trim();
-  const html = $('theme-html').value;
-  if(!name){ themeError('Ponle un nombre al tema'); $('theme-name').focus(); return; }
-  const btn = $('theme-save'); btn.disabled = true; themeError('');
-  try{
-    const res = await api('/api/notes/themes/save',
-                          {id: themeEditing && themeEditing.id, name, html});
-    if(res.error){ themeError(res.error); return; }
-    themeEditing = res.theme;
-    await loadThemes();
-    pdfChoice = 't'+res.theme.id; localStorage.setItem('cogny-pdf-style', pdfChoice);
-    showPdfPane('pick'); renderPdfCards();
-  }catch(e){
-    themeError('No se pudo guardar el tema');
-  }finally{ btn.disabled = false; }
-}
-
-function deleteThemeFromEditor(){
-  if(!themeEditing || !themeEditing.id) return;
-  const t = themeEditing;
-  showConfirmDialog('Eliminar tema', `¿Eliminar el tema «${t.name}»? Los PDF ya exportados no cambian.`,
-    'Sí, eliminar', async ()=>{
-      await api('/api/notes/themes/delete', {id:t.id});
-      if(pdfChoice==='t'+t.id){ pdfChoice='light'; localStorage.setItem('cogny-pdf-style', pdfChoice); }
-      await loadThemes();
-      showPdfPane('pick'); renderPdfCards();
-    });
-}
-
-// Vista previa: imprime una nota de muestra con la plantilla TAL COMO ESTÁ en
-// el editor, sin guardarla — afinar un tema es prueba y error.
-async function previewTheme(){
-  const btn = $('theme-preview'); btn.disabled = true; themeError('');
-  const old = btn.textContent; btn.textContent = 'Generando…';
-  try{
-    const res = await fetch('/api/notes/themes/preview', {method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-      body:JSON.stringify({id: themeEditing && themeEditing.id,
-                           html: $('theme-html').value, landscape: pdfLandscape})});
-    if(!res.ok){
-      let msg = 'No se pudo generar la vista previa';
-      try{ msg = (await res.json()).error || msg; }catch(_){}
-      themeError(msg); return;
-    }
-    const url = URL.createObjectURL(await res.blob());
-    window.open(url, '_blank', 'noopener');
-    setTimeout(()=>URL.revokeObjectURL(url), 30000);
-  }catch(e){
-    themeError('No se pudo generar la vista previa');
-  }finally{ btn.disabled = false; btn.textContent = old; }
-}
-
-async function uploadThemeImage(file){
-  if(!file || !themeEditing || !themeEditing.id) return;
-  if(file.size > 2*1024*1024){ themeError('La imagen no puede pasar de 2 MB'); return; }
-  themeError('');
-  const fd = new FormData();
-  fd.append('id', themeEditing.id); fd.append('file', file); fd.append('name', file.name);
-  try{
-    const res = await fetch('/api/notes/themes/image/upload', {method:'POST', body:fd}).then(r=>r.json());
-    if(res.error){ themeError(res.error); return; }
-    themeEditing = Object.assign(themeEditing, res.theme);
-    renderThemeImages();
-  }catch(e){ themeError('No se pudo subir la imagen'); }
+  renderPdfCards();
 }
 
 /* ── Cableado del modal ── */
@@ -1165,37 +970,14 @@ $('pdf-cancel').addEventListener('click', closePdfModal);
 $('pdf-modal').addEventListener('click', e=>{ if(e.target===$('pdf-modal')) closePdfModal(); });
 $('pdf-go').addEventListener('click', ()=>{
   const it = pdfItem; if(!it) return;
-  const theme = pdfChoice.startsWith('t') ? +pdfChoice.slice(1) : null;
   closePdfModal();
-  exportNotePDF(it, {dark: pdfChoice==='dark', theme, landscape: pdfLandscape});
+  exportNotePDF(it, {dark: pdfChoice==='dark', landscape: pdfLandscape});
 });
 $('pdf-orient').addEventListener('click', e=>{
   const btn = e.target.closest('button'); if(!btn) return;
   pdfLandscape = btn.dataset.orient==='landscape';
   localStorage.setItem('cogny-pdf-orient', pdfLandscape ? 'landscape' : 'portrait');
   renderPdfCards();   // las miniaturas cambian de forma con la orientación
-});
-$('theme-back').addEventListener('click', ()=>{ showPdfPane('pick'); renderPdfCards(); });
-$('theme-save').addEventListener('click', saveTheme);
-$('theme-delete').addEventListener('click', deleteThemeFromEditor);
-$('theme-preview').addEventListener('click', previewTheme);
-$('theme-reset').addEventListener('click', ()=>{
-  showConfirmDialog('Plantilla de ejemplo',
-    'Se sustituirá lo que hay en el editor por la plantilla de ejemplo comentada. El tema guardado no cambia hasta que pulses Guardar.',
-    'Sí, sustituir', ()=>{ $('theme-html').value = PDF_STARTER; $('theme-html').focus(); });
-});
-$('theme-add-img').addEventListener('click', ()=>$('theme-img-file').click());
-$('theme-img-file').addEventListener('change', e=>{ uploadThemeImage(e.target.files[0]); e.target.value=''; });
-// Los marcadores (y los nombres de imagen) se insertan pulsándolos.
-$('pdf-pane-edit').addEventListener('click', e=>{
-  const chip = e.target.closest('code[data-ins]');
-  if(chip) insertInTemplate(chip.dataset.ins);
-});
-// Tab dentro de la plantilla indenta, no salta de campo: es un editor de código.
-$('theme-html').addEventListener('keydown', e=>{
-  if(e.key!=='Tab' || e.ctrlKey || e.altKey) return;
-  e.preventDefault();
-  insertInTemplate('  ');
 });
 
 function cssEsc(s){return (window.CSS&&CSS.escape)?CSS.escape(s):s.replace(/["\\]/g,'\\$&');}
@@ -1217,7 +999,7 @@ async function saveNow(){
   if(!CAN_WRITE){ dirty=false; return; }
   if(!current||!dirty) return; clearTimeout(saveTimer);
   const content=(ED?ED.getValue():current.content).replace(/\n+$/, ''); current.content=content; dirty=false; setStatus('Guardando…',false);
-  const res=await api('/api/notes/save',{path:current.path, content});
+  const res=await api('/comunidad/api/save',{path:current.path, content});
   if(res.success) setStatus('Guardado', true); else { setStatus('Error al guardar',false); dirty=true; }
 }
 
@@ -1302,7 +1084,7 @@ function initEditor(){
       const f=findFileByName(name);
       if(f) openNote(f.path);
       else showConfirmDialog('Crear nota',`La nota «${name}» no existe. ¿Crearla?`,'Crear',async()=>{
-        const res=await api('/api/notes/create',{parent: current?current.path.split('/').slice(0,-1).join('/'):'', name, type:'note'});
+        const res=await api('/comunidad/api/create',{parent: current?current.path.split('/').slice(0,-1).join('/'):'', name, type:'note'});
         if(res.error){alert(res.error);return;} revealPath(res.path); await loadTree(); openNote(res.path);});
       return; }
     const tg=e.target.closest('.tag-pill');
@@ -1462,14 +1244,14 @@ function revealPath(path){ const parts=path.split('/'); let acc='';
 async function newNote(parent){
   if(!guardWrite()) return;
   showInputDialog('Nueva nota','',async name=>{
-    const res=await api('/api/notes/create',{parent: parent ?? currentFolderContext(), name, type:'note'});
+    const res=await api('/comunidad/api/create',{parent: parent ?? currentFolderContext(), name, type:'note'});
     if(res.error){alert(res.error);return;} revealPath(res.path); await loadTree(); openNote(res.path);
   },{placeholder:'Nombre de la nota',okLabel:'Crear'});
 }
 async function newFolder(parent){
   if(!guardWrite()) return;
   showInputDialog('Nueva carpeta','',async name=>{
-    const res=await api('/api/notes/create',{parent: parent ?? currentFolderContext(), name, type:'folder'});
+    const res=await api('/comunidad/api/create',{parent: parent ?? currentFolderContext(), name, type:'folder'});
     if(res.error){alert(res.error);return;} revealPath(res.path); expanded.add(res.path); persistExpanded(); await loadTree();
   },{placeholder:'Nombre de la carpeta',okLabel:'Crear'});
 }
@@ -1477,7 +1259,7 @@ async function renameItem(it){
   if(!guardWrite()) return;
   showInputDialog('Renombrar',it.name,async name=>{
     if(name===it.name) return;
-    const res=await api('/api/notes/rename',{path:it.path, name}); if(res.error){alert(res.error);return;}
+    const res=await api('/comunidad/api/rename',{path:it.path, name}); if(res.error){alert(res.error);return;}
     const wasOpen=current&&current.path===it.path;
     const remap = p => (p===it.path || p.startsWith(it.path+'/')) ? res.path + p.slice(it.path.length) : p;
     tabs.forEach(t=>{ t.path = remap(t.path); t.history = t.history.map(remap); });
@@ -1485,19 +1267,20 @@ async function renameItem(it){
     if(wasOpen) openNote(res.path);
   },{okLabel:'Renombrar'});
 }
-/* ════════════ Copiar a la bóveda comunitaria ════════════
+/* ════════════ Copiar a la bóveda privada ════════════
    Sólo el propietario ve esta acción (window.COGNY.isOwner — el backend la
-   exige igual, @require_owner en /api/notes/copy-to-community, esto es sólo
-   cosmética). Trae consigo los adjuntos que la nota/carpeta referencie
+   exige igual, @require_owner en /comunidad/api/copy-to-private: ni quien
+   sólo tiene un enlace comunitario, ni nadie más, puede escribir en la
+   bóveda privada). Trae consigo los adjuntos que la nota/carpeta referencie
    (![[nombre]]), aunque vivan en el Adjuntos/ raíz de esta bóveda: lo hace
    `vault.copy_across` en el servidor. Nunca sobrescribe nada en destino: un
    nombre ya usado allí se resuelve con ' 2', ' 3'… */
-async function copyToCommunity(it){
+async function copyToPrivate(it){
   const what=it.type==='folder'?'la carpeta':'la nota';
-  showConfirmDialog('Copiar a la bóveda comunitaria',
-    `¿Copiar ${what} «${it.name}» (y sus imágenes) a la bóveda comunitaria?`,
+  showConfirmDialog('Copiar a la bóveda privada',
+    `¿Copiar ${what} «${it.name}» (y sus imágenes) a tu bóveda privada?`,
     'Copiar', async ()=>{
-    const res=await api('/api/notes/copy-to-community', {path:it.path});
+    const res=await api('/comunidad/api/copy-to-private', {path:it.path});
     if(res.error){ alert(res.error); return; }
     flashSync();
   });
@@ -1507,7 +1290,7 @@ async function deleteItem(it){
   if(!guardWrite()) return;
   const what=it.type==='folder'?'la carpeta y todo su contenido':(it.type==='note'?'la nota':'el archivo');
   showConfirmDialog('Borrar',`¿Borrar ${what} «${it.name}»?`,'Sí, borrar',async ()=>{
-    const res=await api('/api/notes/delete',{path:it.path}); if(res.error){alert(res.error);return;}
+    const res=await api('/comunidad/api/delete',{path:it.path}); if(res.error){alert(res.error);return;}
     const isHit = p => p===it.path || p.startsWith(it.path+'/');
     for(let i=tabs.length-1;i>=0;i--){
       const t = tabs[i];
@@ -1538,12 +1321,11 @@ function showCtxMenu(e,it){
   if(it.type==='note'){
     html+=`<button data-act="open-new-tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>Abrir en nueva pestaña</button><div class="ctx-sep"></div>`;
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
-    html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
-    ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}
-    ${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
+    html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>`;
+    html+=`${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
   }
   if((it.type==='note' || it.type==='folder') && window.COGNY.isOwner){
-    html+=`<button data-act="copy-community"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>Copiar a la bóveda comunitaria</button><div class="ctx-sep"></div>`;
+    html+=`<button data-act="copy-private"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>Copiar a mi bóveda privada</button><div class="ctx-sep"></div>`;
   }
   if(CAN_WRITE){
   html+=`<button data-act="rename"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>Renombrar</button>`;
@@ -1569,9 +1351,8 @@ function showCtxMenu(e,it){
       if(a==='new-note') newNote(it.path); else if(a==='new-folder') newFolder(it.path);
       else if(a==='open-new-tab') openInNewTab(it.path);
       else if(a==='pdf') openPdfModal(it);
-      else if(a==='share') openShareModal(it);
       else if(a==='move') openMoveModal(it);
-      else if(a==='copy-community') copyToCommunity(it);
+      else if(a==='copy-private') copyToPrivate(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };
   });
   setTimeout(()=>_ctxBtns[0]?.focus(),20);
@@ -1581,94 +1362,6 @@ document.addEventListener('click', e=>{ if(!e.target.closest('#ctx-menu')) hideC
 document.addEventListener('scroll', hideCtx, true);
 
 /* (Los clics de wikilink/tag/embed se gestionan en initEditor, sobre el editor CM.) */
-
-/* ════════════ Compartir nota (enlace público, con contraseña opcional) ════════ */
-let shareItem = null;
-let sharePwOn = false;
-
-function closeShareModal(){ $('share-modal').classList.remove('show'); shareItem=null; }
-
-async function openShareModal(it){
-  shareItem = it;
-  $('share-modal').classList.add('show');
-  $('share-loading').style.display=''; $('share-body').style.display='none';
-  $('share-save').disabled = true; $('share-stop').style.display='none';
-  sharePwOn = false;
-  $('share-pw-switch').classList.remove('on'); $('share-pw-switch').setAttribute('aria-checked','false');
-  $('share-pw-field').classList.remove('show'); $('share-pw-input').value='';
-  try{
-    // Sólo se consulta el estado: abrir el modal ya no publica la nota por
-    // sí solo. El enlace se crea cuando el usuario pulsa "Guardar" (mismo
-    // handler que aplica/quita la contraseña), nunca antes de esa decisión
-    // explícita.
-    const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
-    if(res.shared){
-      $('share-link-field').value = res.url;
-      $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
-      $('share-stop').style.display='';
-      if(res.has_password){
-        sharePwOn = true;
-        $('share-pw-switch').classList.add('on'); $('share-pw-switch').setAttribute('aria-checked','true');
-        $('share-pw-field').classList.add('show');
-        $('share-pw-input').placeholder = 'Dejar en blanco para no cambiarla';
-      }
-    }else{
-      $('share-link-field').value = '';
-      $('share-status-text').textContent = 'No compartida · pulsa Guardar para generar el enlace';
-    }
-  }catch(e){
-    $('share-status-text').textContent = 'Error al consultar el estado del enlace';
-  }
-  $('share-loading').style.display='none'; $('share-body').style.display='';
-  $('share-save').disabled = false;
-}
-
-$('share-pw-toggle-row').addEventListener('click', ()=>{
-  sharePwOn = !sharePwOn;
-  $('share-pw-switch').classList.toggle('on', sharePwOn);
-  $('share-pw-switch').setAttribute('aria-checked', String(sharePwOn));
-  $('share-pw-field').classList.toggle('show', sharePwOn);
-  if(sharePwOn) setTimeout(()=>$('share-pw-input').focus(), 10);
-});
-
-$('share-save').addEventListener('click', async ()=>{
-  if(!shareItem) return;
-  const btn=$('share-save'); btn.disabled=true; btn.textContent='Guardando…';
-  const password = sharePwOn ? $('share-pw-input').value : '';
-  try{
-    const res = await api('/api/notes/share/create', {path: shareItem.path, password});
-    if(res.error){ alert(res.error); return; }
-    $('share-link-field').value = res.url;
-    $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
-    $('share-stop').style.display='';
-    if(res.has_password) $('share-pw-input').placeholder='Dejar en blanco para no cambiarla';
-    $('share-pw-input').value='';
-  }catch(e){
-    alert('Error de red al compartir la nota');
-  }finally{
-    btn.disabled=false; btn.textContent='Guardar';
-  }
-});
-
-$('share-copy-btn').addEventListener('click', async ()=>{
-  const val=$('share-link-field').value; if(!val) return;
-  try{ await navigator.clipboard.writeText(val); }
-  catch(_){ $('share-link-field').select(); try{document.execCommand('copy');}catch(__){} }
-  const btn=$('share-copy-btn'); const orig=btn.textContent;
-  btn.textContent='¡Copiado!'; btn.classList.add('copied');
-  setTimeout(()=>{ btn.textContent=orig; btn.classList.remove('copied'); }, 1400);
-});
-
-$('share-stop').addEventListener('click', async ()=>{
-  if(!shareItem) return;
-  if(!confirm('¿Dejar de compartir esta nota? El enlace actual dejará de funcionar.')) return;
-  const res = await api('/api/notes/share/revoke', {path: shareItem.path});
-  if(res.error){ alert(res.error); return; }
-  closeShareModal();
-});
-
-$('share-cancel').addEventListener('click', closeShareModal);
-$('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
 
 /* ════════════ Mover nota a otra carpeta (modal con buscador) ════════════
    Reutiliza moveItem() (la misma función que ya usa el arrastrar-y-soltar del
@@ -1730,10 +1423,6 @@ $('move-search-input').addEventListener('input', e=>renderMoveFolderList(e.targe
 $('move-cancel').addEventListener('click', closeMoveModal);
 $('move-modal').addEventListener('click', e=>{ if(e.target===$('move-modal')) closeMoveModal(); });
 
-/* Nota: el panel "Enlaces compartidos" vive en el modal global de Ajustes
-   (templates/base.html), accesible desde el icono de la cabecera — el botón
-   de la barra lateral se quitó por quedar duplicado con ese icono. */
-
 /* ════════════ Imágenes: clic derecho → Eliminar (borra el archivo y la referencia) ════════════ */
 const iconTrash='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
 // Quita del texto TODAS las referencias a un adjunto por su nombre de archivo,
@@ -1774,7 +1463,7 @@ async function deleteImage(info){
   if(!guardWrite()) return;
   if(!info || !current) return;
   setStatus('Borrando imagen…', false);
-  const res=await api('/api/notes/delete',{path:info.path});
+  const res=await api('/comunidad/api/delete',{path:info.path});
   if(res && res.error){ alert(res.error); setStatus('Error al borrar', false); return; }
   if(ED) ED.set(stripImageRefs(ED.getValue(), info.name));
   dirty=true; await saveNow();
@@ -1792,7 +1481,7 @@ function uploadAsset(file){
   // el backend registra con ella el dueño del adjunto, para poder resolverlo
   // en el enlace público sólo desde esta misma nota (ver _resolve_asset_ref).
   if(current) fd.append('note', current.path);
-  return fetch('/api/notes/upload',{method:'POST', body:fd}).then(r=>r.json());
+  return fetch('/comunidad/api/upload',{method:'POST', body:fd}).then(r=>r.json());
 }
 let imgBusy=false;
 async function handleImageFile(file){
@@ -1964,57 +1653,6 @@ const FMT_ACTIONS={
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') fbar.classList.remove('open'); });
 })();
 
-/* ════════════ Export / Import ════════════ */
-$('btn-export').addEventListener('click', ()=>{ if(dirty) saveNow(); window.location='/api/notes/export'; });
-let importFile=null;
-function openImport(){ if(!guardWrite()) return; importFile=null; $('import-fname').style.display='none'; $('import-go').disabled=true;
-  $('import-file').value=''; $('import-modal').classList.add('show'); }
-function closeImport(){ $('import-modal').classList.remove('show'); }
-$('btn-import').addEventListener('click', openImport);
-$('import-cancel').addEventListener('click', closeImport);
-$('import-drop').addEventListener('click', ()=>$('import-file').click());
-$('import-file').addEventListener('change', e=>{ if(e.target.files.length) setImportFile(e.target.files[0]); });
-['dragover','dragenter'].forEach(ev=>$('import-drop').addEventListener(ev, e=>{e.preventDefault(); $('import-drop').classList.add('hover');}));
-['dragleave','drop'].forEach(ev=>$('import-drop').addEventListener(ev, e=>{e.preventDefault(); $('import-drop').classList.remove('hover');}));
-$('import-drop').addEventListener('drop', e=>{ if(e.dataTransfer.files.length) setImportFile(e.dataTransfer.files[0]); });
-const MAX_IMPORT_MB=1000;  // tope práctico vía subdominio uploads. (fuera de Cloudflare)
-function setImportFile(f){ const ok=/\.(zip|md)$/i.test(f.name);
-  if(!ok){ alert('Solo .zip o .md'); return; }
-  importFile=f; const mb=f.size/1048576; const el=$('import-fname');
-  el.innerHTML='📦 '+esc(f.name)+'  ('+mb.toFixed(1)+' MB)'+
-    (mb>MAX_IMPORT_MB?'<br><span style="color:#f59e0b">⚠ Supera '+MAX_IMPORT_MB+' MB; puede que no se suba. Reduce las imágenes o divide la bóveda.</span>':'');
-  el.style.display='block'; $('import-go').disabled=false; }
-document.querySelectorAll('input[name=impmode]').forEach(r=>r.addEventListener('change', ()=>{
-  document.querySelectorAll('#import-modal label').forEach(l=>l.classList.toggle('sel', l.dataset.mode===r.value && r.checked));}));
-$('import-go').addEventListener('click', ()=>{
-  if(!importFile) return;
-  const btn=$('import-go'), bar=$('import-progress'), fill=bar.querySelector('span');
-  btn.disabled=true; btn.textContent='Importando…'; bar.classList.add('show'); fill.style.width='0%';
-  const fd=new FormData(); fd.append('file', importFile);
-  fd.append('mode', document.querySelector('input[name=impmode]:checked').value); fd.append('csrfmiddlewaretoken', CSRF);
-  const xhr=new XMLHttpRequest();
-  xhr.open('POST', UPLOAD_BASE+'/api/notes/import');
-  xhr.withCredentials=true;   // envía la cookie de sesión al subdominio uploads.
-  xhr.upload.onprogress=e=>{ if(e.lengthComputable){ const p=Math.round(e.loaded/e.total*100);
-    fill.style.width=p+'%'; btn.textContent=(p<100?'Subiendo '+p+'%':'Procesando…'); } };
-  const done=()=>{ btn.textContent='Importar'; btn.disabled=false; bar.classList.remove('show'); };
-  const tooBig=()=>'El archivo es demasiado grande para subirlo ('+(importFile.size/1048576).toFixed(0)+' MB). '+
-    'El límite es ~'+MAX_IMPORT_MB+' MB. Reduce el tamaño de las imágenes de la bóveda o divídela en varias partes.';
-  xhr.onload=async ()=>{
-    let res={}; try{ res=JSON.parse(xhr.responseText); }catch(e){}
-    if(xhr.status===413){ alert(tooBig()); done(); return; }
-    if(xhr.status>=400 || res.error){ alert(res.error||('Error al importar ('+xhr.status+')')); done(); return; }
-    closeImport(); done(); current=null;
-    $('vault-toolbar').style.display='none'; $('vault-body').style.display='none'; $('vault-empty').style.display='flex';
-    await loadTree();
-    const _ep=$('vault-empty').querySelector('p'); const _eo=_ep.textContent;
-    _ep.textContent='✓ Importadas '+(res.imported||0)+' notas · selecciona una para empezar';
-    setTimeout(()=>{_ep.textContent=_eo;},5000);
-  };
-  xhr.onerror=()=>{ alert(importFile.size>MAX_IMPORT_MB*1048576 ? tooBig() : 'Error de red al importar. Revisa tu conexión e inténtalo de nuevo.'); done(); };
-  xhr.send(fd);
-});
-
 /* ════════════ Wiring ════════════ */
 // Ctrl/Cmd+S guarda ya (el editor CM gestiona escritura y tabulación).
 document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='s' && current){ e.preventDefault(); saveNow(); } });
@@ -2029,23 +1667,11 @@ document.addEventListener('keydown', e=>{
 });
 // Lightbox: cerrar al pulsar o con Escape.
 $('img-lightbox').addEventListener('click', closeLightbox);
-// Backdrop click cierra modales secundarios
-$('storage-modal').addEventListener('click',e=>{if(e.target===$('storage-modal'))$('storage-modal').classList.remove('show');});
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   if($('img-lightbox').classList.contains('show')){ closeLightbox(); return; }
-  if($('storage-modal').classList.contains('show')){ $('storage-modal').classList.remove('show'); return; }
-  if($('pdf-modal').classList.contains('show')){
-    // Desde el editor de marca, Escape vuelve al selector de estilo (no cierra
-    // el modal entero: perder el formulario a medias sería un mal sobresalto).
-    if($('pdf-pane-edit').style.display!=='none'){ $('theme-back').click(); }
-    else closePdfModal();
-    return;
-  }
-  if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
+  if($('pdf-modal').classList.contains('show')){ closePdfModal(); return; }
   if($('move-modal').classList.contains('show')){ closeMoveModal(); return; }
-  if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
-  if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
 });
 // Ctrl + / Ctrl - / Ctrl 0 → zoom de la nota (evita el zoom del navegador).
 document.addEventListener('keydown', e=>{
@@ -2057,223 +1683,6 @@ document.addEventListener('keydown', e=>{
 $('btn-new-note').addEventListener('click', ()=>newNote());
 $('btn-new-folder').addEventListener('click', ()=>newFolder());
 $('btn-search').addEventListener('click', ()=>toggleSearch());
-// Dropdown de ajustes de la bóveda
-function toggleVaultSettingsMenu(e) {
-  e.stopPropagation();
-  const menu = $('vault-settings-menu');
-  const nowHidden = menu.classList.toggle('hidden');
-  $('btn-img-dir').setAttribute('aria-expanded', (!nowHidden).toString());
-  if(!nowHidden) setTimeout(()=>menu.querySelector('button')?.focus(), 20);
-}
-function closeVaultSettingsMenu() {
-  const menu = $('vault-settings-menu');
-  if (menu) menu.classList.add('hidden');
-}
-$('btn-img-dir').addEventListener('click', toggleVaultSettingsMenu);
-$('vault-settings-menu').addEventListener('keydown', e=>{
-  const _vsmBtns=[...$('vault-settings-menu').querySelectorAll('button')];
-  const _vi=_vsmBtns.indexOf(document.activeElement);
-  if(e.key==='ArrowDown'){e.preventDefault();_vsmBtns[(_vi+1)%_vsmBtns.length]?.focus();}
-  if(e.key==='ArrowUp'){e.preventDefault();_vsmBtns[(_vi-1+_vsmBtns.length)%_vsmBtns.length]?.focus();}
-  if(e.key==='Escape'){e.preventDefault();closeVaultSettingsMenu();$('btn-img-dir').focus();}
-});
-$('vsm-export').addEventListener('click', () => { closeVaultSettingsMenu(); if(dirty) saveNow(); window.location='/api/notes/export'; });
-$('vsm-import').addEventListener('click', () => { closeVaultSettingsMenu(); openImport(); });
-$('vsm-storage').addEventListener('click', () => { closeVaultSettingsMenu(); openStorageModal(); });
-
-/* ════════════ Modal de Almacenamiento ════════════ */
-function fmtBytes(n) {
-  n = +n || 0;
-  const u = ['B','KB','MB','GB','TB'];
-  let i = 0;
-  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-  return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + u[i];
-}
-async function openStorageModal() {
-  $('storage-modal').classList.add('show');
-  $('storage-body').style.display = 'none';
-  $('storage-err').style.display = 'none';
-  $('storage-loading').style.display = '';
-  $('storage-progress').style.display = 'none';
-  $('storage-result').style.display = 'none';
-  try {
-    const r = await fetch('/api/notes/storage').then(x => x.json());
-    if (!r.success) throw new Error(r.error || 'Error');
-    $('storage-loading').style.display = 'none';
-    $('storage-body').style.display = '';
-    renderStorageStats(r);
-  } catch (e) {
-    $('storage-loading').style.display = 'none';
-    $('storage-err').textContent = e.message || 'No se pudo calcular el almacenamiento';
-    $('storage-err').style.display = '';
-  }
-}
-function renderStorageStats(s) {
-  $('storage-total').textContent = fmtBytes(s.total_bytes);
-  const tot = Math.max(1, s.total_bytes);
-  // Barra apilada (segments)
-  const segs = [
-    {bytes: s.notes_bytes,  color: 'var(--storage-c-notes)'},
-    {bytes: s.images_bytes, color: 'var(--storage-c-images)'},
-    {bytes: s.other_bytes,  color: 'var(--storage-c-other)'},
-  ];
-  $('storage-stack').innerHTML = segs
-    .map(seg => `<span style="width:${((seg.bytes/tot)*100).toFixed(2)}%;background:${seg.color}"></span>`)
-    .join('');
-
-  // Cards
-  $('storage-notes-bytes').textContent  = fmtBytes(s.notes_bytes);
-  $('storage-images-bytes').textContent = fmtBytes(s.images_bytes);
-  $('storage-other-bytes').textContent  = fmtBytes(s.other_bytes);
-  const f = (n, label) => `${n} ${label}${n === 1 ? '' : 's'}`;
-  $('storage-notes-n').textContent  = f(s.n_notes,  'archivo');
-  $('storage-images-n').textContent = f(s.n_images, 'archivo');
-  $('storage-other-n').textContent  = f(s.n_other,  'archivo');
-
-  const total = s.n_notes + s.n_images + s.n_other;
-  $('storage-files').textContent   = f(total, 'archivo');
-  $('storage-folders').textContent = `${s.n_folders} carpeta${s.n_folders===1?'':'s'}`;
-}
-$('storage-cancel').addEventListener('click', () => $('storage-modal').classList.remove('show'));
-
-/* ── Optimizar imágenes (backup opcional + recode WebP + rewrite refs) ──── */
-$('btn-optimize-images').addEventListener('click', async () => {
-  const btn = $('btn-optimize-images');
-  const wantsBackup = $('opt-backup-first').checked;
-  const prev = btn.innerHTML;
-
-  // 1) Confirmación
-  const _confirmed = await confirmAsync(
-    wantsBackup ? 'Optimizar imágenes' : '⚠ Sin backup previo',
-    wantsBackup
-      ? '¿Lanzar? Se descargará primero un backup ZIP y se recodificarán las imágenes ráster a WebP. Reversible importando el backup.'
-      : 'Vas a optimizar SIN backup previo. Se recodificarán las imágenes a WebP. Esta acción NO es reversible automáticamente.',
-    'Sí, optimizar'
-  );
-  if (!_confirmed) return;
-
-  btn.disabled = true;
-  $('storage-progress').style.display = '';
-  $('storage-result').style.display = 'none';
-  $('storage-err').style.display = 'none';
-
-  // 2) Backup opcional
-  if (wantsBackup) {
-    btn.textContent = 'Descargando backup…';
-    $('storage-progress-msg').textContent = 'Generando backup ZIP de toda la bóveda…';
-    try {
-      const r = await fetch('/api/notes/export');
-      if (!r.ok) throw new Error('No se pudo generar el backup');
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `boveda-backup-${new Date().toISOString().slice(0, 10)}.zip`;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      $('storage-progress').style.display = 'none';
-      alert('Error generando backup: ' + e.message + '\n\nNo se ha optimizado nada.');
-      btn.disabled = false; btn.innerHTML = prev;
-      return;
-    }
-  }
-
-  // 3) Ejecutar bulk en streaming NDJSON con progreso real
-  btn.textContent = 'Optimizando…';
-  $('storage-progress-msg').textContent = 'Preparando…';
-  // Pasar la barra a modo determinado
-  const bar = document.querySelector('.storage-progress-bar-fill');
-  bar.style.animation = 'none';
-  bar.style.width = '0%';
-  bar.style.left = '0';
-  bar.style.transition = 'width .2s ease';
-
-  let summary = null;
-  try {
-    const r = await fetch('/api/notes/optimize-images', { method: 'POST' });
-    if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let nl;
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line) continue;
-        let upd;
-        try { upd = JSON.parse(line); } catch (_) { continue; }
-        handleOptimizeEvent(upd);
-        if (upd.phase === 'done')  summary = upd;
-        if (upd.phase === 'error') throw new Error(upd.error || 'Error');
-      }
-    }
-    $('storage-progress').style.display = 'none';
-    if (summary) {
-      const out = $('storage-result');
-      out.style.display = '';
-      out.textContent = `${summary.converted} imágenes optimizadas, ${summary.skipped} omitidas. Ahorrado: ${fmtBytes(summary.saved_bytes)}.`;
-    }
-    // Refrescar stats y árbol
-    const s = await fetch('/api/notes/storage').then(x => x.json());
-    if (s.success) renderStorageStats(s);
-    await loadTree();
-    if (current) {
-      const candidate = current.path.replace(/\.(jpe?g|png|bmp|tiff?|heic|avif)$/i, '.webp');
-      if (candidate !== current.path) openNote(candidate);
-    }
-  } catch (e) {
-    $('storage-progress').style.display = 'none';
-    const err = $('storage-err');
-    err.textContent = 'Error: ' + e.message;
-    err.style.display = '';
-  } finally {
-    // Restaurar la barra al modo indeterminado para futuras ejecuciones.
-    bar.style.transition = '';
-    bar.style.width = '35%';
-    bar.style.animation = '';
-    btn.disabled = false;
-    btn.innerHTML = prev;
-  }
-
-  function handleOptimizeEvent(u) {
-    const msg = $('storage-progress-msg');
-    const fill = document.querySelector('.storage-progress-bar-fill');
-    switch (u.phase) {
-      case 'scan':
-        msg.textContent = 'Escaneando bóveda…';
-        break;
-      case 'start':
-        msg.textContent = u.total === 0
-          ? 'No hay imágenes ráster que optimizar.'
-          : `0 / ${u.total} imágenes`;
-        fill.style.width = u.total === 0 ? '100%' : '0%';
-        break;
-      case 'progress': {
-        const pct = u.total ? (u.i / u.total) * 100 : 0;
-        fill.style.width = pct.toFixed(1) + '%';
-        msg.textContent =
-          `${u.i} / ${u.total} · convertidas ${u.converted} · ahorrado ${fmtBytes(u.saved_bytes)}`;
-        break;
-      }
-      case 'rewriting':
-        msg.textContent = `Actualizando referencias en ${u.notes} notas…`;
-        fill.style.width = '100%';
-        break;
-      case 'done':
-        msg.textContent = `Listo: ${u.converted} convertidas, ${u.skipped} omitidas, ${fmtBytes(u.saved_bytes)} ahorrados.`;
-        fill.style.width = '100%';
-        break;
-    }
-  }
-});
-document.addEventListener('click', e => {
-  if (!$('vault-settings-wrap').contains(e.target)) closeVaultSettingsMenu();
-});
 $('btn-collapse-all').addEventListener('click', collapseAll);
 $('btn-expand-all').addEventListener('click', expandAll);
 $('vault-search-input').addEventListener('input', ()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(renderTree, 140); syncSearchClear(); });
@@ -2324,14 +1733,11 @@ $('vault-title').addEventListener('click',e=>{
   await loadTree(); await restoreTabsState();
   const params=new URLSearchParams(location.search);
   const openParam=params.get('open');
-  // Export headless por API: no es una visita real, así que ni se abre pestaña
-  // ni se limpia la URL (ver `runHeadlessPdfExport` arriba).
-  if(openParam && params.get('headless_pdf')){
-    await runHeadlessPdfExport(openParam, {landscape: params.get('landscape')==='1'});
-    return;
-  }
-  // Deep-link desde fuera del vault (p.ej. "Abrir esta nota" en el modal de
-  // Ajustes de otra página): /?open=<ruta> abre la nota y limpia la URL.
+  // Deep-link desde fuera del vault: /?open=<ruta> abre la nota y limpia la URL.
+  // (No hay modo "headless_pdf" aquí: ese bootstrap depende de un login de un
+  // solo uso interno del vault PRIVADO — apps.notes.pdf_headless — que no
+  // existe para la bóveda comunitaria. Exportar a PDF va siempre por el botón
+  // normal del menú contextual, desde el propio navegador.)
   if(openParam){
     await openInNewTab(openParam);
     history.replaceState(null, '', location.pathname);
