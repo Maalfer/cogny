@@ -1540,6 +1540,7 @@ function showCtxMenu(e,it){
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
     ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}
+    ${CAN_WRITE ? `<button data-act="ai-token"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14.5-4-4 1.41-1.41L11 12.67l4.59-4.58L17 9.5l-6 6z"/></svg>Token para IA</button>` : ''}
     ${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
   }
   if((it.type==='note' || it.type==='folder') && window.COGNY.isOwner){
@@ -1570,6 +1571,7 @@ function showCtxMenu(e,it){
       else if(a==='open-new-tab') openInNewTab(it.path);
       else if(a==='pdf') openPdfModal(it);
       else if(a==='share') openShareModal(it);
+      else if(a==='ai-token') openAiTokenModal(it);
       else if(a==='move') openMoveModal(it);
       else if(a==='copy-community') copyToCommunity(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };
@@ -1669,6 +1671,90 @@ $('share-stop').addEventListener('click', async ()=>{
 
 $('share-cancel').addEventListener('click', closeShareModal);
 $('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
+
+/* ════════════ Token de IA (lectura+escritura de una nota vía HTTP, sin sesión) ════════════
+   A diferencia de "Compartir nota" (un único enlace por nota, se reutiliza),
+   aquí puede haber varios tokens vivos a la vez — uno por sesión de IA que
+   quieras darle acceso — y cada uno se revoca por separado. Ver `NoteToken`
+   en apps/notes/models.py para el porqué del diseño. */
+let aiTokenItem = null;
+
+function closeAiTokenModal(){ $('ai-token-modal').classList.remove('show'); aiTokenItem=null; }
+
+function renderAiTokens(tokens){
+  const list = $('ai-token-list');
+  list.innerHTML = '';
+  $('ai-token-empty').style.display = tokens.length ? 'none' : '';
+  tokens.forEach(t=>{
+    const row = document.createElement('div');
+    row.className = 'ai-token-item';
+    const expira = new Date(t.expires_at).toLocaleString();
+    const usado = t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'nunca';
+    row.innerHTML = `
+      <div class="share-link-row">
+        <input type="text" name="ai-token-url" readonly value="${esc(t.url)}" aria-label="Token de IA">
+        <button type="button" class="share-copy-btn" data-copy="${esc(t.url)}">Copiar</button>
+      </div>
+      <div class="share-status-row">
+        <span class="share-status-dot"></span>
+        <span>Caduca el ${esc(expira)} · último uso: ${esc(usado)}</span>
+      </div>
+      <button type="button" class="ai-token-revoke" data-token="${esc(t.token)}">Revocar este token</button>`;
+    list.appendChild(row);
+  });
+}
+
+async function loadAiTokens(){
+  if(!aiTokenItem) return;
+  const res = await fetch('/api/notes/ai-token/list?path='+encodeURIComponent(aiTokenItem.path))
+    .then(r=>r.json()).catch(()=>null);
+  renderAiTokens((res && res.tokens) || []);
+}
+
+async function openAiTokenModal(it){
+  aiTokenItem = it;
+  $('ai-token-modal').classList.add('show');
+  $('ai-token-loading').style.display=''; $('ai-token-body').style.display='none';
+  try{ await loadAiTokens(); }catch(e){}
+  $('ai-token-loading').style.display='none'; $('ai-token-body').style.display='';
+}
+
+$('ai-token-create').addEventListener('click', async ()=>{
+  if(!aiTokenItem) return;
+  const btn=$('ai-token-create'); btn.disabled=true; btn.textContent='Generando…';
+  try{
+    const res = await api('/api/notes/ai-token/create', {path: aiTokenItem.path});
+    if(res.error){ alert(res.error); return; }
+    await loadAiTokens();
+  }catch(e){
+    alert('Error de red al generar el token');
+  }finally{
+    btn.disabled=false; btn.textContent='Generar token nuevo';
+  }
+});
+
+$('ai-token-list').addEventListener('click', e=>{
+  const copyBtn = e.target.closest('[data-copy]');
+  if(copyBtn){
+    const val = copyBtn.dataset.copy;
+    navigator.clipboard.writeText(val).catch(()=>{});
+    const orig=copyBtn.textContent;
+    copyBtn.textContent='¡Copiado!'; copyBtn.classList.add('copied');
+    setTimeout(()=>{ copyBtn.textContent=orig; copyBtn.classList.remove('copied'); }, 1400);
+    return;
+  }
+  const revokeBtn = e.target.closest('[data-token]');
+  if(revokeBtn){
+    showConfirmDialog('Revocar token', '¿Revocar este token? Dejará de funcionar de inmediato.', 'Sí, revocar', async ()=>{
+      const res = await api('/api/notes/ai-token/revoke', {token: revokeBtn.dataset.token});
+      if(res.error){ alert(res.error); return; }
+      await loadAiTokens();
+    });
+  }
+});
+
+$('ai-token-cancel').addEventListener('click', closeAiTokenModal);
+$('ai-token-modal').addEventListener('click', e=>{ if(e.target===$('ai-token-modal')) closeAiTokenModal(); });
 
 /* ════════════ Mover nota a otra carpeta (modal con buscador) ════════════
    Reutiliza moveItem() (la misma función que ya usa el arrastrar-y-soltar del
@@ -2043,6 +2129,7 @@ document.addEventListener('keydown', e=>{
     return;
   }
   if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
+  if($('ai-token-modal').classList.contains('show')){ closeAiTokenModal(); return; }
   if($('move-modal').classList.contains('show')){ closeMoveModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }

@@ -32,4 +32,7 @@ urlpatterns = [
     path("share/status", views.share_status, name="share_status"),
     path("share/list", views.share_list, name="share_list"),
     path("share/revoke", views.share_revoke, name="share_revoke"),
+    path("ai-token/list", views.ai_token_list, name="ai_token_list"),
+    path("ai-token/create", views.ai_token_create, name="ai_token_create"),
+    path("ai-token/revoke", views.ai_token_revoke, name="ai_token_revoke"),
 ]

@@ -18,13 +18,15 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.permissions import require_owner, require_write
 from apps.core.api import as_int, as_text, error_response as _err, json_body
 
 from . import pdf, themes, vault
-from .models import PdfTheme, PdfThemeImage, SharedNote
+from .models import NoteToken, PdfTheme, PdfThemeImage, SharedNote
 from .vault import VaultError
 
 
@@ -611,6 +613,72 @@ def share_revoke(request):
     return JsonResponse({"success": True})
 
 
+# ════════════ Token de IA (lectura+escritura de UNA nota, sin sesión) ════════
+# El token en sí lo canjea `note_token_view`, más abajo — pública, sin login,
+# CSRF exenta (es un bearer-token en la URL, no una cookie). Estos tres
+# endpoints son la administración: crear/listar/revocar, con sesión propia
+# igual que "Compartir nota". Ver `NoteToken` en models.py para el porqué del
+# diseño (varios tokens vivos a la vez, cada uno revocable por separado).
+
+def _note_token_json(request, tok: NoteToken) -> dict:
+    return {
+        "token": tok.token,
+        "url": request.build_absolute_uri(f"/n/{tok.token}/"),
+        "created_at": tok.created_at.isoformat(),
+        "expires_at": tok.expires_at.isoformat(),
+        "last_used_at": tok.last_used_at.isoformat() if tok.last_used_at else None,
+    }
+
+
+@login_required
+@require_write
+@require_GET
+def ai_token_list(request):
+    """Tokens de IA vivos (sin caducar, sin revocar) de una nota."""
+    root = vault.root()
+    target, err = _resolve(root, request.GET.get("path", ""))
+    if err:
+        return err
+    tokens = NoteToken.objects.filter(
+        path=vault.rel_of(root, target), revoked=False, expires_at__gt=timezone.now())
+    return JsonResponse({"tokens": [_note_token_json(request, t) for t in tokens]})
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def ai_token_create(request):
+    """Genera un token nuevo (no reutiliza ninguno existente, a diferencia
+    de "Compartir nota": cada sesión de IA se lleva el suyo, revocable aparte)."""
+    root = vault.root()
+    target, err = _resolve(root, as_text(request.data.get("path")).strip())
+    if err:
+        return err
+    if not target.exists() or target.suffix.lower() != ".md":
+        return _err("Nota no encontrada", 404)
+    tok = NoteToken.objects.create(
+        token=secrets.token_urlsafe(16),
+        path=vault.rel_of(root, target),
+        expires_at=timezone.now() + NoteToken.DEFAULT_LIFETIME,
+    )
+    return JsonResponse({"success": True, **_note_token_json(request, tok)}, status=201)
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def ai_token_revoke(request):
+    tok = NoteToken.objects.filter(
+        token=as_text(request.data.get("token")).strip(), revoked=False).first()
+    if not tok:
+        return _err("Token no encontrado", 404)
+    tok.revoked = True
+    tok.save(update_fields=["revoked"])
+    return JsonResponse({"success": True})
+
+
 # ── Vista pública (sin login) de una nota compartida ─────────────────────────
 
 # Sólo imágenes y PDFs se resuelven en la vista pública: los embeds a OTRAS
@@ -759,3 +827,54 @@ def shared_note_asset(request, token):
     if not target.exists() or target.is_dir():
         raise Http404
     return FileResponse(open(target, "rb"))
+
+
+# ── Canje del token de IA (sin login, sin CSRF: el token en la URL ES la
+#    credencial — mismo criterio que `/s/<token>/` para notas compartidas, o
+#    que una `ApiKey` de la API v1) ──────────────────────────────────────────
+
+@csrf_exempt
+def note_token_view(request, token):
+    """`GET` lee la nota, `POST` la reescribe entera. Sólo esos dos verbos y
+    sólo esa nota: no hay forma de listar la bóveda ni de tocar nada más con
+    este token, por diseño (ver `NoteToken` en models.py).
+
+    404 tanto si el token no existe como si ya caducó o está revocado —igual
+    que un enlace maestro revocado en `apps.knowledge`, no distinguir el
+    motivo no le da a nadie información que no debiera tener.
+    """
+    if request.method not in ("GET", "POST"):
+        return _err("Método no permitido (usa GET o POST)", 405)
+    tok = NoteToken.objects.filter(token=token, revoked=False,
+                                   expires_at__gt=timezone.now()).first()
+    if not tok:
+        raise Http404
+    root = vault.root()
+    try:
+        target = vault.safe_path(root, tok.path)
+    except VaultError:
+        raise Http404
+    if not target.exists() or target.suffix.lower() != ".md":
+        raise Http404
+    NoteToken.objects.filter(pk=tok.pk).update(last_used_at=timezone.now())
+
+    if request.method == "GET":
+        return JsonResponse({
+            "path": tok.path, "name": target.stem,
+            "content": target.read_text(encoding="utf-8"),
+            "expires_at": tok.expires_at.isoformat(),
+        })
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return _err("JSON inválido")
+    content = data.get("content") if isinstance(data, dict) else None
+    if content is None:
+        content = ""
+    if not isinstance(content, str):
+        return _err("'content' debe ser texto")
+    if len(content.encode("utf-8")) > vault.MAX_NOTE_BYTES:
+        return _err("Nota demasiado grande (máx. 5 MB)")
+    vault.write_text_atomic(target, content)
+    return JsonResponse({"success": True, "updated": int(target.stat().st_mtime)})

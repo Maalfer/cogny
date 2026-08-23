@@ -280,6 +280,13 @@
 .share-status-row{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:rgba(255,255,255,.5);margin:-.3rem 0 1rem}
 .share-status-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0}
 
+/* Modal "Token para IA" */
+.ai-token-item{margin-bottom:1.1rem;padding-bottom:1.1rem;border-bottom:1px solid var(--vault-line)}
+.ai-token-item:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.ai-token-item .share-status-row{margin-bottom:.5rem}
+.ai-token-revoke{background:none;border:none;padding:0;color:#f87171;font-size:.78rem;font-weight:600;cursor:pointer;text-decoration:underline}
+.ai-token-empty{color:rgba(255,255,255,.5);font-size:.85rem;text-align:center;padding:1.4rem 0}
+
 /* Modal "Enlaces compartidos" */
 .shared-links-list{display:flex;flex-direction:column;gap:.5rem;max-height:52vh;overflow-y:auto;margin:0 0 1rem}
 .shared-link-item{display:flex;align-items:center;gap:.6rem;background:rgba(255,255,255,.05);border:1px solid var(--vault-line);border-radius:10px;padding:.6rem .7rem}

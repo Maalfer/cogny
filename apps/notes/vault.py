@@ -33,7 +33,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import transaction
 
-from .models import SharedNote
+from .models import NoteToken, SharedNote
 
 log = logging.getLogger(__name__)
 
@@ -264,36 +264,47 @@ def remove_from_order(directory: Path, name: str) -> None:
         write_order(directory, [n for n in order if n != name])
 
 
-# ── Enlaces públicos ─────────────────────────────────────────────────────────
+# ── Enlaces públicos y tokens de IA ──────────────────────────────────────────
 
 def move_shares(old_rel: str, new_rel: str, is_dir: bool) -> None:
-    """Reapunta los enlaces públicos tras renombrar o mover.
+    """Reapunta los enlaces públicos y los tokens de IA tras renombrar o mover.
 
     El token vive en la BD asociado a una `path` del vault, así que mover el
     fichero sin tocar la fila deja el enlace apuntando a la nada (404 silencioso
     para quien ya lo tuviera). Con una carpeta hay que reescribir además el
-    prefijo de todas las notas compartidas que cuelgan de ella.
+    prefijo de todas las notas compartidas / tokens que cuelgan de ella.
+    Cubre tanto `SharedNote` (enlace público de sólo lectura) como
+    `NoteToken` (token de lectura+escritura para una IA): las dos son
+    metadata "atada a una ruta" con exactamente el mismo problema.
     """
     # En transacción: mover una carpeta puede tocar N filas y quedarse a medias
     # dejaría unos enlaces apuntando al sitio nuevo y otros al viejo.
     with transaction.atomic():
         SharedNote.objects.filter(path=old_rel).update(path=new_rel)
+        NoteToken.objects.filter(path=old_rel).update(path=new_rel)
         if not is_dir:
             return
         old_prefix = old_rel + "/"
         for share in SharedNote.objects.filter(path__startswith=old_prefix):
             share.path = new_rel + "/" + share.path[len(old_prefix):]
             share.save(update_fields=["path", "updated_at"])
+        for tok in NoteToken.objects.filter(path__startswith=old_prefix):
+            tok.path = new_rel + "/" + tok.path[len(old_prefix):]
+            tok.save(update_fields=["path"])
 
 
 def drop_shares(rel_path: str, is_dir: bool) -> None:
-    """Revoca los enlaces públicos de lo que se acaba de borrar.
+    """Revoca los enlaces públicos y los tokens de IA de lo que se acaba de borrar.
 
-    Sin esto quedarían tokens vivos apuntando a notas que ya no existen.
+    Sin esto quedarían tokens vivos apuntando a notas que ya no existen —o
+    peor, si más tarde se crea una nota nueva con la misma ruta, apuntando
+    sin querer a un contenido totalmente distinto del que tenía el token.
     """
     SharedNote.objects.filter(path=rel_path).delete()
+    NoteToken.objects.filter(path=rel_path).delete()
     if is_dir:
         SharedNote.objects.filter(path__startswith=rel_path + "/").delete()
+        NoteToken.objects.filter(path__startswith=rel_path + "/").delete()
 
 
 # ── Árbol ────────────────────────────────────────────────────────────────────

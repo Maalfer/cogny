@@ -22,6 +22,10 @@ urlpatterns = [
     path("s/<str:token>/", notes_views.shared_note_view, name="shared_note"),
     path("s/<str:token>/asset", notes_views.shared_note_asset, name="shared_note_asset"),
 
+    # Token de IA: lee y reescribe UNA nota por HTTP, sin login (el token en
+    # la URL es la credencial). Pensado para pasárselo a Claude u otra IA.
+    path("n/<str:token>/", notes_views.note_token_view, name="note_token"),
+
     # Bóveda pública de sólo lectura (sin login; filtrada por dominio de origen).
     path("", include("apps.knowledge.urls")),
 

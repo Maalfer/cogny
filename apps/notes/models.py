@@ -3,7 +3,10 @@
 Esta app es 'view-only' para Django ORM en cuanto al contenido: las notas son
 archivos Markdown bajo settings.VAULT_ROOT/. Los modelos que sí definimos son
 metadata (no contenido): enlaces públicos y marcas de exportación a PDF."""
+from datetime import timedelta
+
 from django.db import models
+from django.utils import timezone
 
 
 class SharedNote(models.Model):
@@ -24,6 +27,45 @@ class SharedNote(models.Model):
 
     def __str__(self):
         return f"{self.path} ({self.token})"
+
+
+class NoteToken(models.Model):
+    """Token temporal de lectura Y ESCRITURA de UNA nota — pensado para
+    dárselo a una IA (Claude u otra) y que edite esa nota por HTTP
+    (`/n/<token>/`, ver `views.note_token_view`) sin sesión ni una `ApiKey`
+    de la bóveda entera.
+
+    A propósito NO es como `SharedNote` (una sola fila por `path`, se
+    reutiliza el token al reabrir el modal): aquí `path` no es único, así que
+    puedes generar un token nuevo para una sesión nueva de Claude sin que eso
+    invalide el que ya le diste a una sesión anterior — cada uno se revoca
+    por separado. Caduca solo pasado `DEFAULT_LIFETIME` (para que un token
+    olvidado no quede vivo para siempre) y además se puede revocar a mano.
+
+    El endpoint que lo consume SOLO sabe leer y sobrescribir el contenido de
+    esa nota — nada de listar la bóveda, renombrar, borrar ni tocar otra
+    nota: por diseño, no por comprobación en cada vista, el token nunca
+    llega a nada que no sea esos dos verbos sobre esa única ruta.
+    """
+
+    DEFAULT_LIFETIME = timedelta(hours=24)
+
+    token = models.CharField(max_length=32, primary_key=True, editable=False)
+    path = models.CharField(max_length=600, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.path} ({self.token})"
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.revoked and self.expires_at > timezone.now()
 
 
 class PdfTheme(models.Model):
