@@ -144,6 +144,15 @@ def api_asset(request):
     if ext == ".md":
         # Las notas se leen por `api_note`, que es quien las renderiza.
         raise Http404
+    # Un adjunto de una nota privada no debe quedar accesible por URL directa
+    # sólo porque la propia nota (la única que lo enlaza) ya esté oculta.
+    # `attachment_owner` es `None` en adjuntos sin dueño registrado (subidos
+    # antes de este control, o compartidos entre varias notas): esos se
+    # sirven igual que siempre, por diseño — no hay forma de saber si "la"
+    # nota dueña está privada cuando puede haber varias, o ninguna registrada.
+    owner = vault.attachment_owner(root, target)
+    if owner and owner in vault.read_private(root):
+        raise Http404
 
     content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
     response = FileResponse(open(target, "rb"), content_type=content_type)

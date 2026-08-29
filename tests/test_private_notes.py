@@ -8,7 +8,14 @@ Lo que se comprueba, por orden de importancia:
    configuración de la propia bóveda pública).
 3. Renombrar/mover/borrar mantiene el registro consistente: la marca sigue a
    la nota, y borrar no deja una ruta fantasma marcada para siempre.
+4. Un adjunto que sólo enlaza una nota privada tampoco queda servible por
+   URL directa — la privacidad no se queda a medias en la primera imagen.
+5. Dos peticiones que mutan `.private.json` a la vez (dos togglees, o un
+   toggle y un borrado) no se pisan entre sí — dos hilos reales, no un mock.
 """
+import io
+import threading
+
 from apps.accounts.models import User
 from apps.knowledge.models import PublicVault
 
@@ -126,3 +133,72 @@ class PrivateNoteBookkeepingTests(VaultTestCase):
         self.assertEqual(resp.status_code, 200)
         tree = self.client.get("/api/notes/tree").json()["tree"]
         self.assertFalse(tree[0]["private"])
+
+
+def _fake_image(name):
+    f = io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    f.name = name
+    return f
+
+
+class PrivateNoteAssetTests(VaultTestCase):
+    """Un adjunto que sólo enlaza una nota privada no debe quedar servible por
+    URL directa en `/conocimiento` — ocultar el texto y dejar la imagen suelta
+    sería una privacidad a medias."""
+
+    def setUp(self):
+        super().setUp()
+        cfg = PublicVault.get()
+        cfg.enabled = True
+        cfg.save()
+        self.owner = self.make_user()
+        self.client.force_login(self.owner)
+        self.write_note("privada.md", "hola")
+        self.write_note("publica.md", "hola")
+        self.json_post("/api/notes/set-private", {"path": "privada.md", "private": True})
+
+    def _upload_for(self, note_path):
+        up = self.client.post("/api/notes/upload",
+                              {"file": _fake_image("img.png"), "note": note_path})
+        self.assertEqual(up.status_code, 200)
+        return up.json()["path"]
+
+    def test_adjunto_de_nota_privada_no_se_sirve(self):
+        path = self._upload_for("privada.md")
+        resp = self.client.get(API + f"/asset?path={path}")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_adjunto_de_nota_publica_se_sigue_sirviendo(self):
+        path = self._upload_for("publica.md")
+        resp = self.client.get(API + f"/asset?path={path}")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_adjunto_sin_dueno_registrado_se_sigue_sirviendo(self):
+        # Simula un adjunto subido antes de que existiera el registro de
+        # dueño (`_record_attachment_owner`): sin fila en `.owners.json`.
+        path = self._upload_for("")
+        resp = self.client.get(API + f"/asset?path={path}")
+        self.assertEqual(resp.status_code, 200)
+
+
+class PrivateFileLockingTests(VaultTestCase):
+    """`.private.json` es un único fichero global que toca cualquier
+    rename/move/delete/toggle de la bóveda — bajo escritura concurrente real
+    (hilos, no mocks: gunicorn corre con varios hilos por worker) no debe
+    perderse ninguna actualización."""
+
+    def test_marcar_muchas_notas_a_la_vez_no_pierde_ninguna(self):
+        from apps.notes import vault
+
+        n = 25
+        for i in range(n):
+            self.write_note(f"nota{i}.md", "x")
+        threads = [
+            threading.Thread(target=vault.set_private, args=(self.vault_dir, f"nota{i}.md", True))
+            for i in range(n)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(vault.read_private(self.vault_dir), {f"nota{i}.md" for i in range(n)})

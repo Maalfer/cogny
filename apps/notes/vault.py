@@ -273,6 +273,15 @@ def remove_from_order(directory: Path, name: str) -> None:
 # sesión la nota se ve exactamente igual que cualquier otra.
 
 PRIVATE_FILE = ".private.json"
+# Bloqueo dedicado para el read-modify-write de `.private.json`: a diferencia
+# de `.vaultorder` (uno por carpeta, colisión rara), este fichero es GLOBAL y
+# lo toca cualquier rename/move/delete de la bóveda entera además del propio
+# toggle — con `--workers 2 --threads 4` en gunicorn, dos peticiones que
+# mutan a la vez (p.ej. borrar una nota mientras se marca otra como privada)
+# perderían en silencio la escritura de la que llega segunda sin este
+# candado. Mismo patrón que `_record_attachment_owner` usa para
+# `.owners.json`, que tiene exactamente el mismo problema.
+_PRIVATE_LOCK = ".private.lock"
 
 
 def read_private(base: Path) -> set:
@@ -300,13 +309,34 @@ def is_private(base: Path, rel_path: str) -> bool:
     return rel_path in read_private(base)
 
 
+def _mutate_private(base: Path, mutate) -> None:
+    """Aplica `mutate(paths) -> (paths_nuevo, changed)` con exclusión mutua.
+
+    `mutate` recibe el set actual y devuelve el que hay que guardar (o el
+    mismo, sin tocar, si `changed` es False) — todo el read-modify-write
+    ocurre con el lock tomado, así que dos llamadas concurrentes nunca se
+    pisan la una a la otra.
+    """
+    lock_fp = open(base / _PRIVATE_LOCK, "a")
+    try:
+        fcntl.flock(lock_fp, fcntl.LOCK_EX)
+        paths, changed = mutate(read_private(base))
+        if changed:
+            write_private(base, paths)
+    finally:
+        fcntl.flock(lock_fp, fcntl.LOCK_UN)
+        lock_fp.close()
+
+
 def set_private(base: Path, rel_path: str, private: bool) -> None:
-    paths = read_private(base)
-    if private:
-        paths.add(rel_path)
-    else:
-        paths.discard(rel_path)
-    write_private(base, paths)
+    def mutate(paths):
+        before = len(paths)
+        if private:
+            paths.add(rel_path)
+        else:
+            paths.discard(rel_path)
+        return paths, len(paths) != before
+    _mutate_private(base, mutate)
 
 
 def rename_private(base: Path, old_rel: str, new_rel: str, is_dir: bool) -> None:
@@ -317,32 +347,32 @@ def rename_private(base: Path, old_rel: str, new_rel: str, is_dir: bool) -> None
     prefijo de cualquier ruta marcada que cuelgue de ella (mismo criterio que
     `move_shares` usa para `SharedNote`/`NoteToken`).
     """
-    paths = read_private(base)
-    changed = False
-    if old_rel in paths:
-        paths.discard(old_rel)
-        paths.add(new_rel)
-        changed = True
-    if is_dir:
-        prefix = old_rel + "/"
-        for p in [p for p in paths if p.startswith(prefix)]:
-            paths.discard(p)
-            paths.add(new_rel + "/" + p[len(prefix):])
+    def mutate(paths):
+        changed = False
+        if old_rel in paths:
+            paths.discard(old_rel)
+            paths.add(new_rel)
             changed = True
-    if changed:
-        write_private(base, paths)
+        if is_dir:
+            prefix = old_rel + "/"
+            for p in [p for p in paths if p.startswith(prefix)]:
+                paths.discard(p)
+                paths.add(new_rel + "/" + p[len(prefix):])
+                changed = True
+        return paths, changed
+    _mutate_private(base, mutate)
 
 
 def drop_private(base: Path, rel_path: str, is_dir: bool) -> None:
     """Quita la marca de privacidad de lo que se acaba de borrar."""
-    paths = read_private(base)
-    before = len(paths)
-    paths.discard(rel_path)
-    if is_dir:
-        prefix = rel_path + "/"
-        paths = {p for p in paths if not p.startswith(prefix)}
-    if len(paths) != before:
-        write_private(base, paths)
+    def mutate(paths):
+        before = len(paths)
+        paths.discard(rel_path)
+        if is_dir:
+            prefix = rel_path + "/"
+            paths = {p for p in paths if not p.startswith(prefix)}
+        return paths, len(paths) != before
+    _mutate_private(base, mutate)
 
 
 # ── Enlaces públicos y tokens de IA ──────────────────────────────────────────
