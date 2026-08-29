@@ -264,6 +264,87 @@ def remove_from_order(directory: Path, name: str) -> None:
         write_order(directory, [n for n in order if n != name])
 
 
+# ── Notas privadas (invisibles desde /conocimiento) ──────────────────────────
+# A diferencia del orden (que es por carpeta), la privacidad es una propiedad
+# de la nota que no depende de en qué carpeta esté en cada momento: un único
+# fichero oculto en la RAÍZ de la bóveda, con la lista de rutas marcadas,
+# evita reescribir un `.private` por carpeta cada vez que la nota se mueve.
+# Sólo afecta a la bóveda pública (`apps.knowledge`); dentro de Cogny con
+# sesión la nota se ve exactamente igual que cualquier otra.
+
+PRIVATE_FILE = ".private.json"
+
+
+def read_private(base: Path) -> set:
+    f = base / PRIVATE_FILE
+    if not f.exists():
+        return set()
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return {p for p in (data.get("paths") or []) if isinstance(p, str)}
+    # Mismo criterio de tolerancia que `read_order`: un fichero corrupto no
+    # debe romper el árbol entero, sólo dejar de ocultar nada por esta vez.
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+        return set()
+
+
+def write_private(base: Path, paths: set) -> None:
+    try:
+        write_text_atomic(base / PRIVATE_FILE,
+                          json.dumps({"paths": sorted(paths)}, ensure_ascii=False))
+    except OSError:
+        pass
+
+
+def is_private(base: Path, rel_path: str) -> bool:
+    return rel_path in read_private(base)
+
+
+def set_private(base: Path, rel_path: str, private: bool) -> None:
+    paths = read_private(base)
+    if private:
+        paths.add(rel_path)
+    else:
+        paths.discard(rel_path)
+    write_private(base, paths)
+
+
+def rename_private(base: Path, old_rel: str, new_rel: str, is_dir: bool) -> None:
+    """Reapunta la marca de privacidad tras renombrar o mover `old_rel`.
+
+    Sólo se marcan notas sueltas, pero una nota privada puede vivir dentro de
+    una carpeta que se renombra o se mueve: hay que reescribir también el
+    prefijo de cualquier ruta marcada que cuelgue de ella (mismo criterio que
+    `move_shares` usa para `SharedNote`/`NoteToken`).
+    """
+    paths = read_private(base)
+    changed = False
+    if old_rel in paths:
+        paths.discard(old_rel)
+        paths.add(new_rel)
+        changed = True
+    if is_dir:
+        prefix = old_rel + "/"
+        for p in [p for p in paths if p.startswith(prefix)]:
+            paths.discard(p)
+            paths.add(new_rel + "/" + p[len(prefix):])
+            changed = True
+    if changed:
+        write_private(base, paths)
+
+
+def drop_private(base: Path, rel_path: str, is_dir: bool) -> None:
+    """Quita la marca de privacidad de lo que se acaba de borrar."""
+    paths = read_private(base)
+    before = len(paths)
+    paths.discard(rel_path)
+    if is_dir:
+        prefix = rel_path + "/"
+        paths = {p for p in paths if not p.startswith(prefix)}
+    if len(paths) != before:
+        write_private(base, paths)
+
+
 # ── Enlaces públicos y tokens de IA ──────────────────────────────────────────
 
 def move_shares(old_rel: str, new_rel: str, is_dir: bool) -> None:
@@ -309,7 +390,12 @@ def drop_shares(rel_path: str, is_dir: bool) -> None:
 
 # ── Árbol ────────────────────────────────────────────────────────────────────
 
-def build_tree(base: Path, directory: Path) -> list:
+def build_tree(base: Path, directory: Path, private_paths: set = None) -> list:
+    # `private_paths` se calcula una sola vez (en la llamada de más arriba) y
+    # se propaga en la recursión: evita releer `.private.json` una vez por
+    # carpeta en bóvedas con muchas subcarpetas.
+    if private_paths is None:
+        private_paths = read_private(base)
     items = []
     try:
         entries = [e for e in directory.iterdir() if not e.name.startswith(".")]
@@ -332,13 +418,15 @@ def build_tree(base: Path, directory: Path) -> list:
             items.append({
                 "type": "folder", "name": entry.name,
                 "path": rel_of(base, entry),
-                "children": build_tree(base, entry),
+                "children": build_tree(base, entry, private_paths),
             })
         elif entry.suffix.lower() == ".md":
+            rel = rel_of(base, entry)
             items.append({
                 "type": "note", "name": entry.stem,
-                "path": rel_of(base, entry),
+                "path": rel,
                 "updated": mtime,
+                "private": rel in private_paths,
             })
         else:
             items.append({
@@ -367,14 +455,19 @@ def iter_files(base: Path):
             yield p
 
 
-def search_notes(base: Path, terms: list, limit: int, snippet_before: int, snippet_after: int):
+def search_notes(base: Path, terms: list, limit: int, snippet_before: int, snippet_after: int,
+                 exclude: set = frozenset()):
     """Notas que contienen TODOS los términos. Devuelve `(path, texto, idx)`.
 
     El índice es el de la primera aparición del primer término: quien llama
-    decide con qué margen recorta el fragmento que enseña.
+    decide con qué margen recorta el fragmento que enseña. `exclude` (rutas
+    relativas) se descarta ANTES de contar para el `limit` — si no, una nota
+    privada que encajase se comería un hueco del cupo de resultados públicos.
     """
     found = 0
     for f in iter_notes(base):
+        if exclude and rel_of(base, f) in exclude:
+            continue
         try:
             text = f.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):

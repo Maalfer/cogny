@@ -145,7 +145,31 @@ def rename(request):
     vault.rename_in_order(src.parent, src.name, dst.name)
     new_rel = vault.rel_of(root, dst)
     vault.move_shares(old_rel, new_rel, was_dir)
+    vault.rename_private(root, old_rel, new_rel, was_dir)
     return JsonResponse({"success": True, "path": new_rel})
+
+
+@login_required
+@require_owner
+@require_POST
+@json_body
+def set_private(request):
+    """Marca/desmarca una nota como privada: invisible en `/conocimiento`,
+    igual que siempre dentro de Cogny con sesión. Sólo el propietario decide
+    qué se enseña en la bóveda pública, igual que la configuración de esa
+    bóveda (`apps.knowledge.views.config_save`) — de ahí `@require_owner` y
+    no `@require_write`.
+    """
+    root = vault.root()
+    target, err = _resolve(root, as_text(request.data.get("path")).strip())
+    if err:
+        return err
+    if not target.exists() or target.suffix.lower() != ".md":
+        return _err("Nota no encontrada", 404)
+    private = bool(request.data.get("private"))
+    rel = vault.rel_of(root, target)
+    vault.set_private(root, rel, private)
+    return JsonResponse({"success": True, "path": rel, "private": private})
 
 
 @login_required
@@ -190,6 +214,7 @@ def move(request):
     vault.remove_from_order(src.parent, src.name)
     new_rel = vault.rel_of(root, dst)
     vault.move_shares(old_rel, new_rel, was_dir)
+    vault.rename_private(root, old_rel, new_rel, was_dir)
     return JsonResponse({"success": True, "path": new_rel})
 
 
@@ -231,6 +256,7 @@ def delete(request):
         target.unlink()
     vault.remove_from_order(parent, name)
     vault.drop_shares(rel_path, was_dir)
+    vault.drop_private(root, rel_path, was_dir)
     return JsonResponse({"success": True})
 
 

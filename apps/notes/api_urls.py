@@ -9,6 +9,7 @@ urlpatterns = [
     path("save", views.file_save, name="file_save"),
     path("create", views.create, name="create"),
     path("rename", views.rename, name="rename"),
+    path("set-private", views.set_private, name="set_private"),
     path("move", views.move, name="move"),
     path("reorder", views.reorder, name="reorder"),
     path("delete", views.delete, name="delete"),

@@ -286,7 +286,7 @@ function buildChildren(kids){
 function buildTreeDOM(items, container, depth, parentPath){
   items.forEach(it=>{
     const row=document.createElement('div');
-    row.className='tree-row'+(it.type==='file'?' is-file':'');
+    row.className='tree-row'+(it.type==='file'?' is-file':'')+(it.private?' is-private':'');
     row.dataset.path=it.path; row.dataset.type=it.type;
     // La carpeta de adjuntos concentra cientos de imágenes subidas por el backend
     // (upload() la fuerza siempre en la raíz): no se puede arrastrar ni recibir
@@ -337,6 +337,10 @@ function buildTreeDOM(items, container, depth, parentPath){
     const menuBtn=row.querySelector('.row-menu');
     menuBtn.addEventListener('click', e=>{e.stopPropagation(); showCtxMenu(e, it);});
     menuBtn.draggable=false;   // que un clic impreciso sobre "···" no arranque el drag de la fila
+    // Clic derecho sobre la fila abre el mismo menú que el botón "···"
+    // (antes sólo se podía abrir con el botón; el menú contextual real
+    // del sistema operativo no se usaba para nada en el árbol).
+    row.addEventListener('contextmenu', e=>{ e.preventDefault(); showCtxMenu(e, it); });
     wireRowDrag(row, it, parentPath, isAttach);
   });
 }
@@ -1503,6 +1507,15 @@ async function copyToCommunity(it){
   });
 }
 
+/* "Hacer privada"/"Hacer pública": la nota deja de (o vuelve a) verse desde
+   `/conocimiento`. Dentro de Cogny con sesión no cambia nada más que el
+   color gris del árbol (ver `.tree-row.is-private` en notes.css). */
+async function toggleNotePrivate(it, makePrivate){
+  const res=await api('/api/notes/set-private', {path:it.path, private:makePrivate});
+  if(res.error){ alert(res.error); return; }
+  await loadTree();
+}
+
 async function deleteItem(it){
   if(!guardWrite()) return;
   const what=it.type==='folder'?'la carpeta y todo su contenido':(it.type==='note'?'la nota':'el archivo');
@@ -1541,6 +1554,9 @@ function showCtxMenu(e,it){
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
     ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}
     ${CAN_WRITE ? `<button data-act="ai-token"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14.5-4-4 1.41-1.41L11 12.67l4.59-4.58L17 9.5l-6 6z"/></svg>Token para IA</button>` : ''}
+    ${window.COGNY.isOwner ? (it.private
+      ? `<button data-act="unset-private"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9h-1V6a5 5 0 0 0-5-5 5 5 0 0 0-5 5v.08A6 6 0 0 0 3 12v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9V6z"/></svg>Hacer pública</button>`
+      : `<button data-act="set-private"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM8.9 6a3.1 3.1 0 0 1 6.2 0v2H8.9V6z"/></svg>Hacer privada</button>`) : ''}
     ${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
   }
   if((it.type==='note' || it.type==='folder') && window.COGNY.isOwner){
@@ -1572,6 +1588,8 @@ function showCtxMenu(e,it){
       else if(a==='pdf') openPdfModal(it);
       else if(a==='share') openShareModal(it);
       else if(a==='ai-token') openAiTokenModal(it);
+      else if(a==='set-private') toggleNotePrivate(it, true);
+      else if(a==='unset-private') toggleNotePrivate(it, false);
       else if(a==='move') openMoveModal(it);
       else if(a==='copy-community') copyToCommunity(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };

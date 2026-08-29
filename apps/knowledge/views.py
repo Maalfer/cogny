@@ -64,11 +64,26 @@ def master_entry(request, token):
     return response
 
 
+def _strip_private(items: list) -> list:
+    """Quita del árbol las notas marcadas como privadas antes de mandarlo al
+    lector público. Recursivo: una nota privada dentro de una subcarpeta
+    también debe desaparecer, no sólo las de primer nivel.
+    """
+    out = []
+    for it in items:
+        if it.get("private"):
+            continue
+        if it["type"] == "folder":
+            it = {**it, "children": _strip_private(it.get("children") or [])}
+        out.append(it)
+    return out
+
+
 @access.public_api
 @require_GET
 def api_tree(request):
     root = vault.root()
-    return JsonResponse({"tree": vault.build_tree(root, root)})
+    return JsonResponse({"tree": _strip_private(vault.build_tree(root, root))})
 
 
 @access.public_api
@@ -81,8 +96,13 @@ def api_note(request):
         return _err(str(exc), exc.status)
     if not target.is_file() or target.suffix.lower() != ".md":
         return _err("Nota no encontrada", 404)
+    rel = vault.rel_of(root, target)
+    if vault.is_private(root, rel):
+        # 404 y no 403: igual que la bóveda pública desactivada (ver
+        # `access.check`), no hay que confirmar que la ruta existe.
+        return _err("Nota no encontrada", 404)
     return JsonResponse({
-        "path": vault.rel_of(root, target),
+        "path": rel,
         "name": target.stem,
         "content": target.read_text(encoding="utf-8"),
         "updated": int(target.stat().st_mtime),
@@ -96,10 +116,12 @@ def api_search(request):
     terms = [t.lower() for t in (request.GET.get("q") or "").split() if t]
     if not terms:
         return JsonResponse({"results": []})
+    private_paths = vault.read_private(root)
     return JsonResponse({"results": [
         {"path": vault.rel_of(root, f), "name": f.stem, "snippet": snippet}
         for f, snippet in vault.search_notes(root, terms, limit=SEARCH_LIMIT,
-                                             snippet_before=40, snippet_after=80)
+                                             snippet_before=40, snippet_after=80,
+                                             exclude=private_paths)
     ]})
 
 
