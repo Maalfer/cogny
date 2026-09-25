@@ -113,13 +113,54 @@ function renderMarkdown(src){
   return DOMPurify.sanitize(html, SANITIZE_CONFIG);
 }
 
-const CALLOUT_ICON='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
+// Icono por tipo de callout (los 13 de Obsidian). Trazados SVG propios,
+// `currentColor` para que el CSS del tema los tina con el color de la franja
+// (--cl). El fallback (info) coincide con el icono unico que usabamos
+// antes - si alguien serializa un callout sin tipo conocido, ve el circulo
+// de informacion en vez de nada.
+const CALLOUT_ICONS = {
+  note:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4z"/></svg>',
+  info:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 11v5M12 8h.01"/></svg>',
+  todo:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></svg>',
+  tip:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M12 19v3M5 12H2M22 12h-3M19 5l-2 2M7 17l-2 2M19 19l-2-2M7 7 5 5"/><circle cx="12" cy="12" r="4"/></svg>',
+  abstract:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>',
+  summary: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h12M4 18h8"/></svg>',
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>',
+  check:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>',
+  done:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>',
+  question:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.3 9.3a3 3 0 1 1 4.2 1.7c-.8.4-1 1-1 1.8v.3M12 17h.01"/></svg>',
+  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2 21h20L12 3.5z"/><path d="M12 10v5M12 18h.01"/></svg>',
+  caution: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2 21h20L12 3.5z"/><path d="M12 10v5M12 18h.01"/></svg>',
+  attention:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2 21h20L12 3.5z"/><path d="M12 10v5M12 18h.01"/></svg>',
+  failure: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+  danger:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+  error:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+  bug:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l-2 2v4l-3 1.5L4 14l3 .5L7 19l-2 1.5L7 22h10l2-1.5L17 19l-.5-4.5L20 14l1-1.5L18 11V7l-2-2-2 1-2-1-2 1z"/><circle cx="12" cy="13" r="3"/></svg>',
+  example: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>',
+  quote:   '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h4v4H8c0 2 1 3 3 3v2c-3 0-5-2-5-5V7zm10 0h4v4h-3c0 2 1 3 3 3v2c-3 0-5-2-5-5V7z"/></svg>',
+};
+const CALLOUT_ICON = CALLOUT_ICONS.info;
+function calloutIconFor(type) {
+  return CALLOUT_ICONS[type] || CALLOUT_ICON;
+}
 const COPY_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const CHECK_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-// Añade un botón "copiar" a un <pre> de código (idempotente).
+// Añade un botón "copiar" a un <pre> de código y un bloque "raw" hermano
+// con el texto plano del código (idempotente). El botón sirve al editor
+// (clic → portapapeles); el bloque raw es invisible en el editor (CSS en
+// notes.css) y se imprime sólo en el PDF (notes_print.css), para que copiar
+// el bloque desde el visor de PDF devuelva el código fuente con sus saltos
+// de línea originales — el <pre> resaltado usa `white-space:pre-wrap` y
+// mezcla saltos visuales con saltos lógicos al copiar, que es justo el
+// problema que evita este bloque hermano.
 function addCopyBtn(pre){
-  if(pre.querySelector('.code-copy')) return;       // ya lo tiene
+  if(pre.querySelector('.code-copy,.code-source-wrap')) return;       // ya lo tiene
   const code=pre.querySelector('code'); if(!code) return;
+  // Capturar el texto ANTES de que el bucle que llama a `addCopyBtn` haya
+  // pasado por highlight.js no aplica aquí (ya pasó), pero `textContent` lo
+  // lee igual de bien: devuelve la concatenación de los nodos de texto
+  // del <code>, que con o sin los <span> de highlight es el mismo string.
+  const rawText=code.textContent;
   const btn=document.createElement('button');
   btn.className='code-copy'; btn.type='button';
   btn.title='Copiar'; btn.setAttribute('aria-label','Copiar código');
@@ -128,7 +169,7 @@ function addCopyBtn(pre){
   btn.addEventListener('mousedown', e=>e.preventDefault());
   btn.addEventListener('click', async e=>{
     e.preventDefault(); e.stopPropagation();
-    const text=code.textContent;
+    const text=rawText;
     try{ await navigator.clipboard.writeText(text); }
     catch(_){ const ta=document.createElement('textarea'); ta.value=text;
       ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta);
@@ -137,9 +178,40 @@ function addCopyBtn(pre){
     setTimeout(()=>{ btn.classList.remove('copied'); btn.innerHTML=COPY_ICON; btn.title='Copiar'; }, 1400);
   });
   pre.appendChild(btn);
+  // Bloque "raw" hermano del <pre>: oculto en el editor (notes.css), visible
+  // en el PDF (notes_print.css). Va como hermano y no dentro del <pre> para
+  // que el `white-space:pre` del raw no afecte al resaltado y para que el
+  // CSS del PDF le pueda dar `column-span:all` en apaisado (sólo aplica a
+  // hijos directos del contenedor multicol).
+  // Si el bloque está vacío (p.ej. un ``` ``` sin contenido) no tiene sentido
+  // imprimirlo: saltamos el wrap para no llenar el PDF de cajitas con la
+  // etiqueta y nada dentro.
+  if(!rawText.trim()) return;
+  const wrap=document.createElement('div');
+  wrap.className='code-source-wrap';
+  const lbl=document.createElement('div');
+  lbl.className='code-source-label';
+  lbl.textContent='Texto del código';
+  const src=document.createElement('pre');
+  src.className='code-source';
+  const srcCode=document.createElement('code');
+  srcCode.textContent=rawText;
+  src.appendChild(srcCode);
+  wrap.appendChild(lbl);
+  wrap.appendChild(src);
+  pre.parentNode.insertBefore(wrap, pre.nextSibling);
+}
+function wrapTables(container){
+  container.querySelectorAll('table').forEach(tbl=>{
+    if(tbl.closest('.table-wrap')) return;
+    if(tbl.closest('.note-props')) return;
+    const w=document.createElement('div'); w.className='table-wrap';
+    tbl.parentNode.insertBefore(w, tbl); w.appendChild(tbl);
+  });
 }
 function postProcess(container, depth){
   depth=depth||0;
+  wrapTables(container);
   // Code blocks: mermaid + syntax highlight
   let hasMermaid=false;
   container.querySelectorAll('pre code').forEach(code=>{
@@ -166,7 +238,7 @@ function postProcess(container, depth){
     const wrap=document.createElement('div'); wrap.className='callout'; wrap.dataset.cl=type;
     const body=document.createElement('div'); body.className='callout-content';
     while(bq.firstChild) body.appendChild(bq.firstChild);
-    wrap.innerHTML=`<div class="callout-title">${CALLOUT_ICON}<span>${title}</span></div>`;
+    wrap.innerHTML=`<div class="callout-title">${calloutIconFor(type)}<span>${title}</span></div>`;
     wrap.appendChild(body); bq.replaceWith(wrap);
   });
   // Resolve relative images
@@ -286,7 +358,10 @@ function buildChildren(kids){
 function buildTreeDOM(items, container, depth, parentPath){
   items.forEach(it=>{
     const row=document.createElement('div');
-    row.className='tree-row'+(it.type==='file'?' is-file':'')+(it.private?' is-private':'');
+    // Gris tanto lo marcado a mano como lo que hereda la marca de su carpeta:
+    // el color dice "esto no se ve desde /conocimiento", y eso es igual de
+    // cierto en las dos situaciones.
+    row.className='tree-row'+(it.type==='file'?' is-file':'')+((it.private||it.private_inherited)?' is-private':'');
     row.dataset.path=it.path; row.dataset.type=it.type;
     // La carpeta de adjuntos concentra cientos de imágenes subidas por el backend
     // (upload() la fuerza siempre en la raíz): no se puede arrastrar ni recibir
@@ -521,7 +596,7 @@ function hitRow(it, snippetHtml, terms){
   row.setAttribute('tabindex','0');
   row.addEventListener('click', e=>{
     if(e.target.closest('.row-menu')) return;
-    if(it.type==='note') openNote(it.path, terms);
+    if(it.type==='note') openFromSearchHit(it.path, terms);
     else window.open(assetUrl(it.path),'_blank');
   });
   row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();row.click();}
@@ -532,6 +607,7 @@ function hitRow(it, snippetHtml, terms){
     e.stopPropagation();
     showCtxMenu(e, it);
   });
+  row.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e, it); });
   return row;
 }
 function hlTerms(text, terms){ let h=esc(text);
@@ -583,6 +659,26 @@ function toggleSearch(force){
 }
 
 /* ════════════ Open / edit / save ════════════ */
+/* Abrir una nota desde un resultado de búsqueda: limpia el input (para que el
+   árbol vuelva a su vista normal), expande las carpetas padre, abre la nota y
+   hace scroll + flash-locate en su fila del árbol. Sin esto, abrir un hit
+   dejaba el árbol congelado mostrando los resultados y la nota abierta
+   quedaba "escondida" en otra rama no expandida. */
+async function openFromSearchHit(path, terms){
+  const inp = $('vault-search-input');
+  if(inp && inp.value){ inp.value=''; syncSearchClear(); }
+  const folderParts = path.split('/').slice(0,-1);
+  folderParts.forEach((_,i,a)=>expanded.add(a.slice(0,i+1).join('/')));
+  persistExpanded();
+  renderTree();
+  await openNote(path, terms);
+  setTimeout(()=>{
+    const row=document.querySelector('.tree-row[data-path="'+cssEsc(path)+'"]');
+    if(!row) return;
+    row.scrollIntoView({behavior:'smooth',block:'center'});
+    row.classList.remove('flash-locate'); void row.offsetWidth; row.classList.add('flash-locate');
+  }, 80);
+}
 async function openNote(path, terms, opts){
   opts = opts || {};
   // Si la nota ya está en otra pestaña, conmutar a ella en lugar de duplicar (estilo Obsidian).
@@ -607,7 +703,7 @@ async function openNote(path, terms, opts){
   applyViewMode();   // respeta el modo elegido (lectura por defecto) al abrir la nota
   document.querySelectorAll('.tree-row.active').forEach(r=>r.classList.remove('active'));
   const row=document.querySelector(`.tree-row[data-path="${cssEsc(path)}"]`); if(row) row.classList.add('active');
-  if(window.innerWidth<760) $('vault').classList.add('side-hidden');
+  if(window.innerWidth<760) closeSidebarMobile();
   if(ED) ED.view.scrollDOM.scrollTop=0;
   if(terms && terms.length) jumpToMatch(terms);   // venido de un resultado de búsqueda
   // Pestañas: actualizar la activa (o crear la primera) con esta ruta.
@@ -766,9 +862,8 @@ function jumpToMatch(terms){
 }
 // Renderiza una nota en el pane oculto exactamente como la vería el Chromium
 // del servidor (KaTeX, código, imágenes incrustadas como data-URI, columnas
-// anchas marcadas si `opts.landscape`) y devuelve el HTML final. Separado de
-// `exportNotePDF` para que `runHeadlessPdfExport` (export headless por API,
-// ver más abajo) pueda reusar exactamente los mismos pasos sin duplicarlos.
+// anchas marcadas si `opts.landscape`) y devuelve el HTML final. `exportNotePDF`
+// y la vista del editor reusan exactamente estos mismos pasos sin duplicarlos.
 async function prepareExportHtml(it, opts){
   opts = opts || {};
   if(!current || current.path!==it.path){ await openNote(it.path); await new Promise(r=>setTimeout(r,150)); }
@@ -826,30 +921,6 @@ async function exportNotePDF(it, opts){
   }finally{
     pp.innerHTML='';
   }
-}
-
-/* ════════════ Exportación headless (API pública, sin usuario detrás) ════════════
-   `apps/notes/pdf_headless.py` no puede ejecutar marked/KaTeX/Mermaid/highlight.js
-   en Python sin reimplementarlos (y divergir del render real), así que en vez de
-   eso navega AQUÍ (vía Playwright/CDP) con una sesión recién autenticada (login
-   de un solo uso, ver `pdf_headless.headless_login`) y dos parámetros en la URL:
-   `open=<ruta>` y `headless_pdf=1` (+ `landscape=1` opcional). El bootstrap de
-   abajo detecta ese modo y llama a esto en vez de abrir la nota en una pestaña.
-   El resultado viaja por un `console.log`, no por `window.algo` ni por el DOM:
-   la CSP de la app (`script-src` sin `unsafe-eval`, ver
-   `ContentSecurityPolicyMiddleware`) bloquea que Playwright compile y corra
-   NUEVO código en la página (`page.evaluate()`/`wait_for_function()` fallan
-   con "unsafe-eval" — comprobado). Un `console.log` de código YA cargado no
-   ejecuta nada nuevo, así que Playwright puede escucharlo (`expect_console_message`
-   en `pdf_headless.render_note_to_html`) sin tocar la CSP para nada. */
-async function runHeadlessPdfExport(path, opts){
-  opts = opts || {};
-  const name = path.split('/').pop().replace(/\.md$/i, '');
-  let html = '';
-  try{ html = await prepareExportHtml({path, name}, opts); }
-  catch(e){ html = ''; }
-  finally{ $('print-pane').innerHTML = ''; }
-  console.log('PDF_EXPORT_READY:' + html);
 }
 
 /* En apaisado el cuerpo va a dos columnas (~12,8 cm cada una). Lo que no cabe
@@ -1489,28 +1560,11 @@ async function renameItem(it){
     if(wasOpen) openNote(res.path);
   },{okLabel:'Renombrar'});
 }
-/* ════════════ Copiar a la bóveda comunitaria ════════════
-   Sólo el propietario ve esta acción (window.COGNY.isOwner — el backend la
-   exige igual, @require_owner en /api/notes/copy-to-community, esto es sólo
-   cosmética). Trae consigo los adjuntos que la nota/carpeta referencie
-   (![[nombre]]), aunque vivan en el Adjuntos/ raíz de esta bóveda: lo hace
-   `vault.copy_across` en el servidor. Nunca sobrescribe nada en destino: un
-   nombre ya usado allí se resuelve con ' 2', ' 3'… */
-async function copyToCommunity(it){
-  const what=it.type==='folder'?'la carpeta':'la nota';
-  showConfirmDialog('Copiar a la bóveda comunitaria',
-    `¿Copiar ${what} «${it.name}» (y sus imágenes) a la bóveda comunitaria?`,
-    'Copiar', async ()=>{
-    const res=await api('/api/notes/copy-to-community', {path:it.path});
-    if(res.error){ alert(res.error); return; }
-    flashSync();
-  });
-}
-
-/* "Hacer privada"/"Hacer pública": la nota deja de (o vuelve a) verse desde
-   `/conocimiento`. Dentro de Cogny con sesión no cambia nada más que el
-   color gris del árbol (ver `.tree-row.is-private` en notes.css). */
-async function toggleNotePrivate(it, makePrivate){
+/* "Hacer privada"/"Hacer pública": la nota —o la carpeta entera, y con ella
+   todo lo que cuelgue— deja de (o vuelve a) verse desde `/conocimiento`.
+   Dentro de Cogny con sesión no cambia nada más que el color gris del árbol
+   (ver `.tree-row.is-private` en notes.css). */
+async function togglePrivate(it, makePrivate){
   const res=await api('/api/notes/set-private', {path:it.path, private:makePrivate});
   if(res.error){ alert(res.error); return; }
   await loadTree();
@@ -1542,25 +1596,40 @@ async function deleteItem(it){
 }
 
 /* ════════════ Context menu ════════════ */
+const iconLockClosed='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM8.9 6a3.1 3.1 0 0 1 6.2 0v2H8.9V6z"/></svg>';
+const iconLockOpen='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9h-1V6a5 5 0 0 0-5-5 5 5 0 0 0-5 5v.08A6 6 0 0 0 3 12v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9V6z"/></svg>';
+/* Entrada de privacidad del menú: la misma para una nota y para una carpeta
+   (en la carpeta el efecto arrastra a todo lo que cuelga). Si lo privado se
+   hereda de una carpeta de arriba no hay interruptor que ofrecer: quitarle la
+   marca propia no lo publicaría, así que se dice dónde está el interruptor de
+   verdad en vez de enseñar un botón que engaña. */
+function ctxPrivateEntry(it){
+  if(!window.COGNY.isOwner) return '';
+  const what = it.type==='folder' ? 'la carpeta' : 'la nota';
+  if(it.private_inherited)
+    return `<div class="ctx-hint">${iconLockClosed}Privada por su carpeta</div>`;
+  return it.private
+    ? `<button data-act="unset-private">${iconLockOpen}Hacer pública ${what}</button>`
+    : `<button data-act="set-private">${iconLockClosed}Hacer privada ${what}</button>`;
+}
 function showCtxMenu(e,it){
   const m=$('ctx-menu'); let html='';
-  if(it.type==='folder' && CAN_WRITE){
-    html+=`<button data-act="new-note">${iconNote.replace('ico','')}Nueva nota aquí</button>`;
-    html+=`<button data-act="new-folder">${iconFolder(false).replace('ico','')}Nueva subcarpeta</button><div class="ctx-sep"></div>`;
+  if(it.type==='folder'){
+    if(CAN_WRITE){
+      html+=`<button data-act="new-note">${iconNote.replace('ico','')}Nueva nota aquí</button>`;
+      html+=`<button data-act="new-folder">${iconFolder(false).replace('ico','')}Nueva subcarpeta</button>`;
+    }
+    const priv=ctxPrivateEntry(it);
+    if(priv) html+=(CAN_WRITE?'<div class="ctx-sep"></div>':'')+priv;
+    if(CAN_WRITE || priv) html+='<div class="ctx-sep"></div>';
   }
   if(it.type==='note'){
     html+=`<button data-act="open-new-tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>Abrir en nueva pestaña</button><div class="ctx-sep"></div>`;
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
     ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}
-    ${CAN_WRITE ? `<button data-act="ai-token"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14.5-4-4 1.41-1.41L11 12.67l4.59-4.58L17 9.5l-6 6z"/></svg>Token para IA</button>` : ''}
-    ${window.COGNY.isOwner ? (it.private
-      ? `<button data-act="unset-private"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9h-1V6a5 5 0 0 0-5-5 5 5 0 0 0-5 5v.08A6 6 0 0 0 3 12v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9V6z"/></svg>Hacer pública</button>`
-      : `<button data-act="set-private"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2zm6-9h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM8.9 6a3.1 3.1 0 0 1 6.2 0v2H8.9V6z"/></svg>Hacer privada</button>`) : ''}
+    ${ctxPrivateEntry(it)}
     ${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
-  }
-  if((it.type==='note' || it.type==='folder') && window.COGNY.isOwner){
-    html+=`<button data-act="copy-community"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>Copiar a la bóveda comunitaria</button><div class="ctx-sep"></div>`;
   }
   if(CAN_WRITE){
   html+=`<button data-act="rename"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>Renombrar</button>`;
@@ -1587,11 +1656,9 @@ function showCtxMenu(e,it){
       else if(a==='open-new-tab') openInNewTab(it.path);
       else if(a==='pdf') openPdfModal(it);
       else if(a==='share') openShareModal(it);
-      else if(a==='ai-token') openAiTokenModal(it);
-      else if(a==='set-private') toggleNotePrivate(it, true);
-      else if(a==='unset-private') toggleNotePrivate(it, false);
+      else if(a==='set-private') togglePrivate(it, true);
+      else if(a==='unset-private') togglePrivate(it, false);
       else if(a==='move') openMoveModal(it);
-      else if(a==='copy-community') copyToCommunity(it);
       else if(a==='rename') renameItem(it); else if(a==='delete') deleteItem(it); };
   });
   setTimeout(()=>_ctxBtns[0]?.focus(),20);
@@ -1605,8 +1672,30 @@ document.addEventListener('scroll', hideCtx, true);
 /* ════════════ Compartir nota (enlace público, con contraseña opcional) ════════ */
 let shareItem = null;
 let sharePwOn = false;
+let shareWriteOn = false;
 
 function closeShareModal(){ $('share-modal').classList.remove('show'); shareItem=null; }
+
+/* El encabezado del modal y la línea de estado dicen SIEMPRE qué permite el
+   enlace tal y como está configurado ahora mismo: prometer "modo lectura" con
+   la escritura encendida sería la peor manera de enterarse. */
+function refreshShareBlurb(){
+  $('share-blurb').textContent = shareWriteOn
+    ? 'Cualquiera con el enlace podrá leer y editar esta nota, sin necesidad de cuenta.'
+    : 'Cualquiera con el enlace podrá ver esta nota en modo lectura, sin necesidad de cuenta.';
+  $('share-write-warn').classList.toggle('show', shareWriteOn);
+}
+function shareStatusText(res){
+  if(!res) return 'No compartida · pulsa Guardar para generar el enlace';
+  return 'Enlace activo · ' + (res.can_write ? 'lectura y escritura' : 'sólo lectura')
+       + (res.has_password ? ' · con contraseña' : '');
+}
+function setShareWrite(on){
+  shareWriteOn = on;
+  $('share-write-switch').classList.toggle('on', on);
+  $('share-write-switch').setAttribute('aria-checked', String(on));
+  refreshShareBlurb();
+}
 
 async function openShareModal(it){
   shareItem = it;
@@ -1616,6 +1705,7 @@ async function openShareModal(it){
   sharePwOn = false;
   $('share-pw-switch').classList.remove('on'); $('share-pw-switch').setAttribute('aria-checked','false');
   $('share-pw-field').classList.remove('show'); $('share-pw-input').value='';
+  setShareWrite(false);
   try{
     // Sólo se consulta el estado: abrir el modal ya no publica la nota por
     // sí solo. El enlace se crea cuando el usuario pulsa "Guardar" (mismo
@@ -1624,8 +1714,9 @@ async function openShareModal(it){
     const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
     if(res.shared){
       $('share-link-field').value = res.url;
-      $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
+      $('share-status-text').textContent = shareStatusText(res);
       $('share-stop').style.display='';
+      setShareWrite(!!res.can_write);
       if(res.has_password){
         sharePwOn = true;
         $('share-pw-switch').classList.add('on'); $('share-pw-switch').setAttribute('aria-checked','true');
@@ -1634,7 +1725,7 @@ async function openShareModal(it){
       }
     }else{
       $('share-link-field').value = '';
-      $('share-status-text').textContent = 'No compartida · pulsa Guardar para generar el enlace';
+      $('share-status-text').textContent = shareStatusText(null);
     }
   }catch(e){
     $('share-status-text').textContent = 'Error al consultar el estado del enlace';
@@ -1651,15 +1742,18 @@ $('share-pw-toggle-row').addEventListener('click', ()=>{
   if(sharePwOn) setTimeout(()=>$('share-pw-input').focus(), 10);
 });
 
+$('share-write-toggle-row').addEventListener('click', ()=>setShareWrite(!shareWriteOn));
+
 $('share-save').addEventListener('click', async ()=>{
   if(!shareItem) return;
   const btn=$('share-save'); btn.disabled=true; btn.textContent='Guardando…';
   const password = sharePwOn ? $('share-pw-input').value : '';
   try{
-    const res = await api('/api/notes/share/create', {path: shareItem.path, password});
+    const res = await api('/api/notes/share/create',
+                          {path: shareItem.path, password, can_write: shareWriteOn});
     if(res.error){ alert(res.error); return; }
     $('share-link-field').value = res.url;
-    $('share-status-text').textContent = res.has_password ? 'Enlace activo · con contraseña' : 'Enlace activo · público';
+    $('share-status-text').textContent = shareStatusText(res);
     $('share-stop').style.display='';
     if(res.has_password) $('share-pw-input').placeholder='Dejar en blanco para no cambiarla';
     $('share-pw-input').value='';
@@ -1689,90 +1783,6 @@ $('share-stop').addEventListener('click', async ()=>{
 
 $('share-cancel').addEventListener('click', closeShareModal);
 $('share-modal').addEventListener('click', e=>{ if(e.target===$('share-modal')) closeShareModal(); });
-
-/* ════════════ Token de IA (lectura+escritura de una nota vía HTTP, sin sesión) ════════════
-   A diferencia de "Compartir nota" (un único enlace por nota, se reutiliza),
-   aquí puede haber varios tokens vivos a la vez — uno por sesión de IA que
-   quieras darle acceso — y cada uno se revoca por separado. Ver `NoteToken`
-   en apps/notes/models.py para el porqué del diseño. */
-let aiTokenItem = null;
-
-function closeAiTokenModal(){ $('ai-token-modal').classList.remove('show'); aiTokenItem=null; }
-
-function renderAiTokens(tokens){
-  const list = $('ai-token-list');
-  list.innerHTML = '';
-  $('ai-token-empty').style.display = tokens.length ? 'none' : '';
-  tokens.forEach(t=>{
-    const row = document.createElement('div');
-    row.className = 'ai-token-item';
-    const expira = new Date(t.expires_at).toLocaleString();
-    const usado = t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'nunca';
-    row.innerHTML = `
-      <div class="share-link-row">
-        <input type="text" name="ai-token-url" readonly value="${esc(t.url)}" aria-label="Token de IA">
-        <button type="button" class="share-copy-btn" data-copy="${esc(t.url)}">Copiar</button>
-      </div>
-      <div class="share-status-row">
-        <span class="share-status-dot"></span>
-        <span>Caduca el ${esc(expira)} · último uso: ${esc(usado)}</span>
-      </div>
-      <button type="button" class="ai-token-revoke" data-token="${esc(t.token)}">Revocar este token</button>`;
-    list.appendChild(row);
-  });
-}
-
-async function loadAiTokens(){
-  if(!aiTokenItem) return;
-  const res = await fetch('/api/notes/ai-token/list?path='+encodeURIComponent(aiTokenItem.path))
-    .then(r=>r.json()).catch(()=>null);
-  renderAiTokens((res && res.tokens) || []);
-}
-
-async function openAiTokenModal(it){
-  aiTokenItem = it;
-  $('ai-token-modal').classList.add('show');
-  $('ai-token-loading').style.display=''; $('ai-token-body').style.display='none';
-  try{ await loadAiTokens(); }catch(e){}
-  $('ai-token-loading').style.display='none'; $('ai-token-body').style.display='';
-}
-
-$('ai-token-create').addEventListener('click', async ()=>{
-  if(!aiTokenItem) return;
-  const btn=$('ai-token-create'); btn.disabled=true; btn.textContent='Generando…';
-  try{
-    const res = await api('/api/notes/ai-token/create', {path: aiTokenItem.path});
-    if(res.error){ alert(res.error); return; }
-    await loadAiTokens();
-  }catch(e){
-    alert('Error de red al generar el token');
-  }finally{
-    btn.disabled=false; btn.textContent='Generar token nuevo';
-  }
-});
-
-$('ai-token-list').addEventListener('click', e=>{
-  const copyBtn = e.target.closest('[data-copy]');
-  if(copyBtn){
-    const val = copyBtn.dataset.copy;
-    navigator.clipboard.writeText(val).catch(()=>{});
-    const orig=copyBtn.textContent;
-    copyBtn.textContent='¡Copiado!'; copyBtn.classList.add('copied');
-    setTimeout(()=>{ copyBtn.textContent=orig; copyBtn.classList.remove('copied'); }, 1400);
-    return;
-  }
-  const revokeBtn = e.target.closest('[data-token]');
-  if(revokeBtn){
-    showConfirmDialog('Revocar token', '¿Revocar este token? Dejará de funcionar de inmediato.', 'Sí, revocar', async ()=>{
-      const res = await api('/api/notes/ai-token/revoke', {token: revokeBtn.dataset.token});
-      if(res.error){ alert(res.error); return; }
-      await loadAiTokens();
-    });
-  }
-});
-
-$('ai-token-cancel').addEventListener('click', closeAiTokenModal);
-$('ai-token-modal').addEventListener('click', e=>{ if(e.target===$('ai-token-modal')) closeAiTokenModal(); });
 
 /* ════════════ Mover nota a otra carpeta (modal con buscador) ════════════
    Reutiliza moveItem() (la misma función que ya usa el arrastrar-y-soltar del
@@ -1859,16 +1869,26 @@ function imageInfoFromEl(img){
   if(!path){ const src=img.getAttribute('src')||''; const m=src.match(/[?&]path=([^&]+)/); if(m) path=decodeURIComponent(m[1]); }
   return path ? {path, name:path.split('/').pop()} : null;
 }
+const iconDownload='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>';
+// Descarga el adjunto con su nombre original (mismo origen → respeta `download`).
+function downloadImage(info){
+  const a=document.createElement('a');
+  a.href=assetUrl(info.path); a.download=info.name||'imagen';
+  document.body.appendChild(a); a.click(); a.remove();
+}
 function showImageCtxMenu(e, info){
-  if(!CAN_WRITE) return;
   const m=$('ctx-menu');
-  // Dos pasos DENTRO del propio menú (sin confirm() del navegador, que no es
+  // Descargar está disponible también en solo lectura; borrar requiere escritura.
+  // Borrar: dos pasos DENTRO del propio menú (sin confirm() del navegador, que no es
   // fiable en PWA/algunos navegadores): "Borrar imagen" → "¿Seguro? Sí, borrar".
-  m.innerHTML=`<button data-act="del-img" class="danger">${iconTrash}Borrar imagen</button>`;
+  m.innerHTML=`<button data-act="dl-img">${iconDownload}Descargar imagen</button>`
+    +(CAN_WRITE?`<button data-act="del-img" class="danger">${iconTrash}Borrar imagen</button>`:'');
   m.style.display='block';
   m.style.left=Math.min(e.clientX, window.innerWidth-185)+'px';
   m.style.top=Math.min(e.clientY, window.innerHeight-m.offsetHeight-10)+'px';
-  m.querySelector('[data-act="del-img"]').onclick=(ev)=>{
+  m.querySelector('[data-act="dl-img"]').onclick=(ev)=>{ ev.stopPropagation(); hideCtx(); downloadImage(info); };
+  const del=m.querySelector('[data-act="del-img"]'); if(!del) return;
+  del.onclick=(ev)=>{
     ev.stopPropagation();   // evita que el clic global cierre el menú al reemplazar su contenido
     m.innerHTML=`<button data-act="del-yes" class="danger">${iconTrash}¿Seguro? Sí, borrar</button>`;
     m.querySelector('[data-act="del-yes"]').onclick=(ev2)=>{ ev2.stopPropagation(); hideCtx(); deleteImage(info); };
@@ -1920,7 +1940,6 @@ async function handleImageFiles(files){
 }
 // (Pegar / arrastrar imágenes se engancha en initEditor, sobre el editor CM.)
 // Botón de la barra + selector (esencial en móvil)
-$('btn-insert-img').addEventListener('click', ()=>$('asset-file').click());
 $('asset-file').addEventListener('change', e=>{ handleImageFiles([...e.target.files]); e.target.value=''; });
 
 // Alternar lectura / edición (botón ojo/lápiz junto a «Guardado»).
@@ -2147,7 +2166,6 @@ document.addEventListener('keydown', e=>{
     return;
   }
   if($('share-modal').classList.contains('show')){ closeShareModal(); return; }
-  if($('ai-token-modal').classList.contains('show')){ closeAiTokenModal(); return; }
   if($('move-modal').classList.contains('show')){ closeMoveModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
@@ -2159,8 +2177,6 @@ document.addEventListener('keydown', e=>{
   else if(e.key==='-'||e.key==='_'){ e.preventDefault(); setNoteFs(noteFs-0.1); }
   else if(e.key==='0'){ e.preventDefault(); setNoteFs(1); }
 });
-$('btn-new-note').addEventListener('click', ()=>newNote());
-$('btn-new-folder').addEventListener('click', ()=>newFolder());
 $('btn-search').addEventListener('click', ()=>toggleSearch());
 // Dropdown de ajustes de la bóveda
 function toggleVaultSettingsMenu(e) {
@@ -2385,6 +2401,59 @@ $('vault-search-input').addEventListener('input', ()=>{ clearTimeout(searchTimer
 $('vault-search-input').addEventListener('keydown', e=>{ if(e.key==='Escape') toggleSearch(false); });
 $('vault-search-clear').addEventListener('click', ()=>{ const inp=$('vault-search-input'); inp.value=''; syncSearchClear(); inp.focus(); renderTree(); });
 // Soltar en el hueco vacío bajo el último elemento (o en una bóveda vacía) → mueve a la raíz.
+// Clic derecho en el espacio vacío del árbol → menú contextual rápido
+// ( los clicks sobre filas ya están cableados en buildTreeDOM )
+$('vault-tree').addEventListener('contextmenu', function(e) {
+  if (e.target.closest('.tree-row')) return;
+  e.preventDefault();
+  if (!CAN_WRITE) return;
+  var m = $('ctx-menu');
+  m.setAttribute('role', 'menu');
+  m.innerHTML = '<button data-act="new-note"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm1 16H8v-2h6v2zm0-4H8v-2h6v2zm-3-5V3.5L18.5 9H13z"/></svg>Nueva nota</button><button data-act="new-folder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm6 11h-3v3h-2v-3H8v-2h3v-3h2v3h3v2z"/></svg>Nueva carpeta</button>';
+  m.style.display = 'block';
+  m.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+  m.style.top = Math.min(e.clientY, window.innerHeight - m.offsetHeight - 10) + 'px';
+  var btns = Array.from(m.querySelectorAll('button'));
+  btns.forEach(function(b, i) {
+    b.setAttribute('role', 'menuitem');
+    b.setAttribute('tabindex', i === 0 ? '0' : '-1');
+    b.addEventListener('keydown', function(ek) {
+      if (ek.key === 'ArrowDown') { ek.preventDefault(); btns[(i + 1) % btns.length].focus(); }
+      if (ek.key === 'ArrowUp') { ek.preventDefault(); btns[(i - 1 + btns.length) % btns.length].focus(); }
+      if (ek.key === 'Escape') { ek.preventDefault(); hideCtx(); }
+    });
+    b.onclick = function() { hideCtx(); if (b.dataset.act === 'new-note') newNote(); else if (b.dataset.act === 'new-folder') newFolder(); };
+  });
+  setTimeout(function() { if (btns[0]) btns[0].focus(); }, 20);
+});
+// Clic derecho en el header de la bóveda → mismo menú rápido
+(function() {
+  var head = document.querySelector('.vault-side-head');
+  if (!head) return;
+  head.addEventListener('contextmenu', function(e) {
+    if (!CAN_WRITE) return;
+    e.preventDefault();
+    var m = $('ctx-menu');
+    m.setAttribute('role', 'menu');
+    m.innerHTML = '<button data-act="new-note"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm1 16H8v-2h6v2zm0-4H8v-2h6v2zm-3-5V3.5L18.5 9H13z"/></svg>Nueva nota</button><button data-act="new-folder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm6 11h-3v3h-2v-3H8v-2h3v-3h2v3h3v2z"/></svg>Nueva carpeta</button>';
+    m.style.display = 'block';
+    m.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+    m.style.top = Math.min(e.clientY, window.innerHeight - m.offsetHeight - 10) + 'px';
+    var btns = Array.from(m.querySelectorAll('button'));
+    btns.forEach(function(b, i) {
+      b.setAttribute('role', 'menuitem');
+      b.setAttribute('tabindex', i === 0 ? '0' : '-1');
+      b.addEventListener('keydown', function(ek) {
+        if (ek.key === 'ArrowDown') { ek.preventDefault(); btns[(i + 1) % btns.length].focus(); }
+        if (ek.key === 'ArrowUp') { ek.preventDefault(); btns[(i - 1 + btns.length) % btns.length].focus(); }
+        if (ek.key === 'Escape') { ek.preventDefault(); hideCtx(); }
+      });
+      b.onclick = function() { hideCtx(); if (b.dataset.act === 'new-note') newNote(); else if (b.dataset.act === 'new-folder') newFolder(); };
+    });
+    setTimeout(function() { if (btns[0]) btns[0].focus(); }, 20);
+  });
+})();
+
 $('vault-tree').addEventListener('dragover', e=>{
   if(!dragSrc || e.target!==$('vault-tree')) return;
   e.preventDefault(); e.dataTransfer.dropEffect='move';
@@ -2400,11 +2469,71 @@ $('vault-tree').addEventListener('drop', e=>{
 $('vault-side').addEventListener('dragleave', e=>{
   if(dragSrc && !$('vault-side').contains(e.relatedTarget)) clearDropVisual();
 });
-$('btn-toggle-sidebar').addEventListener('click', ()=>{
-  const hidden=$('vault').classList.toggle('side-hidden');
-  $('btn-toggle-sidebar').setAttribute('aria-expanded',(!hidden).toString());
-  if(window.innerWidth>=760) localStorage.setItem('vault-side-hidden',hidden?'1':'0');
+$('btn-toggle-sidebar').addEventListener('click', ()=>toggleSidebar());
+$('btn-side-handle').addEventListener('click', e=>{ toggleSidebar(); e.currentTarget.blur(); });
+$('vault-side-backdrop').addEventListener('click', ()=>closeSidebarMobile());
+function closeSidebarMobile(){
+  const v=$('vault');
+  if(!v.classList.contains('vault-mobile-open')) return;
+  v.classList.remove('vault-mobile-open');
+  document.body.classList.remove('vault-side-mobile-open');
+  $('btn-toggle-sidebar').setAttribute('aria-expanded','false');
+  $('btn-side-handle').setAttribute('aria-expanded','false');
+  $('btn-side-handle').classList.remove('open');
+}
+function toggleSidebar(){
+  const v=$('vault');
+  if(window.innerWidth<760){
+    const willOpen=v.classList.toggle('vault-mobile-open');
+    v.classList.remove('side-hidden');                 // compatibilidad desktop-only
+    document.body.classList.toggle('vault-side-mobile-open', willOpen);
+    $('btn-toggle-sidebar').setAttribute('aria-expanded',String(willOpen));
+    $('btn-side-handle').setAttribute('aria-expanded',String(willOpen));
+    $('btn-side-handle').classList.toggle('open',willOpen);
+  } else {
+    const hidden=v.classList.toggle('side-hidden');
+    const expanded=String(!hidden);
+    $('btn-toggle-sidebar').setAttribute('aria-expanded',expanded);
+    $('btn-side-handle').setAttribute('aria-expanded',expanded);
+    $('btn-side-handle').classList.toggle('open',!hidden);
+    localStorage.setItem('vault-side-hidden',hidden?'1':'0');
+  }
+}
+/* Escape cierra el sidebar móvil — coherente con el patrón de modales
+   (tecla universal para "volver/salir") */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && $('vault').classList.contains('vault-mobile-open')){
+    closeSidebarMobile();
+  }
 });
+/* Swipe-to-close en el sidebar móvil: arrastrar hacia la izquierda cierra.
+   Solo se activa dentro del propio sidebar (los clicks en .tree-row no se
+   ven afectados). El umbral (60 px) es suficiente para no competir con el
+   scroll vertical. */
+(function setupSidebarSwipe(){
+  const side=$('vault-side'); if(!side) return;
+  let startX=0,startY=0,active=false,dx=0;
+  side.addEventListener('touchstart',e=>{
+    if(window.innerWidth>=760) return;
+    if(!$('vault').classList.contains('vault-mobile-open')) return;
+    const t=e.touches[0]; startX=t.clientX; startY=t.clientY; dx=0; active=true;
+  },{passive:true});
+  side.addEventListener('touchmove',e=>{
+    if(!active) return;
+    const t=e.touches[0];
+    const ddx=t.clientX-startX, ddy=t.clientY-startY;
+    if(Math.abs(ddy)>8) { active=false; return; }       // vertical → no es swipe
+    dx=Math.min(0,ddx);                                  // solo izquierda
+    if(dx<-2){ side.style.transform='translateX('+dx+'px)'; side.style.transition='none'; }
+  },{passive:true});
+  const end=()=>{
+    if(!active) return; active=false;
+    side.style.transition='';
+    if(dx<-60) closeSidebarMobile(); else side.style.transform='';
+  };
+  side.addEventListener('touchend',end);
+  side.addEventListener('touchcancel',end);
+})();
 window.addEventListener('beforeunload', ()=>{ if(dirty) saveNow(); });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden&&dirty) saveNow(); });
 function flashSync(){ const d=$('sync-dot'); d.classList.add('visible'); setTimeout(()=>d.classList.remove('visible'),700); }
@@ -2412,6 +2541,7 @@ function flashSync(){ const d=$('sync-dot'); d.classList.add('visible'); setTime
 if(localStorage.getItem('vault-side-hidden')==='1'&&window.innerWidth>=760){
   $('vault').classList.add('side-hidden');
   $('btn-toggle-sidebar').setAttribute('aria-expanded','false');
+  $('btn-side-handle').setAttribute('aria-expanded','false');
 }
 initEditor();
 $('vault-title').addEventListener('click',e=>{
@@ -2429,12 +2559,6 @@ $('vault-title').addEventListener('click',e=>{
   await loadTree(); await restoreTabsState();
   const params=new URLSearchParams(location.search);
   const openParam=params.get('open');
-  // Export headless por API: no es una visita real, así que ni se abre pestaña
-  // ni se limpia la URL (ver `runHeadlessPdfExport` arriba).
-  if(openParam && params.get('headless_pdf')){
-    await runHeadlessPdfExport(openParam, {landscape: params.get('landscape')==='1'});
-    return;
-  }
   // Deep-link desde fuera del vault (p.ej. "Abrir esta nota" en el modal de
   // Ajustes de otra página): /?open=<ruta> abre la nota y limpia la URL.
   if(openParam){
