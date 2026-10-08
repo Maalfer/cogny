@@ -2,55 +2,110 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}" type="image/x-icon">
-<link rel="shortcut icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}">
-
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0f">
 <title>Cogny — Iniciar sesión</title>
 <link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}" type="image/x-icon">
+<link rel="shortcut icon" href="/static/favicon.ico?v={{ ASSET_VERSION }}">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png?v={{ ASSET_VERSION }}">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v={{ ASSET_VERSION }}">
 <script nonce="{{ csp_nonce }}">(function(){var m=document.cookie.match(/(?:^|; )bh_theme=([^;]+)/);document.documentElement.dataset.theme=(m&&m[1])||"dark";})();</script>
 <link rel="stylesheet" href="/static/css/app.css?v={{ ASSET_VERSION }}">
+<link rel="stylesheet" href="/static/css/login.css?v={{ ASSET_VERSION }}">
 </head>
 <body class="auth-body">
-<div class="auth-container">
-  <div class="auth-logo">
-    <img class="logo-svg" src="/static/icons/icon-192.png?v={{ ASSET_VERSION }}" alt="" width="60" height="60">
-    <h1>Cogny</h1>
-    <p>Tu plataforma personal</p>
-  </div>
 
-  {% if error %}
-  <div class="alert alert-error">{{ error }}</div>
-  {% endif %}
-
-  <form method="POST" action="/" class="auth-form">
-    {% csrf_token %}
-    <div class="form-group">
-      <label for="username">Usuario</label>
-      <input type="text" id="username" name="username"
-             value="{{ username_val|default:'' }}"
-             placeholder="Tu nombre de usuario" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
-    </div>
-    <div class="form-group">
-      <label for="password">Contraseña</label>
-      <div style="position:relative;display:flex;align-items:center">
-      <input type="password" id="password" name="password" placeholder="Tu contraseña" autocomplete="current-password" required style="padding-right:2.75rem;width:100%">
-      <button type="button" onclick="(function(){var i=document.getElementById('password');i.type=i.type==='text'?'password':'text'})()" style="position:absolute;right:.625rem;background:none;border:none;color:var(--text3);cursor:pointer;padding:0;display:flex">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-      </button>
-    </div>
-    </div>
-    <button type="submit" class="btn btn-primary btn-full">Iniciar sesión</button>
-  </form>
-
-  <p class="auth-footer">Cogny &copy; {% now "Y" %}</p>
+<div class="auth-bg" aria-hidden="true">
+  <div class="aurora-blob b1"></div>
+  <div class="aurora-blob b2"></div>
+  <div class="aurora-blob b3"></div>
+  <div class="auth-grid"></div>
 </div>
+
+<main class="auth-container">
+  <section class="auth-card" aria-label="Acceso a Cogny">
+
+    <div class="auth-logo">
+      <div class="auth-logo-badge">
+        <img class="logo-svg" src="/static/icons/icon-192.png?v={{ ASSET_VERSION }}" alt="" width="76" height="76">
+      </div>
+      <h1>Cogny</h1>
+      <p>Tu plataforma personal</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error" role="alert">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+      <div><strong>No se pudo iniciar sesión</strong><span>{{ error }}</span></div>
+    </div>
+    {% endif %}
+
+    <form id="login-form" method="POST" action="/" class="auth-form" autocomplete="on">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="username">Usuario</label>
+        <div class="input-wrap">
+          <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+          <input type="text" id="username" name="username"
+                 value="{{ username_val|default:'' }}"
+                 placeholder="Tu nombre de usuario" autocomplete="username"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <div class="input-wrap">
+          <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          <input type="password" id="password" name="password" placeholder="Tu contraseña"
+                 autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" id="pw-toggle" aria-label="Mostrar contraseña" aria-pressed="false" tabindex="0">
+            <svg class="ico-eye" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            <svg class="ico-eye-off" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 9.91 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 21 21 19.73 4.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full auth-submit" id="login-submit">
+        <span class="auth-submit-spin" aria-hidden="true"></span>
+        <span class="auth-submit-label">Iniciar sesión</span>
+      </button>
+    </form>
+
+    <p class="auth-footer">Cogny <span class="dot"></span> <b>v{{ APP_VERSION }}</b> <span class="dot"></span> &copy; {% now "Y" %}</p>
+  </section>
+</main>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var toggle = document.getElementById('pw-toggle');
+  var pw = document.getElementById('password');
+  if (toggle && pw) {
+    toggle.addEventListener('click', function () {
+      var show = pw.type === 'password';
+      pw.type = show ? 'text' : 'password';
+      toggle.classList.toggle('visible', show);
+      toggle.setAttribute('aria-pressed', show ? 'true' : 'false');
+      toggle.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    });
+  }
+  var form = document.getElementById('login-form');
+  var submit = document.getElementById('login-submit');
+  if (form && submit) {
+    form.addEventListener('submit', function () {
+      if (!form.checkValidity()) return;
+      submit.classList.add('loading');
+      submit.disabled = true;
+    });
+  }
+  var u = document.getElementById('username');
+  if (u && !u.value) u.focus();
+})();
+</script>
 <script nonce="{{ csp_nonce }}">
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js').catch(function () {});
 }
 </script>
 </body>

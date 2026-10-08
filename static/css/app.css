@@ -1356,6 +1356,18 @@ a{ touch-action: manipulation; }
   background-attachment: fixed;
   color: var(--text);
 }
+/* En las subapps el gradiente del body se filtra a través del header translúcido
+   y crea un halo luminoso artificial en el borde superior (el "degradado
+   respecto al techo" que reportaba el usuario). En el home se mantiene
+   porque actúa de wallpaper; en las apps usamos fondo plano. */
+:root[data-theme="dark-cristal"] body.subapp-body{
+  background:var(--bg);
+  background-attachment:scroll;
+}
+:root[data-theme="dark-cristal"] .subapp-wrapper > .bh-header{
+  background:var(--bg2);
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+}
 :root[data-theme="dark-cristal"] ::selection{ background: rgba(77,163,255,.30); }
 :root[data-theme="dark-cristal"] ::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.18); }
 :root[data-theme="dark-cristal"] ::-webkit-scrollbar-thumb:hover{ background: rgba(255,255,255,.28); }

@@ -132,3 +132,129 @@ class EditorFlowTests(WhiteboardTestCase):
             "id": board_id, "dataUrl": "data:image/png;base64,no-es-base64-valido",
         })
         self.assertEqual(resp.status_code, 400)
+
+
+
+
+class PdfExportTests(WhiteboardTestCase):
+    """Export de pizarra a PDF: validación + happy path.
+
+    Se ejercita contra el Chromium real del servidor porque el resto de la
+    app de export PDF (notas, temas) ya lo hace — y mockearlo solo aquí
+    ocultaría bugs reales del wiring entre `pdf.render_image()` y el
+    cliente.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.user = self.make_user(username="owner-pdf", role=User.ROLE_OWNER)
+        self.client.force_login(self.user)
+        self.board = Board.objects.create(name="Mi diagrama")
+
+    def _png_data_url(self, w=100, h=80):
+        # Reutiliza el PNG 1x1 valido del modulo (mismo que usa
+        # `storage.write_thumb` en sus tests). Generar uno a mano aqui
+        # trae problemas de escape (\x vs \x en los bytes literales)
+        # y este ya pasa el filtro de magic-bytes del servidor.
+        return _THUMB_DATA_URL
+
+    def test_un_viewer_no_puede_exportar(self):
+        viewer = self.make_user(username="viewer-pdf", role=User.ROLE_VIEWER)
+        self.client.force_login(viewer)
+        resp = self.json_post("/api/pizarra/pdf", {
+            "id": str(self.board.id), "dataUrl": self._png_data_url(),
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_sin_id_devuelve_400_no_500(self):
+        resp = self.json_post("/api/pizarra/pdf", {
+            "dataUrl": self._png_data_url(),
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_id_inexistente_devuelve_404(self):
+        resp = self.json_post("/api/pizarra/pdf", {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "dataUrl": self._png_data_url(),
+        })
+        self.assertEqual(resp.status_code, 404)
+
+    def test_data_url_no_png_se_rechaza(self):
+        # data:image/jpeg no pasa el filtro (la API es solo PNG: el cliente
+        # siempre manda `canvas.toDataURL("image/png")`).
+        resp = self.json_post("/api/pizarra/pdf", {
+            "id": str(self.board.id),
+            "dataUrl": "data:image/jpeg;base64," + base64.b64encode(b"\\xff\\xd8\\xff\\x00").decode(),
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_png_invalido_se_rechaza(self):
+        # base64 válido pero los bytes no empiezan por la magic PNG.
+        resp = self.json_post("/api/pizarra/pdf", {
+            "id": str(self.board.id),
+            "dataUrl": "data:image/png;base64," + base64.b64encode(b"NOT-A-REAL-PNG").decode(),
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_flujo_completo_devuelve_pdf(self):
+        resp = self.json_post("/api/pizarra/pdf", {
+            "id": str(self.board.id),
+            "dataUrl": self._png_data_url(),
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        # Magic PDF: empieza por %PDF-
+        self.assertTrue(resp.content.startswith(b"%PDF-"))
+        # El filename sale del nombre saneado del board.
+        self.assertIn("Mi diagrama.pdf", resp["Content-Disposition"])
+
+    def test_nombre_con_caracteres_peligrosos_se_sanean(self):
+        # Nombre que romperia Windows / rutas / headers si se mandase tal
+        # cual al `Content-Disposition`.
+        self.board.name = "Plan\\\\trimestral: fase 1/2"
+        self.board.save()
+        resp = self.json_post("/api/pizarra/pdf", {
+            "id": str(self.board.id),
+            "dataUrl": self._png_data_url(),
+        })
+        self.assertEqual(resp.status_code, 200)
+        cd = resp["Content-Disposition"]
+        # Caracteres prohibidos fuera; palabras reconocibles dentro.
+        for bad in ("\\\\", "/", ":"):
+            self.assertNotIn(bad, cd.split("filename=")[1].rstrip(';\\"'))
+        self.assertIn(".pdf", cd)
+
+
+class InlineTitleTemplateTests(WhiteboardTestCase):
+    """El editor lleva siempre el wiring del título editable y el botón de
+    exportar — incluso para viewer (que sólo ve el span sin `tabindex` y
+    no ve el botón). Garantiza que el HTML no se rompe al añadir las
+    nuevas clases."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = self.make_user(username="owner-title", role=User.ROLE_OWNER)
+        self.client.force_login(self.user)
+        self.board = Board.objects.create(name="Boceto")
+
+    def test_el_editor_lleva_el_wiring_del_titulo(self):
+        html = self.client.get(f"/pizarra/{self.board.id}/").content.decode()
+        self.assertIn("pz-title-wrap", html)
+        self.assertIn("pz-board-name-input", html)
+        # El span del owner es editable (tabindex + role).
+        self.assertIn('role="textbox"', html)
+
+    def test_el_editor_lleva_el_boton_de_exportar_para_owner(self):
+        html = self.client.get(f"/pizarra/{self.board.id}/").content.decode()
+        self.assertIn("pz-export-pdf", html)
+        self.assertIn("Exportar PDF", html)
+
+    def test_un_viewer_no_ve_el_boton_de_exportar(self):
+        viewer = self.make_user(username="viewer-title", role=User.ROLE_VIEWER)
+        self.client.force_login(viewer)
+        html = self.client.get(f"/pizarra/{self.board.id}/").content.decode()
+        self.assertIn("pz-title-wrap", html)
+        # El span existe pero no tiene role="textbox" — no es editable.
+        self.assertNotIn('role="textbox"', html)
+        # El botón de exportar no se renderiza para viewer.
+        self.assertNotIn("pz-export-pdf", html)

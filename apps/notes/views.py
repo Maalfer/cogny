@@ -2,8 +2,7 @@
 
 Aquí sólo vive la capa HTTP —validar lo que llega, traducir el resultado a
 JSON—. Todo lo que toca el disco está en `vault.py` y la exportación a PDF en
-`pdf.py`, para que la API v1 (`apps.api.views`) pueda reutilizar exactamente la
-misma implementación sin pasar por estas vistas.
+`pdf.py`.
 """
 import json
 import re
@@ -18,15 +17,14 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
-from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.permissions import require_owner, require_write
 from apps.core.api import as_int, as_text, error_response as _err, json_body
 
 from . import pdf, themes, vault
-from .models import NoteToken, PdfTheme, PdfThemeImage, SharedNote
+from .models import PdfTheme, PdfThemeImage, SharedNote
 from .vault import VaultError
 
 
@@ -146,6 +144,7 @@ def rename(request):
     new_rel = vault.rel_of(root, dst)
     vault.move_shares(old_rel, new_rel, was_dir)
     vault.rename_private(root, old_rel, new_rel, was_dir)
+    vault.rewrite_attachment_owners(root, old_rel, new_rel, was_dir)
     return JsonResponse({"success": True, "path": new_rel})
 
 
@@ -154,22 +153,33 @@ def rename(request):
 @require_POST
 @json_body
 def set_private(request):
-    """Marca/desmarca una nota como privada: invisible en `/conocimiento`,
-    igual que siempre dentro de Cogny con sesión. Sólo el propietario decide
-    qué se enseña en la bóveda pública, igual que la configuración de esa
-    bóveda (`apps.knowledge.views.config_save`) — de ahí `@require_owner` y
-    no `@require_write`.
+    """Marca/desmarca una nota —o una CARPETA entera— como privada: invisible
+    en `/conocimiento`, igual que siempre dentro de Cogny con sesión. Sólo el
+    propietario decide qué se enseña en la bóveda pública, igual que la
+    configuración de esa bóveda (`apps.knowledge.views.config_save`) — de ahí
+    `@require_owner` y no `@require_write`.
+
+    Con una carpeta la marca la heredan todos sus descendientes (ver
+    `vault.marked_private`), así que no hay que recorrer nada aquí ni volver a
+    marcar las notas que se creen dentro más adelante.
     """
     root = vault.root()
     target, err = _resolve(root, as_text(request.data.get("path")).strip())
     if err:
         return err
-    if not target.exists() or target.suffix.lower() != ".md":
-        return _err("Nota no encontrada", 404)
+    is_dir = target.is_dir()
+    if not target.exists() or not (is_dir or target.suffix.lower() == ".md"):
+        return _err("Nota o carpeta no encontrada", 404)
+    if target == root:
+        # Marcar la raíz escondería la bóveda entera, que es exactamente lo
+        # que hace el interruptor de "Bóveda pública" en Ajustes — y encima
+        # dejaría una marca con ruta vacía que no se ve en ningún sitio.
+        return _err("Para ocultar la bóveda entera, desactívala en Ajustes")
     private = bool(request.data.get("private"))
     rel = vault.rel_of(root, target)
     vault.set_private(root, rel, private)
-    return JsonResponse({"success": True, "path": rel, "private": private})
+    return JsonResponse({"success": True, "path": rel, "private": private,
+                         "is_dir": is_dir})
 
 
 @login_required
@@ -215,6 +225,7 @@ def move(request):
     new_rel = vault.rel_of(root, dst)
     vault.move_shares(old_rel, new_rel, was_dir)
     vault.rename_private(root, old_rel, new_rel, was_dir)
+    vault.rewrite_attachment_owners(root, old_rel, new_rel, was_dir)
     return JsonResponse({"success": True, "path": new_rel})
 
 
@@ -360,30 +371,6 @@ def import_vault(request):
     return JsonResponse({"success": True})
 
 
-# ════════════ Copiar a la bóveda comunitaria ════════════
-
-@login_required
-@require_owner
-@require_POST
-@json_body
-def copy_to_community(request):
-    """Duplica una nota o carpeta de la bóveda privada a la comunitaria.
-
-    Sólo el propietario (no un rol de sólo-lectura invitado a la privada, ni
-    quien sólo tenga un enlace comunitario) puede sacar contenido privado
-    hacia la bóveda comunitaria — es a todos los efectos publicarlo a quien
-    tenga cualquier enlace comunitario vivo.
-    """
-    from apps.community.views import community_root
-    try:
-        new_rel = vault.copy_across(vault.root(),
-                                    as_text(request.data.get("path")).strip(),
-                                    community_root())
-    except VaultError as exc:
-        return _err(str(exc), exc.status)
-    return JsonResponse({"success": True, "path": new_rel})
-
-
 # ════════════ Exportar nota a PDF ════════════
 
 @login_required
@@ -414,6 +401,11 @@ def notes_pdf(request):
                                landscape=bool(request.data.get("landscape")))
     except pdf.PdfError as exc:
         return _err(str(exc), exc.status)
+    except Exception:
+        import traceback as _tb
+        with open("/tmp/pdf_export_traceback.log", "w") as _f:
+            _tb.print_exc(file=_f)
+        raise
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
     resp["Content-Length"] = str(len(pdf_bytes))
@@ -561,6 +553,8 @@ def share_create(request):
     Reutiliza el token existente si la nota ya se había compartido antes, para
     que el enlace no cambie cada vez que se reabre el modal de "Compartir".
     `password` vacío/ausente quita la contraseña; con valor, la (re)establece.
+    `can_write` decide si el enlace es de sólo lectura o también deja escribir
+    en la nota (ver `SharedNote`).
     """
     root = vault.root()
     password = request.data.get("password") or ""
@@ -576,11 +570,13 @@ def share_create(request):
         defaults={"token": secrets.token_urlsafe(16)},
     )
     share.password_hash = make_password(password) if password else ""
-    share.save(update_fields=["password_hash", "updated_at"])
+    share.can_write = bool(request.data.get("can_write"))
+    share.save(update_fields=["password_hash", "can_write", "updated_at"])
     return JsonResponse({
         "success": True, "token": share.token,
         "url": request.build_absolute_uri(f"/s/{share.token}/"),
         "has_password": bool(share.password_hash),
+        "can_write": share.can_write,
     })
 
 
@@ -599,6 +595,7 @@ def share_status(request):
         "shared": True, "token": share.token,
         "url": request.build_absolute_uri(f"/s/{share.token}/"),
         "has_password": bool(share.password_hash),
+        "can_write": share.can_write,
     })
 
 
@@ -620,6 +617,7 @@ def share_list(request):
             "token": s.token,
             "url": request.build_absolute_uri(f"/s/{s.token}/"),
             "has_password": bool(s.password_hash),
+            "can_write": s.can_write,
         }
         for s in SharedNote.objects.all().order_by("-updated_at")
     ]})
@@ -636,72 +634,6 @@ def share_revoke(request):
     if err:
         return err
     SharedNote.objects.filter(path=vault.rel_of(root, target)).delete()
-    return JsonResponse({"success": True})
-
-
-# ════════════ Token de IA (lectura+escritura de UNA nota, sin sesión) ════════
-# El token en sí lo canjea `note_token_view`, más abajo — pública, sin login,
-# CSRF exenta (es un bearer-token en la URL, no una cookie). Estos tres
-# endpoints son la administración: crear/listar/revocar, con sesión propia
-# igual que "Compartir nota". Ver `NoteToken` en models.py para el porqué del
-# diseño (varios tokens vivos a la vez, cada uno revocable por separado).
-
-def _note_token_json(request, tok: NoteToken) -> dict:
-    return {
-        "token": tok.token,
-        "url": request.build_absolute_uri(f"/n/{tok.token}/"),
-        "created_at": tok.created_at.isoformat(),
-        "expires_at": tok.expires_at.isoformat(),
-        "last_used_at": tok.last_used_at.isoformat() if tok.last_used_at else None,
-    }
-
-
-@login_required
-@require_write
-@require_GET
-def ai_token_list(request):
-    """Tokens de IA vivos (sin caducar, sin revocar) de una nota."""
-    root = vault.root()
-    target, err = _resolve(root, request.GET.get("path", ""))
-    if err:
-        return err
-    tokens = NoteToken.objects.filter(
-        path=vault.rel_of(root, target), revoked=False, expires_at__gt=timezone.now())
-    return JsonResponse({"tokens": [_note_token_json(request, t) for t in tokens]})
-
-
-@login_required
-@require_write
-@require_POST
-@json_body
-def ai_token_create(request):
-    """Genera un token nuevo (no reutiliza ninguno existente, a diferencia
-    de "Compartir nota": cada sesión de IA se lleva el suyo, revocable aparte)."""
-    root = vault.root()
-    target, err = _resolve(root, as_text(request.data.get("path")).strip())
-    if err:
-        return err
-    if not target.exists() or target.suffix.lower() != ".md":
-        return _err("Nota no encontrada", 404)
-    tok = NoteToken.objects.create(
-        token=secrets.token_urlsafe(16),
-        path=vault.rel_of(root, target),
-        expires_at=timezone.now() + NoteToken.DEFAULT_LIFETIME,
-    )
-    return JsonResponse({"success": True, **_note_token_json(request, tok)}, status=201)
-
-
-@login_required
-@require_write
-@require_POST
-@json_body
-def ai_token_revoke(request):
-    tok = NoteToken.objects.filter(
-        token=as_text(request.data.get("token")).strip(), revoked=False).first()
-    if not tok:
-        return _err("Token no encontrado", 404)
-    tok.revoked = True
-    tok.save(update_fields=["revoked"])
     return JsonResponse({"success": True})
 
 
@@ -784,27 +716,31 @@ def _resolve_asset_ref(root: Path, ref: str, note_path: str):
     return candidate
 
 
-def _build_share_assets(root: Path, token: str, content: str, note_path: str) -> dict:
+def _build_share_assets(root: Path, token: str, content: str, note_path: str):
     """`{ref_original: url_firmada}` sólo para las imágenes/PDFs referenciados
-    por ESTA nota — nunca la bóveda entera."""
+    por ESTA nota — nunca la bóveda entera. El segundo valor devuelto dice si
+    hay al menos una IMAGEN entre ellos (a diferencia de un PDF suelto) — lo
+    usa la plantilla para mostrar u ocultar el botón de "descargar en .zip"."""
     out = {}
+    has_images = False
     for ref in _extract_asset_refs(content):
         hit = _resolve_asset_ref(root, ref, note_path)
         if hit:
             rel = vault.rel_of(root, hit)
             sig = quote(signing.dumps({"t": token, "p": rel}, salt=_SHARE_ASSET_SALT), safe="")
             out[ref] = f"/s/{token}/asset?p={sig}"
-    return out
+            if hit.suffix.lower() in vault.IMAGE_EXTS:
+                has_images = True
+    return out, has_images
 
 
 def _share_gate_key(token: str) -> str:
     return f"shared_verified_{token}"
 
 
-def shared_note_view(request, token):
-    share = SharedNote.objects.filter(token=token).first()
-    if not share:
-        raise Http404
+def _shared_target(share: SharedNote):
+    """Nota de un enlace público, o 404 si el enlace apunta a algo que ya no
+    está (o que nunca debió ser una nota)."""
     root = settings.VAULT_ROOT.resolve()
     try:
         target = vault.safe_path(root, share.path)
@@ -812,6 +748,21 @@ def shared_note_view(request, token):
         raise Http404
     if not target.exists() or target.suffix.lower() != ".md":
         raise Http404
+    return root, target
+
+
+# `ensure_csrf_cookie` para que el guardado del enlace editable (POST a
+# `/s/<token>/save`) no dependa de que `base.html` siga pintando
+# `{{ csrf_token }}`: hoy eso ya provoca la cookie, pero es un detalle de otra
+# plantilla y aquí el visitante no tiene sesión con la que recuperarse de un
+# 403. Se emite también en los enlaces de sólo lectura: una cookie CSRF no
+# abre ninguna puerta.
+@ensure_csrf_cookie
+def shared_note_view(request, token):
+    share = SharedNote.objects.filter(token=token).first()
+    if not share:
+        raise Http404
+    root, target = _shared_target(share)
 
     gate_key = _share_gate_key(token)
     error = ""
@@ -825,11 +776,54 @@ def shared_note_view(request, token):
             return render(request, "notes/shared_gate.html", {"error": error})
 
     content = target.read_text(encoding="utf-8")
+    assets, has_images = _build_share_assets(root, token, content, share.path)
     return render(request, "notes/shared.html", {
         "note_name": target.stem,
         "content": content,
-        "assets": _build_share_assets(root, token, content, share.path),
+        # `can_edit`, no `can_write`: ese nombre ya lo pone el contexto global
+        # para el rol de la SESIÓN (lo lee `base.html`), y pisarlo aquí haría
+        # que la página compartida mintiera sobre quién es quien la mira.
+        "can_edit": share.can_write,
+        "assets": assets,
+        "has_images": has_images,
     })
+
+
+@require_POST
+def shared_note_save(request, token):
+    """Reescribe la nota desde el enlace público, si es editable.
+
+    Mismas comprobaciones que la vista de lectura —enlace vivo, nota que
+    sigue existiendo, contraseña ya superada en esta sesión— y una más: el
+    enlace tiene que llevar `can_write`. Se responde 404 (no 403) cuando el
+    enlace es de sólo lectura: por el mismo criterio que el resto de la
+    superficie pública, un token que no puede escribir no debe enterarse de
+    que este endpoint existe.
+
+    Escribe con `write_text_atomic` igual que la web con sesión, así que un
+    guardado a medias no puede dejar la nota truncada. Sólo cambia el
+    contenido: ni renombra, ni borra, ni toca adjuntos.
+    """
+    share = SharedNote.objects.filter(token=token, can_write=True).first()
+    if not share:
+        raise Http404
+    _root, target = _shared_target(share)
+    if share.password_hash and not request.session.get(_share_gate_key(token)):
+        raise Http404
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return _err("JSON inválido")
+    content = data.get("content") if isinstance(data, dict) else None
+    if content is None:
+        content = ""
+    if not isinstance(content, str):
+        return _err("'content' debe ser texto")
+    if len(content.encode("utf-8")) > vault.MAX_NOTE_BYTES:
+        return _err("Nota demasiado grande (máx. 5 MB)")
+    vault.write_text_atomic(target, content)
+    return JsonResponse({"success": True, "updated": int(target.stat().st_mtime)})
 
 
 @require_GET
@@ -855,40 +849,88 @@ def shared_note_asset(request, token):
     return FileResponse(open(target, "rb"))
 
 
-# ── Canje del token de IA (sin login, sin CSRF: el token en la URL ES la
-#    credencial — mismo criterio que `/s/<token>/` para notas compartidas, o
-#    que una `ApiKey` de la API v1) ──────────────────────────────────────────
+@require_GET
+def shared_note_images_zip(request, token):
+    """Todas las imágenes de la nota de este enlace, en un único `.zip`.
+
+    Disponible tanto en enlaces de sólo lectura como editables: a diferencia
+    del API de más abajo (`shared_note_note`/`shared_note_assets`, que exige
+    `can_write`), esto no da acceso a nada que el propio enlace de lectura no
+    enseñe ya una por una en la página — es sólo una forma más cómoda de
+    bajárselas todas juntas de una vez. Mismas comprobaciones que
+    `shared_note_view`: enlace vivo, nota que sigue existiendo, contraseña ya
+    superada en esta sesión si la nota la lleva.
+    """
+    share = SharedNote.objects.filter(token=token).first()
+    if not share:
+        raise Http404
+    root, target = _shared_target(share)
+    if share.password_hash and not request.session.get(_share_gate_key(token)):
+        raise Http404
+
+    content = target.read_text(encoding="utf-8")
+    seen_paths = set()
+    used_names = set()
+    files = []
+    for ref in _extract_asset_refs(content):
+        hit = _resolve_asset_ref(root, ref, share.path)
+        if not hit or hit.suffix.lower() not in vault.IMAGE_EXTS or hit in seen_paths:
+            continue
+        seen_paths.add(hit)
+        name = hit.name
+        if name in used_names:
+            n = 2
+            while f"{hit.stem} ({n}){hit.suffix}" in used_names:
+                n += 1
+            name = f"{hit.stem} ({n}){hit.suffix}"
+        used_names.add(name)
+        files.append((hit, name))
+    if not files:
+        raise Http404
+
+    tmp, size = vault.export_files_zip(files)
+    resp = FileResponse(tmp, content_type="application/zip")
+    fname = vault.sanitize_name(target.stem) or "nota"
+    resp["Content-Disposition"] = f'attachment; filename="{fname}-imagenes.zip"'
+    resp["Content-Length"] = str(size)
+    return resp
+
+
+# ── API de la nota compartida en modo escritura (para una IA, sin sesión) ──
+# Cuando el enlace se crea editable (`can_write`), la misma raíz `/s/<token>/`
+# que sirve la página HTML para humanos expone además el API JSON de la nota
+# y de sus adjuntos: leer/reescribir el contenido y listar, subir, descargar o
+# borrar los adjuntos — todo por HTTP sin login. El token en la URL ES la
+# credencial, igual que para leer la nota.
+#
+# Estos endpoints responden igual ante un enlace de sólo lectura que ante uno
+# inexistente: 404. Un enlace que no puede escribir no debe enterarse de que
+# el API existe (mismo criterio que `shared_note_save`).
+
+def _shared_api_target(request, token):
+    """Enlace editable vivo → `(root, target)` de su nota, o 404."""
+    share = SharedNote.objects.filter(token=token, can_write=True).first()
+    if not share:
+        raise Http404
+    root, target = _shared_target(share)
+    if share.password_hash and not request.session.get(_share_gate_key(token)):
+        raise Http404
+    return root, target, share
+
 
 @csrf_exempt
-def note_token_view(request, token):
-    """`GET` lee la nota, `POST` la reescribe entera. Sólo esos dos verbos y
-    sólo esa nota: no hay forma de listar la bóveda ni de tocar nada más con
-    este token, por diseño (ver `NoteToken` en models.py).
-
-    404 tanto si el token no existe como si ya caducó o está revocado —igual
-    que un enlace maestro revocado en `apps.knowledge`, no distinguir el
-    motivo no le da a nadie información que no debiera tener.
-    """
+def shared_note_note(request, token):
+    """`GET` lee la nota, `POST` la reescribe entera — como JSON, para que una
+    IA pueda gestionarla sin sesión. Sólo esa nota: no hay forma de listar la
+    bóveda ni de tocar otra (el token ya dice qué nota es)."""
     if request.method not in ("GET", "POST"):
         return _err("Método no permitido (usa GET o POST)", 405)
-    tok = NoteToken.objects.filter(token=token, revoked=False,
-                                   expires_at__gt=timezone.now()).first()
-    if not tok:
-        raise Http404
-    root = vault.root()
-    try:
-        target = vault.safe_path(root, tok.path)
-    except VaultError:
-        raise Http404
-    if not target.exists() or target.suffix.lower() != ".md":
-        raise Http404
-    NoteToken.objects.filter(pk=tok.pk).update(last_used_at=timezone.now())
+    root, target, share = _shared_api_target(request, token)
 
     if request.method == "GET":
         return JsonResponse({
-            "path": tok.path, "name": target.stem,
+            "path": share.path, "name": target.stem,
             "content": target.read_text(encoding="utf-8"),
-            "expires_at": tok.expires_at.isoformat(),
         })
 
     try:
@@ -904,3 +946,68 @@ def note_token_view(request, token):
         return _err("Nota demasiado grande (máx. 5 MB)")
     vault.write_text_atomic(target, content)
     return JsonResponse({"success": True, "updated": int(target.stat().st_mtime)})
+
+
+@csrf_exempt
+def shared_note_assets(request, token):
+    """Adjuntos de la nota de este enlace editable. `GET` los lista — los que
+    la nota referencia con `![[nombre]]` más los que ya se subieron para esta
+    nota y aún no se mencionan en el texto. `POST` (multipart, campo `file`)
+    sube uno nuevo, registrado como propiedad de ESTA nota
+    (`vault.save_upload`). Nunca la bóveda entera, sólo lo que es de esta
+    nota — el mismo criterio de dueño registrado (`vault.attachment_owner`)
+    que usa el enlace público en `_resolve_asset_ref`."""
+    if request.method not in ("GET", "POST"):
+        return _err("Método no permitido (usa GET o POST)", 405)
+    root, target, share = _shared_api_target(request, token)
+
+    if request.method == "POST":
+        f = request.FILES.get("file")
+        if not f:
+            return _err("Falta archivo")
+        saved = vault.save_upload(root, f, note_path=share.path)
+        return JsonResponse({"success": True, "name": saved.name}, status=201)
+
+    content = target.read_text(encoding="utf-8")
+    assets = {}
+    for ref in _extract_asset_refs(content):
+        hit = _resolve_asset_ref(root, ref, share.path)
+        if hit:
+            assets[hit.name] = ref
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+    if attachments_dir.is_dir():
+        for p in attachments_dir.iterdir():
+            if (p.is_file() and p.name not in assets
+                    and vault.attachment_owner(root, p) == share.path):
+                assets[p.name] = None
+    return JsonResponse({"assets": [
+        {"name": name, "ref": ref, "url": f"/s/{token}/assets/{name}"}
+        for name, ref in assets.items()
+    ]})
+
+
+@csrf_exempt
+def shared_note_asset_detail(request, token, name):
+    """UN adjunto de la nota de este enlace editable. `GET` descarga sus
+    bytes, `DELETE` lo borra — sólo si esta nota es su dueña registrada
+    (`vault.attachment_owner`), igual que en `shared_note_assets`. Nunca edita
+    el contenido de la nota: si el adjunto seguía referenciado con
+    `![[nombre]]`, ese embed se queda roto hasta que la IA lo quite con un
+    POST a `shared_note_note`."""
+    if request.method not in ("GET", "DELETE"):
+        return _err("Método no permitido (usa GET o DELETE)", 405)
+    root, _target, share = _shared_api_target(request, token)
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+    try:
+        asset_path = vault.safe_path(attachments_dir, name)
+    except VaultError:
+        raise Http404
+    if not asset_path.is_file() or vault.attachment_owner(root, asset_path) != share.path:
+        raise Http404
+
+    if request.method == "DELETE":
+        asset_path.unlink()
+        return JsonResponse({"success": True})
+    content_type, as_attachment = vault.safe_content_type(asset_path.name)
+    return FileResponse(open(asset_path, "rb"), content_type=content_type,
+                        as_attachment=as_attachment, filename=asset_path.name)

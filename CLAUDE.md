@@ -2,20 +2,23 @@
 
 Bóveda de notas en Markdown, autoalojada, estilo Obsidian. Django + gunicorn,
 sin frontend framework. Las notas son ficheros en disco, no filas de base de
-datos — la BD (SQLite) sólo guarda cuentas, sesiones, claves de API y la
-configuración de la bóveda pública.
+datos — la BD (SQLite) sólo guarda cuentas, sesiones y la configuración de la
+bóveda pública.
 
 ## Apps
 
 - `apps/core` — helpers y middleware compartidos (`GlobalContextMiddleware`,
   `UploadCorsMiddleware`), utilidades HTTP comunes (`apps/core/api.py`:
   `error_response`, `json_body`, coerción de tipos del body JSON).
-- `apps/accounts` — login, perfil, ajustes, avatar, tema, roles y claves de
-  API. Reglas de cuenta en `apps/accounts/services.py`; permisos por rol en
+- `apps/accounts` — login, perfil, ajustes, avatar, tema y roles. Reglas de
+  cuenta en `apps/accounts/services.py`; permisos por rol en
   `apps/accounts/permissions.py` (`require_write`, `require_owner` — la
   comprobación es siempre de servidor, el frontend sólo esconde botones).
 - `apps/notes` — el vault en sí: árbol de carpetas, edición, adjuntos,
-  export/import ZIP, enlaces públicos de sólo lectura. Todo lo que toca disco
+  export/import ZIP, enlaces públicos por nota (`SharedNote`, `/s/<token>/`:
+  sólo lectura por defecto, con contraseña opcional y —si se marca
+  `can_write`— también escritura, que sirve `shared_note_save` sobre ESA nota
+  y nada más). Todo lo que toca disco
   vive en `apps/notes/vault.py` (rutas seguras vía `safe_path`, orden manual
   de carpetas, escritura atómica, búsqueda, stats, optimización a WebP);
   `apps/notes/pdf.py` exporta una nota a PDF con Chromium headless y
@@ -31,46 +34,30 @@ configuración de la bóveda pública.
   negativos) y sobre el apaisado a dos columnas.
 - `apps/knowledge` — bóveda pública de sólo lectura en `/conocimiento`, para
   compartir la misma bóveda de `apps.notes` hacia fuera sin exponer el editor.
-  Dos formas de entrar: por dominio de origen permitido (`Referer`/`Origin`,
-  ver aviso en `apps/knowledge/access.py` — es una puerta blanda, no control
-  de acceso real) o por enlace maestro (`MasterLink`, token UUID4 revocable).
-  El permiso se firma en una cookie (`django.core.signing`) para no depender
-  del `Referer` en cada navegación.
-- `apps/community` — bóveda comunitaria de lectura Y ESCRITURA en `/comunidad`,
-  con su propio `settings.COMMUNITY_VAULT_ROOT` (nunca `VAULT_ROOT`: son dos
-  bóvedas en disco totalmente separadas). Se entra por sesión del propietario
-  o por un `CommunityLink` (token UUID4, revocable, se pueden tener varios
-  activos a la vez) — quien entra por cualquiera de las dos vías tiene
-  lectura y escritura completas, sin distinción de roles. El contenido pasa
-  por `apps.notes.vault` igual que la bóveda privada, apuntando a la otra
-  raíz. Ojo: `rename`/`move`/`delete` de esta app NO llaman a
-  `vault.move_shares`/`vault.drop_shares` (esas tocan `SharedNote`, que indexa
-  por `path` sin distinguir de qué bóveda es — llamarlas aquí podría afectar
-  al enlace público de una nota de la bóveda PRIVADA con la misma ruta). Por
-  la misma tabla-global-compartida (`PdfTheme`), la exportación a PDF de la
-  comunitaria (`views.api_pdf`) sólo ofrece los estilos base/oscuro, nunca
-  temas personalizados — así nadie con un enlace puede tocar un tema que el
-  dueño usa de verdad en su bóveda privada. `vault.copy_across` (en
-  `apps/notes/vault.py`, la usan las vistas `copy_to_community`/
-  `api_copy_to_private` de las dos apps) deja que el propietario duplique una
-  nota o carpeta de una bóveda a la otra trayendo consigo los adjuntos que
-  referencie, aunque vivan en el `Adjuntos/` raíz fuera de lo copiado — nunca
-  sobrescribe nada en destino, un nombre repetido se resuelve con ' 2', ' 3'…
-- `apps/api` — API pública v1 autenticada por clave (`apps/api/auth.py`) +
-  Swagger en `/api/docs/` (`apps/api/openapi.py`).
+  Única puerta de entrada: el enlace maestro (`MasterLink`, token UUID4
+  revocable) — ya no hay filtro por dominio de origen/`Referer`, se quitó por
+  ser una puerta blanda y no control de acceso real. El permiso se firma en
+  una cookie (`django.core.signing`) al canjear el enlace, para no tener que
+  repetirlo en cada navegación. Qué se enseña ahí lo decide la lista de
+  rutas privadas de `apps/notes/vault.py` (`.private.json` en la raíz de la
+  bóveda): puede marcarse una nota o una CARPETA, y la marca de una carpeta la
+  heredan todos sus descendientes (`marked_private`), así que una nota creada
+  después dentro de una carpeta privada nace privada. Dentro de Cogny con
+  sesión no cambia nada: el árbol distingue `private` (marca propia) de
+  `private_inherited` sólo para pintarla en gris y para no ofrecer un "Hacer
+  pública" que no publicaría nada.
 
-**La lógica no vive en las vistas.** Hay dos entradas al mismo sistema — la
-web con sesión y la API con clave —, así que las vistas sólo validan la
-petición y traducen el resultado; lo que hace de verdad el trabajo está en
-los módulos de servicio de arriba. Si añades una operación, va en el módulo
-de servicio y la exponen las dos capas.
+**La lógica no vive en las vistas.** Las vistas sólo validan la petición y
+traducen el resultado a JSON; lo que hace de verdad el trabajo está en los
+módulos de servicio de arriba (`vault.py`, `services.py`...). Si añades una
+operación, va en el módulo de servicio.
 
 ## Settings
 
 `config/settings/base.py` + `dev.py` (DEBUG, sin HTTPS) + `prod.py` (cookies
 seguras, HSTS, detrás de nginx). `.env` en la raíz se carga a mano en
 `base.py` (sin `python-dotenv`); variables clave: `DJANGO_SECRET_KEY`,
-`DJANGO_ALLOWED_HOSTS`, `DATA_ROOT`/`VAULT_ROOT`/`COMMUNITY_VAULT_ROOT`/
+`DJANGO_ALLOWED_HOSTS`, `DATA_ROOT`/`VAULT_ROOT`/
 `AVATARS_ROOT`/`DB_PATH`, `ASSET_VERSION` (cache-busting de estáticos),
 `UPLOAD_HOST`. `VERSION` es un
 fichero en la raíz, no una variable — súbelo en cada release junto al tag de
@@ -79,7 +66,7 @@ git (`VERSION` + badge de `README.md` + tag `vX.Y.Z`).
 ## Tests
 
 `tests/` a nivel de raíz, uno por área (`test_vault.py`, `test_notes_web.py`,
-`test_api_v1.py`, `test_knowledge.py`, `test_community.py`). Usan un
+`test_knowledge.py`). Usan un
 `DATA_ROOT` propio y aislado
 (no `/tmp` compartido) para no interferir entre tests ni con una bóveda real.
 

@@ -84,3 +84,104 @@
 .pz-save-status.error{ color:#f87171; border-color:#f87171; }
 
 .pz-hidden-input{ display:none; }
+
+/* ───────────── Título editable en el header ─────────────
+   El header pone el título a la izquierda (después de la flecha de "Volver").
+   El <span> se comporta como texto normal hasta que se le hace clic (sólo
+   `is-editable`): entonces un <input> se superpone en su mismo sitio con el
+   MISMO font/letter-spacing y el span se oculta. Mismo patrón que Notion,
+   Drive o Linear: clic = input inline. */
+
+/* Wrapper posiciona el hint (icono lápiz) absolutamente a la derecha del
+   span/input para no romper el layout cuando el texto crece. */
+.pz-title-wrap{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+/* El span: ancho flexible, ellipsis si no cabe. El input NO existe por
+   defecto; cuando `.editing` lo activa, lo posicionamos encima con el
+   mismo font para que el texto no salte al editar. */
+.pz-board-name{
+  font: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: inline-block;
+}
+/* Hint (icono lápiz) — sólo aparece en hover/focus del span editable. */
+.pz-title-wrap .pz-title-hint{
+  margin-left: .35rem;
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  color: var(--text3, rgba(255,255,255,.5));
+  transition: opacity .15s;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.pz-title-wrap .pz-title-hint svg{ width: 100%; height: 100%; }
+.pz-title-wrap.is-editable:hover:not(.editing) .pz-title-hint,
+.pz-board-name:focus-visible + .pz-board-name-input + .pz-title-hint,
+.pz-board-name:focus-visible ~ .pz-title-hint{
+  opacity: .65;
+}
+/* Estado edición: span oculto, input visible y a su mismo sitio. */
+.pz-board-name-input{
+  display: none;
+  font: inherit;
+  font-weight: 700;
+  background: var(--bg3, rgba(255,255,255,.06));
+  border: 1px solid var(--cyan, #22d3ee);
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: var(--text);
+  outline: none;
+  min-width: 6ch;
+  max-width: 60ch;
+  letter-spacing: inherit;
+  /* `field-sizing: content` ajusta el ancho al texto: el <input> deja de
+     tener un ancho fijo en chars y se adapta como un contenteditable. Sin
+     esto el `size` en JS tiene que estar sincronizado a cada keystroke, y
+     en Firefox se ve un feo "salto" de 2-3 chars al pegar texto largo. */
+  field-sizing: content;
+}
+.pz-title-wrap.editing .pz-board-name{ display: none; }
+.pz-title-wrap.editing .pz-board-name-input{ display: inline-block; }
+.pz-title-wrap.editing .pz-title-hint{ display: none; }
+/* Estado guardando: gira el lápiz en sitio como un spinner ligero. */
+.pz-title-wrap.saving .pz-board-name{ opacity: .6; }
+
+
+/* ───────────── Botón "Exportar PDF" en el header ─────────────
+   Estilo coherente con .bh-desk-btn pero con label visible (es la acción
+   primaria del header de pizarra, no un icono de la barra de escritorio). */
+.pz-header-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .4rem .75rem;
+  height: 32px;
+  background: var(--cyan, #22d3ee);
+  color: #04202a;
+  border: none;
+  border-radius: 8px;
+  font: 600 .82rem system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  transition: background .12s, transform .12s, opacity .12s;
+  white-space: nowrap;
+}
+.pz-header-btn:hover:not(:disabled){ background: var(--cyan-hover, #2be5ff); transform: translateY(-1px); }
+.pz-header-btn:active:not(:disabled){ transform: translateY(0); }
+.pz-header-btn:disabled{ opacity: .55; cursor: progress; }
+.pz-header-btn svg{ width: 16px; height: 16px; }
+/* En pantallas estrechas escondemos el label y dejamos solo el icono. El
+   header ya tiene `flex-shrink:0`, asi que no se sale; el icono + el
+   padding siguen siendo legibles a 320px de ancho. */
+@media (max-width: 520px){
+  .pz-header-btn span{ display: none; }
+  .pz-header-btn{ padding: .4rem; width: 32px; justify-content: center; }
+}

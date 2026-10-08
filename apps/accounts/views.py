@@ -2,8 +2,7 @@
 
 No hay registro público: los accesos los crea el propietario desde su perfil,
 eligiendo si cada invitado entra en sólo lectura o con permiso de escritura.
-Las reglas (validación, serialización, avatares) están en `services.py`, que
-comparte con la API v1.
+Las reglas (validación, serialización, avatares) están en `services.py`.
 """
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -14,7 +13,7 @@ from django.views.decorators.http import require_POST
 from apps.core.api import as_int, as_optional_text, as_text, error_response as _err, json_body
 
 from . import services
-from .models import ApiKey, User
+from .models import User
 from .permissions import require_owner
 
 
@@ -123,44 +122,6 @@ def set_theme(request):
         return _err("Tema inválido")
     request.user.theme = theme
     request.user.save(update_fields=["theme"])
-    return JsonResponse({"success": True})
-
-
-# ── Claves de API (panel de Ajustes) ─────────────────────────────────────────
-# Estos endpoints van con sesión + CSRF, como el resto de la web. La API en sí
-# (`/api/v1/`) sólo acepta clave de API: ver `apps.api.auth`.
-
-@login_required
-@require_owner
-def api_keys_list(request):
-    keys = ApiKey.objects.filter(user=request.user, revoked=False)
-    return JsonResponse({"keys": [services.api_key_json(k) for k in keys]})
-
-
-@login_required
-@require_owner
-@require_POST
-@json_body
-def api_keys_create(request):
-    key, raw = ApiKey.objects.create_key(
-        request.user,
-        as_text(request.data.get("name")).strip(),
-        read_only=bool(request.data.get("read_only")),
-    )
-    # `raw` viaja UNA sola vez: a partir de aquí en BD sólo queda el hash.
-    return JsonResponse({"success": True, "key": {**services.api_key_json(key), "secret": raw}})
-
-
-@login_required
-@require_owner
-@require_POST
-@json_body
-def api_keys_revoke(request):
-    key = ApiKey.objects.filter(pk=as_int(request.data.get("id")), user=request.user).first()
-    if not key:
-        return _err("Clave no encontrada", 404)
-    key.revoked = True
-    key.save(update_fields=["revoked"])
     return JsonResponse({"success": True})
 
 

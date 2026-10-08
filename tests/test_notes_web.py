@@ -1,6 +1,5 @@
 """Endpoints del vault que consume la web (sesión + CSRF)."""
 import io
-import json
 import zipfile
 
 from apps.accounts.models import User
@@ -287,10 +286,6 @@ class ReadOnlyRoleTests(VaultTestCase):
         estar logueado."""
         self.assertEqual(self.client.get("/api/notes/share/list").status_code, 403)
 
-    def test_no_puede_tocar_las_claves_de_api(self):
-        self.assertEqual(self.client.get("/api/apikeys/list").status_code, 403)
-        self.assertEqual(self.json_post("/api/apikeys/create", {"name": "x"}).status_code, 403)
-
     def test_no_puede_gestionar_accesos(self):
         self.assertEqual(self.client.get("/api/users/list").status_code, 403)
         self.assertEqual(self.json_post("/api/users/create", {
@@ -313,7 +308,6 @@ class AccountTests(VaultTestCase):
         # El propietario ve las tres secciones y el hueco donde el JS pinta.
         self.assertIn('id="settings-theme-picker"', html)
         self.assertIn('id="shared-links-list"', html)
-        self.assertIn('id="apikeys-list"', html)
         # Y ya no queda rastro del modal en el layout común.
         self.assertNotIn('id="settings-modal"', html)
 
@@ -323,12 +317,6 @@ class AccountTests(VaultTestCase):
         # La raíz es quien enseña el login al anónimo (ver `core.views.root`).
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp["Location"], "/?next=/settings/")
-
-    def test_un_invitado_no_ve_las_claves_de_api_en_ajustes(self):
-        self.client.force_login(self.make_user("lector", role=User.ROLE_VIEWER))
-        html = self.client.get("/settings/").content.decode()
-        self.assertIn('id="shared-links-list"', html)
-        self.assertNotIn('id="apikeys-list"', html)
 
     def test_cambiar_tema(self):
         self.assertEqual(self.json_post("/api/profile/set-theme", {"theme": "gold"}).status_code, 200)
@@ -353,12 +341,3 @@ class AccountTests(VaultTestCase):
         resp = self.json_post("/api/users/delete", {"id": self.user.pk})
         self.assertEqual(resp.status_code, 403)
         self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
-
-    def test_crear_y_revocar_una_clave_de_api(self):
-        created = self.json_post("/api/apikeys/create", {"name": "Claude"}).json()["key"]
-        self.assertTrue(created["secret"].startswith("cgny_"))
-        self.assertNotIn(created["secret"], json.dumps(
-            self.client.get("/api/apikeys/list").json()))
-        self.assertEqual(self.json_post("/api/apikeys/revoke",
-                                        {"id": created["id"]}).status_code, 200)
-        self.assertEqual(self.client.get("/api/apikeys/list").json()["keys"], [])

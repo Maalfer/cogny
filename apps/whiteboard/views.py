@@ -1,15 +1,15 @@
 """Vistas de pizarra (sesión + CSRF): páginas y API que consume el frontend.
 
 Mismo reparto que `apps.notes`: aquí sólo la capa HTTP, el disco lo toca
-`storage.py`. No hay API v1 (clave de API) para esto de momento — las
-pizarras se editan desde el navegador, no tiene sentido de automatización
-como sí lo tiene el vault de notas.
+`storage.py`. Las pizarras se editan desde el navegador, no existe API
+pública sin sesión.
 """
 import json
+import re
 import uuid
 
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_POST
 
@@ -176,3 +176,88 @@ def thumb(request):
     resp = FileResponse(open(path, "rb"), content_type="image/png")
     resp["Cache-Control"] = "no-store"
     return resp
+
+
+
+@login_required
+@require_write
+@require_POST
+@json_body
+def pdf_export(request):
+    """Exporta la pizarra actual a PDF.
+
+    El cliente (board.js) ya pinta el lienzo en un canvas off-screen con el
+    mismo codigo que la miniatura de la galeria (`drawElementOn`), exporta
+    ese canvas como PNG dataURL con el `bgColor` ya horneado, y lo manda
+    aqui con `{id, dataUrl, landscape?}`. Aqui se imprime a PDF via
+    `pdf.render_image()`, que reutiliza la misma infraestructura headless
+    que `pdf.render()` para notas (Chromium con CSP, proxy validador y
+    workdir en `/var`).
+
+    El nombre lo leemos del modelo, no del cuerpo: el cliente lo manda
+    informativo pero la fuente de verdad es la BD (mismo patron que el
+    `Content-Disposition` del export de notas: si el cliente miente sobre
+    el nombre, gana la BD).
+    """
+    from apps.notes import pdf as notes_pdf
+
+    # Validación ANTES de levantar Chromium: si falla algo del input, 400
+    # (error del cliente), no 500 (error del servidor). `render_image()`
+    # también valida por su cuenta, pero con status 500 por defecto — la
+    # barrera útil para el cliente es esta, que distingue las dos cosas.
+    raw_id = request.data.get("id")
+    if not raw_id:
+        return _err("Falta el id de la pizarra")
+    board = _board_or_404(raw_id)
+    data_url = request.data.get("dataUrl") or ""
+    if not isinstance(data_url, str) or not data_url.startswith("data:image/png;base64,"):
+        return _err("dataUrl no es un PNG valido")
+    if len(data_url) > notes_pdf._IMG_MAX_PNG_BYTES:
+        return _err("Imagen demasiado grande")
+    # La validación de magic-bytes también la hace `render_image()`, pero
+    # hacerla aquí separa "input inválido" (400) de "fallo del servidor"
+    # (502) — sin esto, bytes que no son PNG cruzan la frontera como 502
+    # cuando el cliente claramente nos ha mandado algo que no es una imagen.
+    try:
+        import base64 as _b64
+        head = _b64.b64decode(data_url.split(",", 1)[1], validate=True)[:8]
+    except (binascii.Error, ValueError):
+        return _err("Imagen no valida")
+    if head != b"\x89PNG\r\n\x1a\n":
+        return _err("Imagen no valida")
+    landscape = bool(request.data.get("landscape"))
+
+    try:
+        pdf_bytes = notes_pdf.render_image(data_url, title=board.name, landscape=landscape)
+    except notes_pdf.PdfError as exc:
+        # Cualquier PdfError que sobreviva a la validación previa es un
+        # fallo del servidor (Chromium no disponible, timeout, etc.) — 500.
+        return _err(str(exc), exc.status if exc.status != 500 else 502)
+    except Exception:
+        import traceback as _tb
+        with open("/tmp/pdf_export_traceback.log", "a") as _f:
+            _tb.print_exc(file=_f)
+        raise
+
+    filename = _sanitize_filename(board.name) or "pizarra"
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+    resp["Content-Length"] = str(len(pdf_bytes))
+    return resp
+
+
+_FILENAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _sanitize_filename(name) -> str:
+    """Nombre de fichero saneado para el Content-Disposition (pizarras).
+
+    Mismo criterio que `vault.sanitize_name`: rechaza separadores y
+    caracteres de control, recorta puntos/espacios al principio y al final
+    (los navegadores y Windows se quejan de ".." o " .pdf") y limita a
+    120 chars para que `<filename>.pdf` quepa en cualquier FS.
+    """
+    if not isinstance(name, str):
+        return ""
+    n = _FILENAME_RE.sub("", name).strip(". ")
+    return n[:120]

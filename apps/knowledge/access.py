@@ -1,23 +1,19 @@
 """Quién puede leer `/conocimiento`, y cómo se le recuerda.
 
-AVISO, y va en el código a propósito para que no se olvide: el filtro por
-dominio de origen se apoya en la cabecera `Referer`, que **la manda el cliente**.
-Un `curl -H "Referer: https://elrincondelhacker.es/"` entra igual. Esto sirve
-para que el enlace no circule fuera de la comunidad —que es para lo que está—,
-NO como control de acceso. Lo que hay detrás es de sólo lectura precisamente
-porque la puerta es blanda.
+Única puerta de entrada: el enlace maestro (`MasterLink`, token UUID4
+revocable). No hay filtro por dominio de origen ni por `Referer` — esa
+cabecera la manda el cliente y no es un control de acceso real, así que se
+quitó: quien no tiene un enlace maestro, no entra.
 
 Flujo de una visita:
 
-    1. ¿la bóveda pública está activada?     no → 404 (ni existe)
-    2. ¿trae ya un permiso firmado en cookie? sí → pasa
-    3. ¿llega desde un dominio permitido?     sí → pasa y se le firma el permiso
-    4. si no                                      → 403 con explicación
+    1. ¿la bóveda pública está activada?      no → 404 (ni existe)
+    2. ¿trae ya un permiso firmado en cookie?  sí → pasa
+    3. si no                                       → 403
 
-El paso 2 existe porque el `Referer` sólo viaja en el clic que trae al visitante
-desde fuera: al navegar por la propia bóveda, recargar o volver por un marcador
-ya no hay dominio de origen que mirar, y sin la cookie se quedaría fuera a la
-segunda página.
+El permiso de la cookie sólo se firma al canjear un enlace maestro
+(`enter_with_master`): es lo que permite navegar, recargar y volver por un
+marcador sin tener que repetir el enlace en cada petición.
 """
 import functools
 
@@ -33,54 +29,10 @@ from .models import MasterLink, PublicVault
 COOKIE_NAME = "cogny_conocimiento"
 SIGNING_SALT = "cogny.knowledge.grant"
 
-# Cómo entró quien tiene el permiso, sólo para poder explicárselo y para que un
-# enlace maestro revocado no siga valiendo por la cookie que dejó.
-GRANT_DOMAIN = "d"
+# Cómo entró quien tiene el permiso: hoy sólo existe esta vía, pero se guarda
+# en la cookie para que un enlace maestro revocado eche también a quien ya
+# había entrado con él (ver `read_grant`).
 GRANT_MASTER = "m"
-
-
-# ── Dominios ─────────────────────────────────────────────────────────────────
-
-def host_matches(host: str, pattern: str) -> bool:
-    """¿`host` encaja con `pattern`?
-
-    `*.dominio.tld` cubre el dominio **y** todos sus subdominios: quien escribe
-    `*.elrincondelhacker.es` espera que valga también el enlace puesto en la
-    portada, no sólo en `www.`.
-    """
-    if not host or not pattern:
-        return False
-    if pattern.startswith("*."):
-        bare = pattern[2:]
-        return host == bare or host.endswith("." + bare)
-    return host == pattern
-
-
-def request_origin_host(request) -> str:
-    """Dominio del que viene la visita, según el navegador.
-
-    Se mira `Referer` y, si no está, `Origin`: en una navegación normal el que
-    llega es `Referer`, pero algunas políticas lo recortan a sólo el origen y
-    ciertos clientes mandan `Origin` en su lugar.
-    """
-    from .models import normalize_domain
-    for header in ("Referer", "Origin"):
-        value = request.headers.get(header, "")
-        if value and value.lower() != "null":
-            host = normalize_domain(value)
-            if host:
-                return host
-    return ""
-
-
-def domain_allowed(cfg: PublicVault, host: str) -> bool:
-    patterns = cfg.domain_list()
-    if not patterns:
-        # Sin lista, la bóveda queda abierta a cualquiera que tenga el enlace.
-        # Es la lectura natural de "no he restringido nada", y la interfaz de
-        # Ajustes lo dice con todas las letras.
-        return True
-    return any(host_matches(host, p) for p in patterns)
 
 
 # ── Permiso firmado (cookie) ─────────────────────────────────────────────────
@@ -132,20 +84,11 @@ def clear_grant(response):
 # ── Puerta ───────────────────────────────────────────────────────────────────
 
 class Denied(Exception):
-    """Visita rechazada: no venía de un dominio permitido."""
-
-    def __init__(self, host: str):
-        super().__init__(host)
-        self.host = host
+    """Visita rechazada: no trae un permiso válido (ni enlace maestro)."""
 
 
 def check(request):
-    """`(cfg, grant, nuevo_permiso)` o levanta `Http404` / `Denied`.
-
-    `nuevo_permiso` es el tipo de permiso que hay que firmar en la respuesta
-    (o `None` si ya venía con uno válido): quien llama es el que tiene la
-    respuesta a mano para ponerle la cookie.
-    """
+    """`(cfg, grant)` o levanta `Http404` / `Denied`."""
     cfg = PublicVault.get()
     if not cfg.enabled:
         # 404 y no 403: si está apagada, la bóveda pública no existe. Un 403
@@ -154,30 +97,22 @@ def check(request):
 
     grant = read_grant(request)
     if grant:
-        return cfg, grant, None
+        return cfg, grant
 
-    host = request_origin_host(request)
-    if domain_allowed(cfg, host):
-        return cfg, {"k": GRANT_DOMAIN}, GRANT_DOMAIN
-
-    raise Denied(host)
+    raise Denied
 
 
 def public_view(view):
-    """Vista de página de la bóveda pública: 404 si está apagada, 403 si el
-    dominio no vale, y permiso firmado en la respuesta si acaba de entrar."""
+    """Vista de página de la bóveda pública: 404 si está apagada, 403 si no
+    hay permiso (sólo se consigue canjeando un enlace maestro)."""
     @functools.wraps(view)
     def wrapper(request, *args, **kwargs):
         try:
-            cfg, grant, fresh = check(request)
-        except Denied as denied:
-            return render(request, "knowledge/blocked.html",
-                          {"origin_host": denied.host}, status=403)
+            cfg, grant = check(request)
+        except Denied:
+            return render(request, "knowledge/blocked.html", {}, status=403)
         request.public_grant = grant
-        response = view(request, *args, **kwargs)
-        if fresh:
-            set_grant(response, cfg, fresh)
-        return response
+        return view(request, *args, **kwargs)
     return wrapper
 
 
@@ -186,15 +121,11 @@ def public_api(view):
     @functools.wraps(view)
     def wrapper(request, *args, **kwargs):
         try:
-            cfg, grant, fresh = check(request)
+            cfg, grant = check(request)
         except Denied:
-            return JsonResponse({"error": "Acceso no permitido desde este origen"},
-                                status=403)
+            return JsonResponse({"error": "Acceso no permitido"}, status=403)
         request.public_grant = grant
-        response = view(request, *args, **kwargs)
-        if fresh:
-            set_grant(response, cfg, fresh)
-        return response
+        return view(request, *args, **kwargs)
     return wrapper
 
 

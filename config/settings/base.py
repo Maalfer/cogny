@@ -46,9 +46,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.notes",
     "apps.knowledge",
-    "apps.community",
     "apps.whiteboard",
-    "apps.api",
 ]
 
 MIDDLEWARE = [
@@ -162,25 +160,14 @@ LOGGING = {
     },
 }
 
-# ── Constantes app ───────────────────────────────────────────────────────────
+# Constantes app ───────────────────────────────────────────────────────────────
 ASSET_VERSION = os.environ.get("ASSET_VERSION", "v1")
 
 # Subdominio DNS-only (fuera de Cloudflare) para importar bóvedas grandes,
 # esquivando el límite de 100 MB por request del proxy de Cloudflare.
 UPLOAD_HOST = os.environ.get("UPLOAD_HOST", "")
 
-# Origen que usa el Chromium headless CON JavaScript de `apps.notes.pdf_headless`
-# para navegar a la app real (nunca sale de esta máquina: nginx no expone
-# /internal/ hacia fuera). En dev coincide con el runserver de Django; en
-# producción hay que apuntarlo al gunicorn local (ver el `proxy_pass` del
-# vhost de nginx), NO al dominio público — se salta Cloudflare/TLS a propósito.
-INTERNAL_ORIGIN = os.environ.get("INTERNAL_ORIGIN", "http://127.0.0.1:8000")
-
 DATA_ROOT = Path(os.environ.get("DATA_ROOT", BASE_DIR / "data"))
 VAULT_ROOT = Path(os.environ.get("VAULT_ROOT", DATA_ROOT / "vault"))
 AVATARS_ROOT = Path(os.environ.get("AVATARS_ROOT", BASE_DIR / "static" / "avatars"))
 WHITEBOARD_ROOT = Path(os.environ.get("WHITEBOARD_ROOT", DATA_ROOT / "pizarra"))
-# Bóveda comunitaria (/comunidad): raíz separada a propósito de VAULT_ROOT —
-# es escribible por cualquiera con un enlace (ver apps.community), nunca debe
-# compartir directorio con la bóveda privada.
-COMMUNITY_VAULT_ROOT = Path(os.environ.get("COMMUNITY_VAULT_ROOT", DATA_ROOT / "community_vault"))

@@ -1,9 +1,6 @@
-"""Reglas de cuenta compartidas por la web (sesión) y la API v1 (clave).
+"""Reglas de cuenta: crear accesos invitados, cambiar su permiso, etc.
 
-Las dos capas hacen lo mismo con distinta puerta de entrada: crear accesos
-invitados, cambiar su permiso, revocar claves… Si cada una lleva su propia
-validación acaban divergiendo, y la que se quede corta es un agujero. Aquí está
-la versión única; las vistas sólo traducen a HTTP.
+Las vistas de `apps.accounts.views` sólo traducen esto a HTTP.
 """
 from pathlib import Path
 
@@ -12,7 +9,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
 
-from .models import ApiKey, User
+from .models import User
 
 MAX_AVATAR_BYTES = 4 * 1024 * 1024
 
@@ -57,21 +54,6 @@ def user_json(user: User) -> dict:
         "is_owner": user.is_owner,
         "last_login": user.last_login.isoformat() if user.last_login else None,
         "created_at": user.date_joined.isoformat(),
-    }
-
-
-def api_key_json(key: ApiKey) -> dict:
-    """Todo lo público de una clave. El secreto NO está aquí: sólo existe en el
-    momento de crearla, y lo añade quien la crea."""
-    return {
-        "id": key.pk,
-        "name": key.name,
-        "prefix": key.prefix,
-        "masked": key.masked,
-        "read_only": key.read_only,
-        "revoked": key.revoked,
-        "created_at": key.created_at.isoformat(),
-        "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
     }
 
 

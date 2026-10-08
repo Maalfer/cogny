@@ -1,6 +1,11 @@
-"""Notas privadas: invisibles desde `/conocimiento`, iguales en Cogny con sesión.
+"""Notas y carpetas privadas: invisibles desde `/conocimiento`, iguales en
+Cogny con sesión.
 
 Lo que se comprueba, por orden de importancia:
+
+0. Una CARPETA marcada esconde todo lo que cuelga de ella —incluidas las notas
+   que se creen dentro DESPUÉS— y al desmarcarla no se publica lo que ya
+   tenía marca propia (`PrivateFolderTests`).
 
 1. Marcarla oculta la nota del árbol, la nota misma y la búsqueda públicos —
    pero NO de la web con sesión, donde sigue viéndose (con `private: true`).
@@ -17,11 +22,18 @@ import io
 import threading
 
 from apps.accounts.models import User
-from apps.knowledge.models import PublicVault
+from apps.knowledge.models import MasterLink, PublicVault
 
 from .base import VaultTestCase
 
 API = "/conocimiento/api"
+
+
+def _enter_public_vault(client):
+    """Canjea un enlace maestro de usar y tirar: única puerta de entrada a la
+    bóveda pública ahora que no hay filtro por dominio/Referer."""
+    link = MasterLink.objects.create(name="test")
+    client.get(f"/conocimiento/m/{link.token}/")
 
 
 class PrivateNoteVisibilityTests(VaultTestCase):
@@ -30,6 +42,7 @@ class PrivateNoteVisibilityTests(VaultTestCase):
         cfg = PublicVault.get()
         cfg.enabled = True
         cfg.save()
+        _enter_public_vault(self.client)
         self.owner = self.make_user()
         self.client.force_login(self.owner)
         self.write_note("Linux/Publica.md", "contenido público")
@@ -86,6 +99,110 @@ class PrivateNoteVisibilityTests(VaultTestCase):
         # La carpeta sigue existiendo (no es lo que se marca), sólo falta su hija privada.
         self.assertEqual([f["name"] for f in tree], ["Linux"])
         self.assertEqual([n["name"] for n in tree[0]["children"]], ["Publica"])
+
+
+class PrivateFolderTests(VaultTestCase):
+    """Marcar una CARPETA esconde todo lo que cuelga de ella, sin marcar nota
+    a nota: es la diferencia entre "oculto esta nota" y "esta rama entera no
+    sale de casa", y tiene que aguantar que se creen notas dentro después."""
+
+    def setUp(self):
+        super().setUp()
+        cfg = PublicVault.get()
+        cfg.enabled = True
+        cfg.save()
+        _enter_public_vault(self.client)
+        self.owner = self.make_user()
+        self.client.force_login(self.owner)
+        self.write_note("Trabajo/Informe.md", "cifras confidenciales")
+        self.write_note("Trabajo/Clientes/Acme.md", "contrato de acme")
+        self.write_note("Blog/Publica.md", "esto sí se enseña")
+
+    def _set_private(self, path: str, private: bool):
+        return self.json_post("/api/notes/set-private", {"path": path, "private": private})
+
+    def _public_tree(self):
+        return self.client.get(API + "/tree").json()["tree"]
+
+    def test_marcar_la_carpeta_la_oculta_entera_del_arbol_publico(self):
+        self.assertEqual(self._set_private("Trabajo", True).status_code, 200)
+        self.assertEqual([f["name"] for f in self._public_tree()], ["Blog"])
+
+    def test_lo_que_hay_dentro_deja_de_leerse_y_de_buscarse(self):
+        self._set_private("Trabajo", True)
+        # También la nota de la SUBcarpeta: la marca baja hasta el fondo.
+        self.assertEqual(self.client.get(API + "/note?path=Trabajo/Informe.md").status_code, 404)
+        self.assertEqual(
+            self.client.get(API + "/note?path=Trabajo/Clientes/Acme.md").status_code, 404)
+        self.assertEqual(self.client.get(API + "/search?q=acme").json()["results"], [])
+        hits = self.client.get(API + "/search?q=enseña").json()["results"]
+        self.assertEqual([h["path"] for h in hits], ["Blog/Publica.md"])
+
+    def test_una_nota_creada_despues_dentro_nace_privada(self):
+        self._set_private("Trabajo", True)
+        self.assertEqual(
+            self.json_post("/api/notes/create", {"parent": "Trabajo", "name": "Nueva"}).status_code,
+            200)
+        self.assertEqual(self.client.get(API + "/note?path=Trabajo/Nueva.md").status_code, 404)
+
+    def test_con_sesion_se_ve_todo_y_se_distingue_marca_propia_de_heredada(self):
+        self._set_private("Trabajo", True)
+        tree = self.client.get("/api/notes/tree").json()["tree"]
+        trabajo = next(f for f in tree if f["name"] == "Trabajo")
+        self.assertTrue(trabajo["private"])
+        self.assertFalse(trabajo["private_inherited"])
+        # La nota de dentro no lleva marca PROPIA (nadie la puso), pero está
+        # oculta: el frontend usa justo esa diferencia para no ofrecer un
+        # "Hacer pública" que no publicaría nada.
+        informe = next(n for n in trabajo["children"] if n["name"] == "Informe")
+        self.assertFalse(informe["private"])
+        self.assertTrue(informe["private_inherited"])
+        clientes = next(f for f in trabajo["children"] if f["name"] == "Clientes")
+        self.assertTrue(clientes["private_inherited"])
+        self.assertTrue(clientes["children"][0]["private_inherited"])
+
+    def test_hacer_publica_la_carpeta_no_publica_lo_que_ya_era_privado_aparte(self):
+        self._set_private("Trabajo/Informe.md", True)
+        self._set_private("Trabajo", True)
+        self._set_private("Trabajo", False)
+        # Vuelve la carpeta y la nota que nunca se marcó...
+        self.assertEqual(
+            self.client.get(API + "/note?path=Trabajo/Clientes/Acme.md").status_code, 200)
+        # ...pero la que sí tenía marca propia sigue oculta.
+        self.assertEqual(self.client.get(API + "/note?path=Trabajo/Informe.md").status_code, 404)
+
+    def test_renombrar_la_carpeta_conserva_la_marca(self):
+        self._set_private("Trabajo", True)
+        resp = self.json_post("/api/notes/rename", {"path": "Trabajo", "name": "Curro"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([f["name"] for f in self._public_tree()], ["Blog"])
+        self.assertEqual(self.client.get(API + "/note?path=Curro/Informe.md").status_code, 404)
+
+    def test_sacar_una_nota_de_la_carpeta_privada_la_publica(self):
+        self._set_private("Trabajo", True)
+        resp = self.json_post("/api/notes/move", {"path": "Trabajo/Informe.md", "target": "Blog"})
+        self.assertEqual(resp.status_code, 200)
+        # Sin marca propia, fuera de la carpeta ya no hay nada que la oculte.
+        self.assertEqual(self.client.get(API + "/note?path=Blog/Informe.md").status_code, 200)
+
+    def test_adjunto_de_una_nota_dentro_de_carpeta_privada_no_se_sirve(self):
+        up = self.client.post("/api/notes/upload",
+                              {"file": _fake_image("img.png"), "note": "Trabajo/Informe.md"})
+        self.assertEqual(up.status_code, 200)
+        path = up.json()["path"]
+        self.assertEqual(self.client.get(API + f"/asset?path={path}").status_code, 200)
+        self._set_private("Trabajo", True)
+        self.assertEqual(self.client.get(API + f"/asset?path={path}").status_code, 404)
+
+    def test_solo_el_propietario_puede_marcar_una_carpeta(self):
+        self.client.force_login(self.make_user(username="editora", role=User.ROLE_EDITOR))
+        self.assertEqual(self._set_private("Trabajo", True).status_code, 403)
+        self.assertEqual(sorted(f["name"] for f in self._public_tree()), ["Blog", "Trabajo"])
+
+    def test_no_se_puede_marcar_la_raiz_de_la_boveda(self):
+        resp = self._set_private("", True)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(sorted(f["name"] for f in self._public_tree()), ["Blog", "Trabajo"])
 
 
 class PrivateNoteBookkeepingTests(VaultTestCase):
@@ -151,6 +268,7 @@ class PrivateNoteAssetTests(VaultTestCase):
         cfg = PublicVault.get()
         cfg.enabled = True
         cfg.save()
+        _enter_public_vault(self.client)
         self.owner = self.make_user()
         self.client.force_login(self.owner)
         self.write_note("privada.md", "hola")

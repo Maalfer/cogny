@@ -1,0 +1,284 @@
+/* =============================================
+   COGNY LOGIN — página de acceso
+   Estilos propios de la página de login. Se cargan DESPUÉS de app.css para
+   heredar las variables de tema (--bg, --cyan, …) y pisar solo lo de aquí.
+   ============================================= */
+
+/* ── Paleta del fondo ambiental por tema ── */
+:root{
+  --auth-a:#00d4e8;               /* primario (cián) */
+  --auth-b:#5b56c8;               /* violeta profundo */
+  --auth-c:#0ea5e9;               /* azul eléctrico */
+  --auth-glow:rgba(0,212,232,.16);
+  --auth-card-inset:rgba(255,255,255,.07);
+  --auth-card-shadow:0 24px 60px rgba(0,0,0,.42);
+  --auth-grid:rgba(255,255,255,.045);
+}
+:root[data-theme="light"]{
+  --auth-a:#0e7490; --auth-b:#7c6fd0; --auth-c:#0ea5e9;
+  --auth-glow:rgba(14,116,144,.12);
+  --auth-card-inset:rgba(255,255,255,.9);
+  --auth-card-shadow:0 24px 60px rgba(30,40,80,.14);
+  --auth-grid:rgba(20,30,60,.05);
+}
+:root[data-theme="dracula"]{
+  --auth-a:#bd93f9; --auth-b:#ff79c6; --auth-c:#50fa7b;
+  --auth-glow:rgba(189,147,249,.15);
+  --auth-grid:rgba(255,255,255,.045);
+}
+:root[data-theme="pink"]{
+  --auth-a:#ec4899; --auth-b:#c084fc; --auth-c:#f0abfc;
+  --auth-glow:rgba(236,72,153,.13);
+  --auth-card-inset:rgba(255,255,255,.9);
+  --auth-card-shadow:0 24px 60px rgba(180,40,100,.16);
+  --auth-grid:rgba(120,30,70,.06);
+}
+:root[data-theme="gold"]{
+  --auth-a:#f4d772; --auth-b:#d9ad3f; --auth-c:#fbbf24;
+  --auth-glow:rgba(244,215,114,.14);
+  --auth-grid:rgba(255,255,255,.045);
+}
+
+.auth-body{
+  position:relative;
+  min-height:100dvh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow-x:hidden;
+  background:
+    radial-gradient(1000px 640px at 50% -10%, var(--auth-glow), transparent 62%),
+    var(--bg);
+}
+
+/* ── Fondo ambiental: aurora de manchas que flotan ── */
+.auth-bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.aurora-blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.5;will-change:transform}
+.aurora-blob.b1{
+  width:560px;height:560px;top:-14%;left:-10%;
+  background:color-mix(in srgb,var(--auth-a) 34%,transparent);
+  animation:blobFloat1 30s ease-in-out infinite alternate;
+}
+.aurora-blob.b2{
+  width:520px;height:520px;top:12%;right:-12%;
+  background:color-mix(in srgb,var(--auth-b) 30%,transparent);
+  opacity:.42;
+  animation:blobFloat2 36s ease-in-out infinite alternate;
+}
+.aurora-blob.b3{
+  width:460px;height:460px;bottom:-20%;left:16%;
+  background:color-mix(in srgb,var(--auth-c) 26%,transparent);
+  opacity:.4;
+  animation:blobFloat3 42s ease-in-out infinite alternate;
+}
+/* Rejilla técnica sutil que se desvanece hacia los bordes */
+.auth-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(var(--auth-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--auth-grid) 1px, transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:radial-gradient(ellipse 62% 55% at 50% 42%, #000 0%, transparent 78%);
+          mask-image:radial-gradient(ellipse 62% 55% at 50% 42%, #000 0%, transparent 78%);
+}
+/* Velo para que el texto respire sobre las manchas */
+.auth-bg::after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse 85% 70% at 50% 45%, transparent 40%, var(--bg) 100%);
+}
+
+@keyframes blobFloat1{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(4%,7%,0) scale(1.08)}
+  100%{transform:translate3d(-3%,12%,0) scale(.94)}
+}
+@keyframes blobFloat2{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(-6%,-8%,0) scale(1.12)}
+  100%{transform:translate3d(5%,4%,0) scale(.96)}
+}
+@keyframes blobFloat3{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(6%,-6%,0) scale(1.06)}
+  100%{transform:translate3d(-5%,3%,0) scale(1.1)}
+}
+
+/* ── Tarjeta de cristal ── */
+.auth-container{position:relative;z-index:1;width:100%;max-width:416px;padding:1.25rem}
+.auth-card{
+  position:relative;
+  overflow:hidden;
+  border-radius:24px;
+  border:1px solid var(--border);
+  padding:2.6rem 2.25rem 1.9rem;
+  background:linear-gradient(180deg,
+    color-mix(in srgb,var(--bg2) 78%,transparent),
+    color-mix(in srgb,var(--bg2) 56%,transparent));
+  -webkit-backdrop-filter:blur(26px) saturate(150%);
+          backdrop-filter:blur(26px) saturate(150%);
+  box-shadow:var(--auth-card-shadow), inset 0 1px 0 var(--auth-card-inset);
+  animation:cardIn .65s cubic-bezier(.2,.75,.25,1) both;
+}
+/* Línea luminosa superior (toque de acento) */
+.auth-card::before{
+  content:"";position:absolute;top:0;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--cyan) 55%,transparent),transparent);
+}
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(22px) scale(.985)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+
+/* ── Logo ── */
+.auth-logo{text-align:center;margin-bottom:2.1rem}
+.auth-logo-badge{
+  position:relative;width:76px;height:76px;margin:0 auto 1.15rem;
+}
+.auth-logo-badge::before{
+  content:"";position:absolute;inset:-9px;border-radius:30px;
+  background:conic-gradient(from 0deg,
+    var(--cyan),
+    transparent 32%,
+    transparent 62%,
+    var(--auth-b) 78%,
+    var(--cyan));
+  animation:ringSpin 7s linear infinite;
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 9px),#000 calc(100% - 8px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 9px),#000 calc(100% - 8px));
+  filter:drop-shadow(0 0 14px var(--auth-glow));
+}
+.auth-logo-badge img{
+  position:relative;z-index:1;display:block;width:76px;height:76px;border-radius:22px;
+  box-shadow:0 12px 30px rgba(0,0,0,.45), inset 0 0 0 1px var(--border);
+  animation:logoPulse 4.5s ease-in-out infinite;
+}
+@keyframes ringSpin{to{transform:rotate(360deg)}}
+@keyframes logoPulse{
+  0%,100%{box-shadow:0 12px 30px rgba(0,0,0,.45),0 0 0 0 var(--auth-glow)}
+  50%{box-shadow:0 12px 34px rgba(0,0,0,.5),0 0 26px 4px var(--auth-glow)}
+}
+.auth-logo h1{
+  margin:0;font-size:2.15rem;font-weight:900;letter-spacing:-.6px;line-height:1.05;
+  background:linear-gradient(115deg,var(--text) 30%,color-mix(in srgb,var(--cyan) 78%,var(--text)));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+}
+.auth-logo p{
+  margin:.4rem 0 0;color:var(--text2);font-size:.92rem;letter-spacing:.02em;
+}
+
+/* ── Alerta de error ── */
+.alert{
+  position:relative;display:flex;align-items:flex-start;gap:.6rem;
+  padding:.85rem 1rem;border-radius:14px;font-size:.85rem;line-height:1.45;
+  margin-bottom:1.15rem;
+  animation:alertIn .4s cubic-bezier(.2,.75,.25,1) both;
+}
+.alert svg{flex-shrink:0;margin-top:.1rem}
+.alert-error{
+  background:color-mix(in srgb,var(--red) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--red) 38%,transparent);
+  color:var(--red);
+}
+.alert-error strong{display:block;font-weight:800}
+.alert-error span{opacity:.9}
+@keyframes alertIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* ── Campos ── */
+.auth-form{display:flex;flex-direction:column;gap:1.15rem}
+.form-group{display:flex;flex-direction:column;gap:.5rem}
+.form-group label{
+  font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--text2);margin-left:.2rem;transition:color .18s;
+}
+.form-group:focus-within label{color:var(--cyan)}
+.input-wrap{position:relative}
+.input-wrap .input-icon{
+  position:absolute;left:.95rem;top:50%;transform:translateY(-50%);
+  width:18px;height:18px;color:var(--text3);pointer-events:none;
+  transition:color .18s;
+}
+.form-group input{
+  width:100%;height:54px;border-radius:14px;
+  background:var(--bg3);border:1.5px solid var(--border);color:var(--text);
+  font-size:1rem;padding:.8rem 1rem .8rem 2.75rem;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  transition:border-color .18s,box-shadow .18s,background .18s;
+  -webkit-appearance:none;appearance:none;
+}
+.form-group input::placeholder{color:var(--text3);opacity:.75}
+.form-group input:focus{
+  outline:none;border-color:var(--cyan);
+  box-shadow:0 0 0 3px var(--cyan-dim), 0 0 24px var(--auth-glow);
+  background:var(--bg3);
+}
+.form-group:focus-within .input-icon{color:var(--cyan)}
+/* Campo con contraseña: más cajón para el botón del ojo */
+.form-group input[type="password"]{padding-right:3.1rem}
+.pw-toggle{
+  position:absolute;right:.55rem;top:50%;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border:none;border-radius:11px;
+  background:transparent;color:var(--text3);cursor:pointer;
+  transition:color .15s,background .15s,transform .15s;
+}
+.pw-toggle:hover{color:var(--text);background:var(--bg4)}
+.pw-toggle:active{transform:translateY(-50%) scale(.94)}
+.pw-toggle svg{width:20px;height:20px;transition:transform .2s}
+.pw-toggle .ico-eye-off{display:none}
+.pw-toggle.visible .ico-eye{display:none}
+.pw-toggle.visible .ico-eye-off{display:block}
+
+/* ── Botón de envío ── */
+.auth-submit{
+  position:relative;width:100%;height:54px;margin-top:.25rem;
+  border-radius:14px;font-size:.95rem;font-weight:800;letter-spacing:.06em;
+  background:linear-gradient(120deg,var(--cyan),color-mix(in srgb,var(--cyan) 62%,var(--auth-a)));
+  box-shadow:0 12px 26px var(--auth-glow);
+  overflow:hidden;
+  transition:transform .16s,box-shadow .16s,filter .16s;
+}
+.auth-submit::after{
+  content:"";position:absolute;top:0;left:-70%;width:55%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.28),transparent);
+  transform:skewX(-22deg);animation:btnShine 3.2s ease-in-out infinite;
+}
+.auth-submit:hover{transform:translateY(-2px);box-shadow:0 16px 34px var(--auth-glow);filter:brightness(1.06)}
+.auth-submit:active{transform:translateY(0) scale(.985)}
+.auth-submit:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.auth-submit .auth-submit-spin{
+  width:19px;height:19px;border:2.5px solid color-mix(in srgb,currentColor 60%,transparent);
+  border-top-color:currentColor;border-radius:50%;
+  display:none;animation:spin .7s linear infinite;
+}
+.auth-submit.loading{cursor:default;pointer-events:none;filter:saturate(.85)}
+.auth-submit.loading .auth-submit-spin{display:inline-block}
+.auth-submit.loading::after{animation:none;display:none}
+@keyframes btnShine{
+  0%{left:-70%}55%{left:130%}100%{left:130%}
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Pie ── */
+.auth-footer{
+  display:flex;align-items:center;justify-content:center;gap:.45rem;
+  color:var(--text3);font-size:.78rem;margin-top:1.85rem;letter-spacing:.02em;
+}
+.auth-footer .dot{width:3px;height:3px;border-radius:50%;background:var(--text3);opacity:.6}
+.auth-footer b{color:var(--text2);font-weight:700}
+
+/* ── Móvil ── */
+@media (max-width:480px){
+  .auth-container{padding:.75rem}
+  .auth-card{padding:2.2rem 1.45rem 1.6rem;border-radius:20px}
+  .auth-logo-badge{width:68px;height:68px}
+  .auth-logo-badge img{width:68px;height:68px;border-radius:19px}
+  .auth-logo-badge::before{inset:-8px;border-radius:27px}
+  .auth-logo h1{font-size:1.95rem}
+  .form-group input{height:52px;font-size:16px}   /* evita el zoom automático de iOS */
+}
+
+/* ── Accesibilidad: menos movimiento ── */
+@media (prefers-reduced-motion:reduce){
+  .aurora-blob,.auth-logo-badge::before,.auth-logo-badge img,
+  .auth-submit::after,.auth-card{animation:none !important}
+}

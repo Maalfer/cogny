@@ -6,7 +6,27 @@
 <a href="/pizarra/" class="pz-back" title="Volver a la galería" aria-label="Volver a la galería">
   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
 </a>
-<span class="pz-board-name" id="pz-board-name" title="{{ board.name }}">{{ board.name }}</span>
+{# Titulo editable inline (Notion/Drive style). Viewer no puede editar (sin tabindex). JS en board.js. #}
+<div class="pz-title-wrap{% if can_write %} is-editable{% endif %}" id="pz-title-wrap">
+  <span class="pz-board-name" id="pz-board-name"
+        {% if can_write %}tabindex="0" role="textbox" aria-label="Nombre de la pizarra" title="Clic para renombrar"{% endif %}>{{ board.name }}</span>
+  <input class="pz-board-name-input" id="pz-board-name-input" type="text" maxlength="120"
+         value="{{ board.name }}" autocomplete="off" spellcheck="false"
+         aria-label="Nombre de la pizarra">
+  <span class="pz-title-hint" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+  </span>
+</div>
+{% endblock %}
+
+{% block header_actions %}
+{# Boton de exportar PDF (pizarra -> PNG a alta res -> PDF A4 en servidor). Solo si tiene permisos de escritura. #}
+{% if can_write %}
+<button class="pz-header-btn" id="pz-export-pdf" title="Exportar la pizarra a PDF" aria-label="Exportar a PDF">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7zM13 12.67 17.59 8 19 9.41l-6 6-6-6L9.41 8 13 12.67zM11 3h2v8h-2z"/></svg>
+  <span>Exportar PDF</span>
+</button>
+{% endif %}
 {% endblock %}
 
 {% block extra_head %}

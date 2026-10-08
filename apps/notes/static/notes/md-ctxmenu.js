@@ -19,6 +19,7 @@
   // Opciones específicas cuando el cursor está sobre una línea con embed de
   // imagen (wikilink `![[…]]`, markdown `![alt](path)` o `<img src="…">`).
   const IMAGE_OPTIONS = [
+    { key: 'img_download',      label: 'Descargar imagen',          kind: 'image_op', op: 'download' },
     { key: 'img_delete_full',   label: 'Eliminar imagen',           kind: 'image_op', op: 'delete_full',   danger: true },
     { key: 'img_remove_ref',    label: 'Quitar referencia (sin borrar archivo)', kind: 'image_op', op: 'remove_ref' },
     { sep: true },
@@ -389,6 +390,17 @@
     const lineText = st.doc.line(info.line).text;
     const onlyEmbed = lineText.trim() === info.matched.trim();
 
+    if (op === 'download') {
+      const isData = /^data:[a-z0-9]+\//i.test(info.ref);
+      const path = isData ? info.ref : resolveImagePath(info.ref);
+      const a = document.createElement('a');
+      a.href = isData ? path : '/api/notes/asset?path=' + encodeURIComponent(path);
+      a.download = (path.split('/').pop() || 'imagen').slice(0, 120);
+      if (isData && !/\.[a-z0-9]+$/i.test(a.download)) a.download = 'imagen.' + (info.ref.slice(5, info.ref.indexOf(';')).split('/')[1] || 'png');
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+
     if (op === 'remove_ref') {
       let from = info.from, to = info.to;
       if (onlyEmbed) {
@@ -402,24 +414,43 @@
     }
 
     if (op === 'delete_full') {
-      if (!confirm('¿Eliminar definitivamente la imagen "' + info.ref + '"?\n\nSe borrará el archivo del disco y la referencia en esta nota.')) return;
-      const path = resolveImagePath(info.ref);
-      // Intentamos borrar el archivo en el servidor primero. Si falla,
-      // informamos y NO tocamos el editor.
-      try {
-        const r = await fetch('/api/notes/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok || data.error) {
-          alert('No se pudo borrar el archivo: ' + (data.error || 'error desconocido'));
-          return;
+      // Las imágenes pueden estar incrustadas como data URI (base64) en el
+      // propio markdown — por ejemplo cuando un tercero las pega a través de
+      // un enlace compartido con permisos de escritura, sin que la vista
+      // pública suba el archivo al vault. En ese caso NO hay archivo que
+      // borrar en disco: la imagen es la referencia misma, y eliminarla de la
+      // nota (junto con su base64) ya la borra de verdad. Resolverlo como si
+      // fuera una ruta mandaría el base64 entero a `/api/notes/delete`, donde
+      // `safe_path` lo dividiría por los `/` del base64 y fallaría con
+      // «Ruta demasiado profunda».
+      const isDataUri = /^data:[a-z0-9]+\//i.test(info.ref);
+      if (isDataUri) {
+        if (!confirm('La imagen está incrustada en la nota (base64) y no es un archivo del vault.\nSe eliminará la referencia y con ella la imagen.')) return;
+      } else {
+        if (!confirm('¿Eliminar definitivamente la imagen "' + info.ref + '"?\n\nSe borrará el archivo del disco y la referencia en esta nota.')) return;
+        const path = resolveImagePath(info.ref);
+        // Un data URI camuflado no debería llegar hasta aquí, pero si lo hace
+        // no debe tratarse como ruta jamás.
+        const isPathDataUri = /^data:[a-z0-9]+\//i.test(path || '');
+        if (path && !isPathDataUri) {
+          // Intentamos borrar el archivo en el servidor primero. Si falla,
+          // informamos y NO tocamos el editor.
+          try {
+            const r = await fetch('/api/notes/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || data.error) {
+              alert('No se pudo borrar el archivo: ' + (data.error || 'error desconocido'));
+              return;
+            }
+          } catch (e) {
+            alert('Error de red al borrar el archivo: ' + e.message);
+            return;
+          }
         }
-      } catch (e) {
-        alert('Error de red al borrar el archivo: ' + e.message);
-        return;
       }
       // Ahora sí, quitar la referencia del editor.
       let from = info.from, to = info.to;

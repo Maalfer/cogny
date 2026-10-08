@@ -14,6 +14,23 @@
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
 <link rel="stylesheet" href="/static/vendor/highlight-github-dark.min.css?v={{ ASSET_VERSION }}">
 <link rel="stylesheet" href="/static/notes/notes.css?v={{ ASSET_VERSION }}">
+<style>
+  /* Inline mínimo: layout/visibilidad. NO fija color — el tema pinta la barra. */
+  @media (max-width:760px){
+    #btn-side-handle{
+      display:flex !important;align-items:center !important;justify-content:center !important;
+      position:fixed !important;
+      left:0 !important;top:calc(50% - 32px) !important;
+      width:16px !important;height:64px !important;
+      cursor:pointer !important;
+      border:none !important;
+      z-index:2147483647 !important;
+    }
+    #btn-side-handle.vault-side-handle.open{left:290px !important}
+    #btn-side-handle svg{display:block !important;pointer-events:none !important}
+    #btn-side-handle .vault-side-handle-chev{width:13px !important;height:13px !important;opacity:.9 !important}
+  }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -55,16 +72,8 @@
       <button id="btn-export" style="display:none"></button>
       <button id="btn-import" style="display:none"></button>
     </div>
-    <div class="vault-side-top">
-      <button id="btn-new-note" title="Nueva nota">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm1 16h-2v-2h-2v2H9v-2H7v-2h2v-2h2v2h2v2h2v2z"/></svg>
-        Nota
-      </button>
-      <button id="btn-new-folder" title="Nueva carpeta">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zm6 11h-3v3h-2v-3H8v-2h3v-3h2v3h3v2z"/></svg>
-        Carpeta
-      </button>
-    </div>
+    <!-- Botones "Nota"/"Carpeta" eliminados (2026-09-07): la creación se hace
+         desde el menú contextual del árbol (clic derecho). -->
     <div class="vault-search hidden" id="vault-search">
       <input type="search" id="vault-search-input" placeholder="Buscar notas..." autocomplete="off" aria-label="Buscar notas en la bóveda">
       <button type="button" id="vault-search-clear" class="vault-search-clear" aria-label="Borrar búsqueda" tabindex="-1">
@@ -73,6 +82,18 @@
     </div>
     <div class="vault-tree" id="vault-tree"></div>
   </aside>
+
+  <div class="vault-side-backdrop" id="vault-side-backdrop" aria-hidden="true"></div>
+
+  <button class="vault-side-handle" id="btn-side-handle" type="button"
+          title="Mostrar / ocultar lista de notas"
+          aria-label="Mostrar u ocultar la lista de notas"
+          aria-controls="vault-side" aria-expanded="false">
+    <svg class="vault-side-handle-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 5l5 5-5 5"/>
+      <path d="M15 5l5 5-5 5"/>
+    </svg>
+  </button>
 
   <div class="vault-resizer" id="rz-side" title="Arrastra para ajustar el ancho de la lista"></div>
 
@@ -154,9 +175,6 @@
           <button data-fmt="calloutfold" title="Callout plegable (se contrae al hacer clic)">▸ Plegable</button>
         </div>
       </div>
-      <button class="vault-tool-btn" id="btn-insert-img" title="Insertar imagen (o pega/arrastra en el editor)" aria-label="Insertar imagen">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg>
-      </button>
       <button class="vault-tool-btn" id="btn-nav-back" title="Nota anterior" aria-label="Ir a la nota anterior" disabled>
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
       </button>
@@ -325,7 +343,10 @@
 <div class="modal-back" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
   <div class="modal">
     <h3 id="share-modal-title">Compartir nota</h3>
-    <p>Cualquiera con el enlace podrá ver esta nota en modo lectura, sin necesidad de cuenta.</p>
+    <!-- El texto lo reescribe `refreshShareBlurb()` según el interruptor de
+         edición: leer y escribir no son la misma promesa y el modal no puede
+         seguir prometiendo "modo lectura" con la escritura encendida. -->
+    <p id="share-blurb">Cualquiera con el enlace podrá ver esta nota en modo lectura, sin necesidad de cuenta.</p>
     <div id="share-loading" style="text-align:center;padding:1.6rem 0">
       <div class="spinner" style="width:28px;height:28px;border-width:3px;margin:0 auto"></div>
     </div>
@@ -342,30 +363,16 @@
       <div class="share-pw-field" id="share-pw-field">
         <input type="text" class="vault-input-field" id="share-pw-input" placeholder="Contraseña" autocomplete="off" maxlength="120">
       </div>
+      <button type="button" class="share-pw-toggle" id="share-write-toggle-row">
+        <span>Permitir editar<small>Quien tenga el enlace podrá escribir en la nota, sin cuenta</small></span>
+        <span class="share-switch" id="share-write-switch" role="switch" aria-checked="false"></span>
+      </button>
+      <div class="share-warn" id="share-write-warn">El enlace es la única llave: quien lo reciba (o a quien se lo reenvíen) podrá cambiar el contenido de la nota. Combínalo con una contraseña si va a circular. En modo escritura el enlace también da acceso por HTTP (JSON) al contenido y a los adjuntos de la nota, sin cuenta: pásalo a una IA si quieres que gestione esta nota por ti.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" id="share-stop" style="margin-right:auto;color:#f87171;display:none">Dejar de compartir</button>
       <button class="btn-cancel" id="share-cancel">Cerrar</button>
       <button class="btn-primary" id="share-save" disabled>Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Token de IA: da a esta nota lectura+escritura por HTTP sin sesión -->
-<div class="modal-back" id="ai-token-modal" role="dialog" aria-modal="true" aria-labelledby="ai-token-modal-title">
-  <div class="modal">
-    <h3 id="ai-token-modal-title">Token para IA</h3>
-    <p>Pásale este enlace a Claude (u otra IA) para que pueda leer y reescribir <b>esta nota</b> — nada más de tu bóveda. Caduca solo en 24&nbsp;horas; puedes generar varios a la vez y revocar cada uno por separado.</p>
-    <div id="ai-token-loading" style="text-align:center;padding:1.6rem 0">
-      <div class="spinner" style="width:28px;height:28px;border-width:3px;margin:0 auto"></div>
-    </div>
-    <div id="ai-token-body" style="display:none">
-      <div id="ai-token-list"></div>
-      <div id="ai-token-empty" class="ai-token-empty" style="display:none">Aún no has generado ningún token para esta nota.</div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="ai-token-cancel">Cerrar</button>
-      <button class="btn-primary" id="ai-token-create">Generar token nuevo</button>
     </div>
   </div>
 </div>

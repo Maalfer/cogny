@@ -1433,6 +1433,195 @@
   window.addEventListener('blur', hideContextMenu);
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
 
+/* ════════════ Título editable inline ════════════ */
+const titleWrap = document.getElementById('pz-title-wrap');
+const titleSpan = document.getElementById('pz-board-name');
+const titleInput = document.getElementById('pz-board-name-input');
+let editingTitle = false;
+
+// El <input> se superpone al <span> cuando `.editing` esta activo. Para que
+// el layout no salte al editar, el input se dimensiona por `size` (en chars)
+// y se le da la misma `font` y `letter-spacing` que al span via CSS.
+function syncTitleInputWidth() {
+  if (!titleInput) return;
+  titleInput.size = Math.max((titleInput.value || '').length + 1, 4);
+}
+
+async function commitTitleEdit() {
+  if (!editingTitle) return;
+  editingTitle = false;
+  titleWrap && titleWrap.classList.remove('editing');
+  const next = (titleInput.value || '').trim();
+  const prev = BOOT.name || '';
+  if (next === prev) {
+    titleSpan.textContent = prev || 'Sin título';
+    return;
+  }
+  if (!next) {
+    // El backend rechaza nombre vacio; dejamos el nombre anterior y avisamos
+    // por el flashStatus (no por un alert — el rename es silencioso siempre).
+    titleSpan.textContent = prev || 'Sin título';
+    titleInput.value = prev;
+    flashStatus('El nombre no puede estar vacío', false);
+    return;
+  }
+  // El servidor es la fuente de verdad: aplicamos lo que devuelva
+  // (`name`) en vez del texto que escribió el usuario (trim + longitud).
+  try {
+    const res = await fetch('/api/pizarra/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: BOOT.id, name: next }),
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      BOOT.name = data.name;
+      titleSpan.textContent = data.name;
+      document.title = data.name + ' · Pizarra';
+      flashStatus('Nombre guardado', true);
+    } else {
+      titleSpan.textContent = prev;
+      titleInput.value = prev;
+      flashStatus((data && data.error) || 'Error al guardar', false);
+    }
+  } catch (_e) {
+    titleSpan.textContent = prev;
+    titleInput.value = prev;
+    flashStatus('Error al guardar', false);
+  }
+}
+
+function startTitleEdit() {
+  if (!CAN_WRITE || !titleSpan || !titleInput) return;
+  if (editingTitle) return;
+  editingTitle = true;
+  titleInput.value = BOOT.name || '';
+  syncTitleInputWidth();
+  titleWrap && titleWrap.classList.add('editing');
+  // Hay que esperar al siguiente tick: el <input> pasa de display:none a
+  // block en el mismo frame, y focus() antes de ese reflow falla en
+  // algunos navegadores.
+  setTimeout(() => { try { titleInput.focus(); titleInput.select(); } catch (_) {} }, 0);
+}
+
+if (titleSpan && CAN_WRITE) {
+  titleSpan.addEventListener('click', startTitleEdit);
+  titleSpan.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startTitleEdit(); }
+  });
+}
+if (titleInput) {
+  titleInput.addEventListener('focus', syncTitleInputWidth);
+  titleInput.addEventListener('input', syncTitleInputWidth);
+  titleInput.addEventListener('blur', commitTitleEdit);
+  titleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); titleInput.blur(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // Cancela sin guardar: restauramos el valor del BOOT y salimos.
+      titleInput.value = BOOT.name || '';
+      titleInput.blur();
+    }
+  });
+}
+
+
+/* ════════════ Export PDF ════════════ */
+const exportBtn = document.getElementById('pz-export-pdf');
+
+// Pinta el lienzo en un canvas off-screen a 2×DPR, ajustando al bbox de los
+// elementos (más padding). Es el mismo cálculo que `saveThumb` pero sin el
+// escalado a 480×360: aquí queremos resolución nativa para que el PDF salga
+// nítido al imprimir a A4. Reutilizamos `drawElementOn` para no duplicar
+// código de render.
+function renderBoardOffscreen() {
+  const dpr = 2;
+  const PAD = 60;
+  const boxes = elements.map(bbox);
+  let cw, ch, ox, oy;
+  if (boxes.length) {
+    const minX = Math.min(...boxes.map((b) => b.x)) - PAD;
+    const minY = Math.min(...boxes.map((b) => b.y)) - PAD;
+    const maxX = Math.max(...boxes.map((b) => b.x + b.w)) + PAD;
+    const maxY = Math.max(...boxes.map((b) => b.y + b.h)) + PAD;
+    cw = Math.max(1, maxX - minX);
+    ch = Math.max(1, maxY - minY);
+    ox = -minX; oy = -minY;
+  } else {
+    // Pizarra vacía: un lienzo neutro. Mejor que un PDF con un solo
+    // píxel, que algunos visores renderizan como página en blanco
+    // absoluto y confunden al usuario.
+    cw = 1200; ch = 800; ox = 0; oy = 0;
+  }
+  const off = document.createElement('canvas');
+  off.width = Math.round(cw * dpr);
+  off.height = Math.round(ch * dpr);
+  const octx = off.getContext('2d');
+  octx.fillStyle = bgColor;
+  octx.fillRect(0, 0, off.width, off.height);
+  octx.scale(dpr, dpr);
+  octx.translate(ox, oy);
+  elements.forEach((el) => {
+    octx.save();
+    octx.strokeStyle = el.color || '#e9edf5';
+    octx.fillStyle = el.color || '#e9edf5';
+    octx.lineWidth = (el.strokeWidth || 2);
+    octx.lineCap = 'round'; octx.lineJoin = 'round';
+    drawElementOn(octx, el);
+    octx.restore();
+  });
+  return { dataUrl: off.toDataURL('image/png'), landscape: cw > ch * 1.4 };
+}
+
+async function exportBoardPDF() {
+  if (!exportBtn || !CAN_WRITE) return;
+  exportBtn.disabled = true;
+  const labelEl = exportBtn.querySelector('span');
+  const oldLabel = labelEl ? labelEl.textContent : '';
+  if (labelEl) labelEl.textContent = 'Generando…';
+  flashStatus('Generando PDF…', true);
+  try {
+    // 1) Si hay un guardado de escena/miniatura pendiente, lo forzamos
+    //    AHORA: si no, el PDF se exporta con el estado anterior al último
+    //    trazo (mismo motivo que el handler de "Volver" más abajo).
+    if (saveTimer || thumbTimer) {
+      clearTimeout(saveTimer); saveTimer = null;
+      clearTimeout(thumbTimer); thumbTimer = null;
+      await Promise.all([saveNow(), saveThumb()]);
+    }
+    // 2) Render off-screen.
+    const { dataUrl, landscape } = renderBoardOffscreen();
+    // 3) Mandar al backend: el servidor decide orientación final (también
+    //    mira la suya) y maquetado A4 con cabecera.
+    const res = await fetch('/api/pizarra/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: BOOT.id, dataUrl, landscape }),
+    });
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (_) {}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = ((BOOT.name || 'pizarra').replace(/[\\\/:\.]+$/, '')) + '.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    flashStatus('PDF generado', true);
+  } catch (e) {
+    flashStatus((e && e.message) || 'Error al exportar', false);
+  } finally {
+    exportBtn.disabled = false;
+    if (labelEl) labelEl.textContent = oldLabel;
+  }
+}
+
+if (exportBtn) exportBtn.addEventListener('click', exportBoardPDF);
+
+
   /* ════════════ Arranque ════════════ */
   buildIconTabs();
   buildBgMenu();

@@ -21,12 +21,9 @@ class PublicVault(models.Model):
 
     enabled = models.BooleanField(default=False)
 
-    # Un dominio por línea. Admite comodín inicial: `*.elrincondelhacker.es`
-    # (cubre el dominio y todos sus subdominios). Vacío = sin filtro.
-    allowed_domains = models.TextField(blank=True, default="")
-
-    # Días que dura el permiso una vez concedido, para que quien ya entró pueda
-    # navegar, volver por un marcador o recargar sin traer el dominio de origen.
+    # Días que dura el permiso una vez concedido (al canjear un enlace
+    # maestro), para que quien ya entró pueda navegar, volver por un
+    # marcador o recargar sin repetir el enlace.
     grant_days = models.PositiveSmallIntegerField(default=30)
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -47,39 +44,9 @@ class PublicVault(models.Model):
         self.pk = self.SINGLETON_PK
         super().save(*args, **kwargs)
 
-    def domain_list(self) -> list:
-        """Los dominios configurados, ya normalizados y sin duplicados."""
-        seen, out = set(), []
-        for raw in (self.allowed_domains or "").splitlines():
-            pattern = normalize_domain(raw)
-            if pattern and pattern not in seen:
-                seen.add(pattern)
-                out.append(pattern)
-        return out
-
-
-def normalize_domain(raw: str) -> str:
-    """Limpia lo que escribe el usuario: `https://Foo.ES/algo` → `foo.es`.
-
-    Se aceptan tal cual la URL entera, el host con puerto o el patrón con
-    comodín, porque cualquiera de las tres cosas es lo que uno copia y pega.
-    """
-    value = (raw or "").strip().lower()
-    if not value or value.startswith("#"):
-        return ""
-    value = value.split("//")[-1]        # quita el esquema
-    value = value.split("/")[0]          # quita la ruta
-    value = value.split("?")[0].split("#")[0]
-    value = value.rsplit("@", 1)[-1]     # user:pass@host
-    # El puerto sobra: el navegador manda el Referer con puerto sólo si no es
-    # el estándar, y el filtro es por dominio, no por puerto.
-    if value.count(":") == 1:
-        value = value.split(":")[0]
-    return value.strip(". ")
-
 
 class MasterLink(models.Model):
-    """Enlace maestro: entra desde cualquier sitio, sin filtro de dominio.
+    """Enlace maestro: única puerta de entrada a la bóveda pública.
 
     El token es un UUID4 justamente para que no se pueda adivinar: es la única
     barrera que tiene este enlace, así que se manda a dedo y se revoca en cuanto

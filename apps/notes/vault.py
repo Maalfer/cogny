@@ -3,22 +3,15 @@
 Las notas no están en la BD, son ficheros `.md` bajo `settings.VAULT_ROOT`. Este
 módulo concentra las reglas de ese sistema de ficheros —validación de rutas,
 orden manual de carpetas, escritura atómica, import/export, optimización de
-imágenes— para que las dos capas HTTP que lo usan compartan una sola
-implementación: la web con sesión (`apps.notes.views`) y la API con clave de
-API (`apps.api.views`).
-
-Antes esto vivía dentro de `apps.notes.views` y la API importaba sus funciones
-privadas (`nv._safe`, `nv._rel_of`, `nv.shutil`…). Funcionaba, pero significaba
-que la regla de seguridad de rutas se cruzaba a través del guion bajo de otro
-módulo, y que para reutilizar una operación había que llamar a una *vista* ya
-decorada con `@login_required`.
+imágenes— separadas de la capa HTTP (`apps.notes.views`) para que no haya que
+llamar a una *vista* ya decorada con `@login_required` sólo para reutilizar
+una operación.
 
 Nada de aquí conoce `HttpRequest` ni devuelve respuestas: se comunica con
 valores de Python y, cuando algo va mal de una forma que el usuario debe leer,
 levanta `VaultError` con el mensaje ya redactado.
 """
 import fcntl
-import filecmp
 import io
 import json
 import logging
@@ -33,7 +26,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import transaction
 
-from .models import NoteToken, SharedNote
+from .models import SharedNote
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +46,7 @@ class VaultError(ValueError):
 # ── Límites ──────────────────────────────────────────────────────────────────
 
 # Tope por nota, en BYTES (no en caracteres: con acentos y emojis una nota de
-# 5M de caracteres ocupa el doble en disco). Compartido con la API v1.
+# 5M de caracteres ocupa el doble en disco).
 MAX_NOTE_BYTES = 5_000_000
 
 MAX_PATH_DEPTH = 20
@@ -86,9 +79,8 @@ _ATTACHMENT_OWNERS_LOCK = ".owners.lock"
 # `sanitize_name` no filtra la extensión (cualquier editor puede subir un
 # .html/.js) y `save_upload` guarda tal cual lo que Pillow no reconoce como
 # imagen, así que aquí es donde se decide qué se sirve para renderizar en el
-# navegador y qué se fuerza a descargar — compartido por las dos vistas que
-# devuelven un adjunto (`apps.notes.views.asset` y `apps.api.views.file_content`)
-# para que no puedan volver a divergir. Sólo las imágenes rasterizadas y el
+# navegador y qué se fuerza a descargar — lo decide `apps.notes.views.asset`,
+# la única vista que devuelve un adjunto. Sólo las imágenes rasterizadas y el
 # PDF son inertes al navegarlos directamente; el Content-Type se fija a mano
 # en vez de fiarse de `mimetypes.guess_type`, para que un adjunto no pueda
 # hacerse pasar por otra cosa.
@@ -264,13 +256,20 @@ def remove_from_order(directory: Path, name: str) -> None:
         write_order(directory, [n for n in order if n != name])
 
 
-# ── Notas privadas (invisibles desde /conocimiento) ──────────────────────────
+# ── Notas y carpetas privadas (invisibles desde /conocimiento) ───────────────
 # A diferencia del orden (que es por carpeta), la privacidad es una propiedad
 # de la nota que no depende de en qué carpeta esté en cada momento: un único
 # fichero oculto en la RAÍZ de la bóveda, con la lista de rutas marcadas,
 # evita reescribir un `.private` por carpeta cada vez que la nota se mueve.
 # Sólo afecta a la bóveda pública (`apps.knowledge`); dentro de Cogny con
 # sesión la nota se ve exactamente igual que cualquier otra.
+#
+# La lista mezcla notas y CARPETAS, y la marca de una carpeta se HEREDA: todo
+# lo que cuelga de ella queda privado sin escribir una ruta por nota (si no,
+# crear una nota dentro de una carpeta ya marcada la publicaría sin querer, y
+# mover mil notas obligaría a reescribir mil entradas). Por eso la marca
+# propia y la heredada se guardan por separado: quitar la de la carpeta
+# devuelve a cada nota su propio estado anterior en vez de publicarlas todas.
 
 PRIVATE_FILE = ".private.json"
 # Bloqueo dedicado para el read-modify-write de `.private.json`: a diferencia
@@ -305,8 +304,18 @@ def write_private(base: Path, paths: set) -> None:
         pass
 
 
+def marked_private(private_paths: set, rel_path: str) -> bool:
+    """¿`rel_path` está oculto por su propia marca o por la de una carpeta que
+    lo contiene? Trabaja sobre un set ya leído para poder preguntarlo muchas
+    veces (árbol, búsqueda) sin releer `.private.json` en cada elemento.
+    """
+    if rel_path in private_paths:
+        return True
+    return any(rel_path.startswith(p + "/") for p in private_paths)
+
+
 def is_private(base: Path, rel_path: str) -> bool:
-    return rel_path in read_private(base)
+    return marked_private(read_private(base), rel_path)
 
 
 def _mutate_private(base: Path, mutate) -> None:
@@ -329,6 +338,13 @@ def _mutate_private(base: Path, mutate) -> None:
 
 
 def set_private(base: Path, rel_path: str, private: bool) -> None:
+    """Marca (o desmarca) una nota o una carpeta entera.
+
+    Al desmarcar una carpeta NO se tocan las marcas de lo que hay dentro: una
+    nota que ya era privada por su cuenta antes de marcar la carpeta lo sigue
+    siendo después, que es justo lo que espera quien marcó la carpeta "un
+    rato" para esconder una rama entera.
+    """
     def mutate(paths):
         before = len(paths)
         if private:
@@ -345,7 +361,7 @@ def rename_private(base: Path, old_rel: str, new_rel: str, is_dir: bool) -> None
     Sólo se marcan notas sueltas, pero una nota privada puede vivir dentro de
     una carpeta que se renombra o se mueve: hay que reescribir también el
     prefijo de cualquier ruta marcada que cuelgue de ella (mismo criterio que
-    `move_shares` usa para `SharedNote`/`NoteToken`).
+    `move_shares` usa para `SharedNote`).
     """
     def mutate(paths):
         changed = False
@@ -375,52 +391,79 @@ def drop_private(base: Path, rel_path: str, is_dir: bool) -> None:
     _mutate_private(base, mutate)
 
 
-# ── Enlaces públicos y tokens de IA ──────────────────────────────────────────
+# ── Enlaces públicos ─────────────────────────────────────────────────────────
 
 def move_shares(old_rel: str, new_rel: str, is_dir: bool) -> None:
-    """Reapunta los enlaces públicos y los tokens de IA tras renombrar o mover.
+    """Reapunta los enlaces públicos tras renombrar o mover.
 
-    El token vive en la BD asociado a una `path` del vault, así que mover el
+    El enlace vive en la BD asociado a una `path` del vault, así que mover el
     fichero sin tocar la fila deja el enlace apuntando a la nada (404 silencioso
     para quien ya lo tuviera). Con una carpeta hay que reescribir además el
-    prefijo de todas las notas compartidas / tokens que cuelgan de ella.
-    Cubre tanto `SharedNote` (enlace público de sólo lectura) como
-    `NoteToken` (token de lectura+escritura para una IA): las dos son
-    metadata "atada a una ruta" con exactamente el mismo problema.
+    prefijo de todas las notas compartidas que cuelgan de ella.
     """
     # En transacción: mover una carpeta puede tocar N filas y quedarse a medias
     # dejaría unos enlaces apuntando al sitio nuevo y otros al viejo.
     with transaction.atomic():
         SharedNote.objects.filter(path=old_rel).update(path=new_rel)
-        NoteToken.objects.filter(path=old_rel).update(path=new_rel)
         if not is_dir:
             return
         old_prefix = old_rel + "/"
         for share in SharedNote.objects.filter(path__startswith=old_prefix):
             share.path = new_rel + "/" + share.path[len(old_prefix):]
             share.save(update_fields=["path", "updated_at"])
-        for tok in NoteToken.objects.filter(path__startswith=old_prefix):
-            tok.path = new_rel + "/" + tok.path[len(old_prefix):]
-            tok.save(update_fields=["path"])
+
+
+def rewrite_attachment_owners(base: Path, old_rel: str, new_rel: str, is_dir: bool) -> None:
+    """Reapunta `Adjuntos/.owners.json` tras renombrar o mover `old_rel`.
+
+    Sin esto, una nota renombrada deja de ser la "dueña" registrada de sus
+    propias imágenes (ver `attachment_owner`): el enlace público compartido
+    sigue funcionando, pero cada `![[...]]` se pinta como "no disponible en
+    la vista pública" aunque el archivo siga ahí tal cual y sea la misma
+    nota — sólo cambió de nombre. Mismo criterio de prefijo que
+    `move_shares`/`rename_private` para carpetas: toda nota que cuelgue de
+    `old_rel/` se reapunta también. Mismo candado que `_record_attachment_owner`
+    para no pisarse con una subida concurrente.
+    """
+    attachments_dir = base / ATTACHMENTS_DIR
+    if not attachments_dir.is_dir():
+        return
+    lock_fp = open(attachments_dir / _ATTACHMENT_OWNERS_LOCK, "a")
+    try:
+        fcntl.flock(lock_fp, fcntl.LOCK_EX)
+        owners = _read_attachment_owners(attachments_dir)
+        changed = False
+        prefix = old_rel + "/"
+        for filename, note_path in list(owners.items()):
+            if note_path == old_rel:
+                owners[filename] = new_rel
+                changed = True
+            elif is_dir and note_path.startswith(prefix):
+                owners[filename] = new_rel + "/" + note_path[len(prefix):]
+                changed = True
+        if changed:
+            write_text_atomic(attachments_dir / _ATTACHMENT_OWNERS_FILE, json.dumps(owners))
+    finally:
+        fcntl.flock(lock_fp, fcntl.LOCK_UN)
+        lock_fp.close()
 
 
 def drop_shares(rel_path: str, is_dir: bool) -> None:
-    """Revoca los enlaces públicos y los tokens de IA de lo que se acaba de borrar.
+    """Revoca los enlaces públicos de lo que se acaba de borrar.
 
-    Sin esto quedarían tokens vivos apuntando a notas que ya no existen —o
+    Sin esto quedarían enlaces vivos apuntando a notas que ya no existen —o
     peor, si más tarde se crea una nota nueva con la misma ruta, apuntando
-    sin querer a un contenido totalmente distinto del que tenía el token.
+    sin querer a un contenido totalmente distinto del que tenía el enlace.
     """
     SharedNote.objects.filter(path=rel_path).delete()
-    NoteToken.objects.filter(path=rel_path).delete()
     if is_dir:
         SharedNote.objects.filter(path__startswith=rel_path + "/").delete()
-        NoteToken.objects.filter(path__startswith=rel_path + "/").delete()
 
 
 # ── Árbol ────────────────────────────────────────────────────────────────────
 
-def build_tree(base: Path, directory: Path, private_paths: set = None) -> list:
+def build_tree(base: Path, directory: Path, private_paths: set = None,
+               inherited_private: bool = False) -> list:
     # `private_paths` se calcula una sola vez (en la llamada de más arriba) y
     # se propaga en la recursión: evita releer `.private.json` una vez por
     # carpeta en bóvedas con muchas subcarpetas.
@@ -444,25 +487,34 @@ def build_tree(base: Path, directory: Path, private_paths: set = None) -> list:
             mtime = int(entry.stat().st_mtime) if not is_dir else None
         except OSError:
             continue
+        # `private` es la marca PROPIA (la que se pone y se quita desde el
+        # menú) y `private_inherited` la que viene de una carpeta de arriba:
+        # el frontend las necesita separadas para no ofrecer "Hacer pública"
+        # en una nota que seguiría oculta por su carpeta.
+        rel = rel_of(base, entry)
+        own_private = rel in private_paths
         if is_dir:
             items.append({
                 "type": "folder", "name": entry.name,
-                "path": rel_of(base, entry),
-                "children": build_tree(base, entry, private_paths),
+                "path": rel,
+                "private": own_private,
+                "private_inherited": inherited_private,
+                "children": build_tree(base, entry, private_paths,
+                                       inherited_private or own_private),
             })
         elif entry.suffix.lower() == ".md":
-            rel = rel_of(base, entry)
             items.append({
                 "type": "note", "name": entry.stem,
                 "path": rel,
                 "updated": mtime,
-                "private": rel in private_paths,
+                "private": own_private,
+                "private_inherited": inherited_private,
             })
         else:
             items.append({
                 "type": "file", "name": entry.name,
                 "ext": entry.suffix.lower().lstrip("."),
-                "path": rel_of(base, entry),
+                "path": rel,
                 "updated": mtime,
             })
     return items
@@ -490,13 +542,15 @@ def search_notes(base: Path, terms: list, limit: int, snippet_before: int, snipp
     """Notas que contienen TODOS los términos. Devuelve `(path, texto, idx)`.
 
     El índice es el de la primera aparición del primer término: quien llama
-    decide con qué margen recorta el fragmento que enseña. `exclude` (rutas
-    relativas) se descarta ANTES de contar para el `limit` — si no, una nota
-    privada que encajase se comería un hueco del cupo de resultados públicos.
+    decide con qué margen recorta el fragmento que enseña. `exclude` son rutas
+    relativas de notas O de carpetas (en cuyo caso cae todo lo que cuelga de
+    ellas, ver `marked_private`) y se descarta ANTES de contar para el `limit`
+    — si no, una nota privada que encajase se comería un hueco del cupo de
+    resultados públicos.
     """
     found = 0
     for f in iter_notes(base):
-        if exclude and rel_of(base, f) in exclude:
+        if exclude and marked_private(exclude, rel_of(base, f)):
             continue
         try:
             text = f.read_text(encoding="utf-8")
@@ -765,6 +819,22 @@ def export_zip(base: Path):
     return tmp, size
 
 
+def export_files_zip(files):
+    """Comprime una lista concreta de archivos. `files` es un iterable de
+    `(Path, arcname)`. Mismo patrón que `export_zip` (fichero temporal, no
+    `BytesIO`) y mismo motivo: no duplicar el contenido en RAM — aquí importa
+    menos por el tamaño (son imágenes, no la bóveda entera) pero mantiene un
+    único sitio con el patrón correcto de `TemporaryFile` + `ZipFile`.
+    """
+    tmp = tempfile.TemporaryFile()
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path, arcname in files:
+            zf.write(path, arcname=arcname)
+    size = tmp.tell()
+    tmp.seek(0)
+    return tmp, size
+
+
 def import_zip(base: Path, fileobj, mode: str = "merge") -> None:
     """Extrae un ZIP de bóveda. `mode="replace"` sustituye lo que hubiera.
 
@@ -867,166 +937,15 @@ def _extract(zf, targets) -> None:
             fp.write(zf.read(info))
 
 
-# ── Copiar entre bóvedas (privada ↔ comunitaria) ─────────────────────────────
-# El dueño puede duplicar una nota o carpeta de una bóveda a la otra. Son dos
-# `VAULT_ROOT` distintos en disco (ver `apps.community.views.community_root`),
-# así que copiar es literalmente copiar ficheros — la parte no trivial es que
-# los adjuntos de una nota (`![[nombre]]`) aterrizan SIEMPRE en `Adjuntos/` en
-# la RAÍZ de la bóveda (ver `save_upload`), no junto a la nota, así que copiar
-# sólo la nota (o sólo la carpeta) los dejaría atrás. Por eso, tras copiar,
-# `copy_across` rastrea esas referencias y trae también los ficheros que
-# falten al `Adjuntos/` de destino.
-
-_EMBED_RE = re.compile(r'!\[\[([^\]\n]+?)\]\]')
-
-
-def _embed_ref(raw: str):
-    """`(nombre, resto)` de un embed `![[nombre|display]]` / `![[nombre#Sección]]`.
-
-    `resto` es todo lo que vaya desde el primer `|` o `#` (incluidos), tal
-    cual estaba escrito — así un renombrado por colisión sólo toca el nombre
-    y no se arriesga a perder o deformar el `|display`/`#Sección` original.
-    """
-    cut = len(raw)
-    for ch in ("|", "#"):
-        i = raw.find(ch)
-        if i >= 0:
-            cut = min(cut, i)
-    return raw[:cut].strip(), raw[cut:]
-
-
-def _embed_names(content: str) -> list:
-    """Nombres de adjuntos que una nota referencia con `![[nombre]]`."""
-    names = []
-    for m in _EMBED_RE.finditer(content):
-        name, _ = _embed_ref(m.group(1))
-        if name and not name.lower().endswith(".md"):
-            names.append(name)
-    return names
-
-
-def _iter_files_named(base: Path, name: str):
-    """Ficheros de `base` (recursivo) cuyo nombre es EXACTAMENTE `name`.
-
-    A propósito no se le pasa `name` a `rglob()` como patrón: `name` sale de
-    un embed `![[nombre]]` escrito por quien sea que tenga permiso de
-    escritura en la bóveda (el dueño en la privada, cualquiera con enlace en
-    la comunitaria), y `rglob` trata `*`/`?`/`[...]` como comodines. Un embed
-    `![[*]]` con `rglob(name)` casaría con CUALQUIER fichero del árbol y
-    `copy_across` acabaría copiando uno cualquiera —ajeno a la nota— a la
-    otra bóveda. `rglob("*")` es un patrón fijo (no depende de `name`); el
-    filtrado por nombre es una comparación de igualdad, no un patrón.
-    """
-    for p in base.rglob("*"):
-        if p.is_file() and p.name == name:
-            yield p
-
-
-def _find_by_basename(base: Path, name: str):
-    """Busca un fichero por nombre exacto en toda la bóveda.
-
-    Primero en `Adjuntos/` (donde caen todas las subidas desde la web: el
-    caso común, y barato); si no está ahí, en el resto del árbol (bóvedas
-    importadas pueden tener imágenes en cualquier carpeta) — mismo criterio
-    de resolución "por nombre, en toda la bóveda" que usa el frontend
-    (`findFileByName` en `notes.js`) al renderizar `![[nombre]]`.
-    """
-    candidate = base / ATTACHMENTS_DIR / name
-    if candidate.is_file():
-        return candidate
-    return next(_iter_files_named(base, name), None)
-
-
-def _same_file(a: Path, b: Path) -> bool:
-    """`True` si `a` y `b` tienen el mismo contenido byte a byte.
-
-    El tamaño es sólo un descarte barato: dos adjuntos DISTINTOS de bóvedas
-    distintas pueden coincidir en bytes por azar (sobre todo con nombres
-    genéricos tipo "captura.png"), y compararlos sólo por tamaño daría por
-    buena una imagen que no es la que la nota necesita.
-    """
-    return (a.stat().st_size == b.stat().st_size
-            and filecmp.cmp(a, b, shallow=False))
-
-
-def _bring_attachments(src_base: Path, dst_base: Path, copied_root: Path, md_files: list) -> None:
-    """Trae a `dst_base/Adjuntos/` los adjuntos que referencien `md_files`
-    y que no hayan viajado ya dentro de `copied_root` (p.ej. una imagen que
-    vivía en una subcarpeta propia de la nota/carpeta copiada).
-
-    Si en destino ya hay un fichero con ese nombre pero de OTRO contenido
-    (colisión real entre las dos bóvedas — p.ej. las dos tienen una
-    "captura.png" distinta), se copia con un nombre libre (mismo criterio que
-    `free_path` usa en todas partes) y se reescribe la referencia en la nota
-    copiada para que siga apuntando a la imagen correcta.
-    """
-    for md in md_files:
-        try:
-            content = md.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        renames = {}
-        for name in _embed_names(content):
-            if (copied_root / name).is_file() or any(
-                    True for _ in _iter_files_named(copied_root, name)):
-                continue  # ya vino dentro de lo copiado
-            src_file = _find_by_basename(src_base, name)
-            if not src_file:
-                continue  # referencia ya rota en origen: se deja tal cual
-            dst_attach = dst_base / ATTACHMENTS_DIR
-            dst_attach.mkdir(parents=True, exist_ok=True)
-            target = dst_attach / name
-            if target.exists():
-                if _same_file(target, src_file):
-                    continue  # ya hay uno igual de verdad: no duplicar
-                target = free_path(dst_attach, target.stem, target.suffix)
-                renames[name] = target.name
-            shutil.copy2(src_file, target)
-        if renames:
-            def repl(m):
-                name, rest = _embed_ref(m.group(1))
-                return "![[" + renames.get(name, name) + rest + "]]"
-            write_text_atomic(md, _EMBED_RE.sub(repl, content))
-
-
 def reject_attachments_root(base: Path, target: Path, verb: str) -> None:
     """Corta operaciones sobre la carpeta `Adjuntos/` de la RAÍZ de la bóveda.
 
     Es la única carpeta con ruta fija que el backend impone (`save_upload`
     sube ahí siempre): moverla, copiarla o renombrarla dejaría subidas
     futuras creando una "Adjuntos" nueva y vacía en la raíz, duplicando la
-    carpeta y rompiendo la resolución de adjuntos existentes. Un único punto
-    para las tres operaciones (mover en `apps.notes.views`/`apps.community.
-    views`, copiar en `copy_across`) evita que una cuarta llamada futura se
-    olvide de repetir el guardia.
+    carpeta y rompiendo la resolución de adjuntos existentes. Único punto
+    para esa operación en `apps.notes.views` evita que una segunda llamada
+    futura se olvide de repetir el guardia.
     """
     if target == base / ATTACHMENTS_DIR:
         raise VaultError(f"La carpeta de adjuntos no se puede {verb}")
-
-
-def copy_across(src_base: Path, src_rel: str, dst_base: Path) -> str:
-    """Copia una nota o carpeta de `src_base` a la raíz de `dst_base`.
-
-    Nunca sobrescribe nada en destino: un nombre ya usado se resuelve con
-    ' 2', ' 3'… (mismo criterio que `free_path` usa para notas nuevas), así
-    que esto nunca falla por colisión de nombre — sólo por ruta de origen
-    inválida. Devuelve la ruta relativa (en `dst_base`) de lo copiado.
-    """
-    src = safe_path(src_base, src_rel)
-    if not src.exists() or src == src_base:
-        raise VaultError("No existe", 404)
-    dst_base.mkdir(parents=True, exist_ok=True)
-    if src.is_dir():
-        reject_attachments_root(src_base, src, "copiar")
-        dst = free_path(dst_base, src.name, "")
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(
-            ORDER_FILE, _IMPORT_LOCK_NAME, _ATTACHMENT_OWNERS_FILE, _ATTACHMENT_OWNERS_LOCK))
-        md_files = [p for p in dst.rglob("*.md")]
-    else:
-        if src.suffix.lower() != ".md":
-            raise VaultError("Sólo se pueden copiar notas o carpetas")
-        dst = free_path(dst_base, src.stem, ".md")
-        shutil.copy2(src, dst)
-        md_files = [dst]
-    _bring_attachments(src_base, dst_base, dst, md_files)
-    return rel_of(dst_base, dst)

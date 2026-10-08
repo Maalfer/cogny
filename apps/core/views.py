@@ -1,7 +1,6 @@
 """Vistas core: root (login / redirect al vault), service worker y manifest."""
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import redirect
 
 
 def root(request):

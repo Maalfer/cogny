@@ -65,7 +65,7 @@ class ContentSecurityPolicyMiddleware(MiddlewareMixin):
     ejecute.
 
     Los `<script>` inline propios de la app (el puente plantilla→JS de
-    `base.html`, login, perfil, Swagger) llevan `nonce="{{ csp_nonce }}"` —
+    `base.html`, login, perfil) llevan `nonce="{{ csp_nonce }}"` —
     lo expone `apps.core.context_processors.global_context`. `style-src`
     admite `unsafe-inline` porque KaTeX posiciona las fórmulas con estilos
     inline por elemento; no hay forma razonable de dar nonce a eso.

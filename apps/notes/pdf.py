@@ -551,6 +551,32 @@ def _resolve_chromium() -> str:
 
 CHROMIUM_BIN = _resolve_chromium()
 
+
+def _pdf_workdir() -> str:
+    """Directorio de trabajo del render. Por que no /tmp:
+
+    El user-data-dir que se le pasa a Chromium para que no toque el del
+    usuario necesita escribir ahi su Default/Shared Dictionary/cache/index
+    y la base LevelDB de shared_proto_db/metadata; los MANIFEST-XXXXXX
+    que escribe el LevelDB ocupan varios MB y, sobre todo, requieren
+    reescrituras que fallan con FILE_ERROR_NO_SPACE si el disco se llena.
+    Confirmado en vivo: con /tmp (tmpfs) al 100% el binario termina con
+    SIGTRAP (exit -5) sin escribir el PDF, y el codigo cae en el
+    No se pudo generar el PDF.
+
+    El directorio bajo DATA_ROOT es persistente, escribible por www-data
+    (ReadWritePaths=/var/www/cogny en la unidad systemd) y tiene sitio de
+    sobra (decenas de GB libres en el volumen de la app). Cada render()
+    crea el suyo dentro con mkdtemp(prefix=) y lo borra al terminar
+    con shutil.rmtree(workdir, ignore_errors=True); si un render queda
+    colgado y mata al worker, los notepdf_* huerfanos los barre
+    scripts/cleanup_pdf_tmp.sh (cron diario, ver su cabecera).
+    """
+    root = os.path.join(getattr(settings, "DATA_ROOT", "/var/www/cogny/data"), "pdf_tmp")
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
 _CSS_CACHE = None
 
 
@@ -730,6 +756,117 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
             # propio HTML: no depende de qué build de Chromium hay instalada,
             # y confirmado con el DevTools log que SÍ bloquea el `onerror` sin
             # romper la impresión.
+            "--user-data-dir=" + os.path.join(workdir, "ud"),
+            "--no-pdf-header-footer", "--virtual-time-budget=8000",
+            "--print-to-pdf=" + out_pdf, "file://" + in_html,
+        ]
+        env = dict(os.environ, HOME=workdir)
+        try:
+            subprocess.run(cmd, env=env, timeout=60,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired as exc:
+            raise PdfError("Tiempo agotado generando el PDF", 504) from exc
+        except FileNotFoundError as exc:
+            raise PdfError("Chromium no disponible en el servidor") from exc
+        if not os.path.exists(out_pdf) or os.path.getsize(out_pdf) == 0:
+            raise PdfError("No se pudo generar el PDF")
+        with open(out_pdf, "rb") as fh:
+            return fh.read()
+    finally:
+        guard.shutdown()
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+
+# ── Imagen a PDF (pizarras) ────────────────────────────────────────────────
+
+# El lienzo de la pizarra es un <canvas> 2D propio: no hay forma razonable de
+# re-renderizarlo en el servidor. El cliente ya lo pinta a un canvas off-screen
+# con el MISMO codigo que la miniatura de la galeria (`drawElementOn` en
+# board.js), exporta ese canvas como PNG dataURL y lo manda aqui. Aqui se
+# envuelve en una pagina HTML minima y se imprime con el mismo Chromium que
+# ya usa `render()` para notas, asi reutilizamos proxy validador, CSP,
+# workdir en /var y todo.
+#
+# La pagina decide la orientacion mirando la relacion de aspecto de la
+# imagen entrante: si es claramente apaisada (>1.4 de ancho/alto) sale en
+# A4 horizontal; si no, en A4 vertical. Asi una pizarra rectangular aprovecha
+# el ancho sin dejar una franja blanca enorme a los lados, y una cuadrada
+# o vertical no sale estirada.
+_IMG_MAX_PNG_BYTES = 8 * 1024 * 1024  # 8 MB: a 2x DPR las pizarras grandes
+
+
+def render_image(data_url: str, title: str = "", landscape: bool = False) -> bytes:
+    """Imprime un PNG (dataURL `data:image/png;base64,...`) a PDF A4.
+
+    `landscape` fuerza A4 horizontal; si se deja a False se elige por la
+    relacion de aspecto de la propia imagen. Levanta `PdfError`.
+    """
+    if not isinstance(data_url, str) or not data_url.startswith("data:image/png;base64,"):
+        raise PdfError("Imagen no valida")
+    if len(data_url) > _IMG_MAX_PNG_BYTES:
+        raise PdfError("Imagen demasiado grande (max 8 MB)")
+
+    try:
+        import base64 as _b64
+        raw = _b64.b64decode(data_url.split(",", 1)[1], validate=True)
+    except (binascii.Error, ValueError):
+        raise PdfError("Imagen no valida")
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise PdfError("Imagen no valida")
+
+    # Relacion de aspecto para decidir orientacion. El header IHDR del PNG
+    # lleva el ancho/alto en big-endian a partir del byte 16; lo leemos
+    # directo en vez de decodificar toda la imagen (que puede pesar MB).
+    if len(raw) < 24:
+        raise PdfError("Imagen no valida")
+    w = int.from_bytes(raw[16:20], "big")
+    h = int.from_bytes(raw[20:24], "big")
+    if w <= 0 or h <= 0:
+        raise PdfError("Imagen no valida")
+    if not landscape and (w / h) > 1.4:
+        landscape = True
+
+    safe_title = html_escape((title or "").strip()[:120])
+    # El <img> lleva un `data:` URI: ya pasa el saneador (`_SAFE_URI_RE`
+    # acepta `data:image/...`), pero pasamos por `sanitize_html` igual para
+    # no abrir un camino nuevo y mantener una sola frontera de confianza.
+    body = (
+        f'<figure class="pz-fig"><img src="{data_url}" alt=""></figure>'
+    )
+    body = sanitize_html(body)
+
+    page_css = _page_rule(landscape, "12mm")
+    doc = (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta http-equiv="Content-Security-Policy" content="script-src \'none\'">'
+        '<style>'
+        + _styles() + page_css + '''
+  body{ margin:0; background:#fff; font: 10pt system-ui, -apple-system, sans-serif; color:#666; }
+  .pz-fig{ margin:0; padding:0; display:flex; align-items:center; justify-content:center; min-height:calc(100vh - 24mm); }
+  .pz-fig img{ max-width:100%; max-height:calc(100vh - 30mm); display:block; }
+  .pz-caption{ position:fixed; top:6mm; left:12mm; right:12mm; font-weight:700; color:#333; }
+  .pz-caption small{ font-weight:400; color:#888; margin-left:8px; font-size:8pt; }
+'''
+        + '</style></head><body>'
+        + (f'<div class="pz-caption">{safe_title} <small>cogny · pizarra</small></div>' if safe_title else '')
+        + body
+        + '</body></html>'
+    )
+
+    workdir = tempfile.mkdtemp(prefix="notepdf_", dir=_pdf_workdir())
+    guard, guard_port = _start_egress_guard()
+    try:
+        in_html = os.path.join(workdir, "in.html")
+        out_pdf = os.path.join(workdir, "out.pdf")
+        with open(in_html, "w", encoding="utf-8") as fh:
+            fh.write(doc)
+        # Sin proxy ni flags raros: imagen local en data: URI, sin red que
+        # validad, sin JS. Solo --headless + --print-to-pdf.
+        cmd = [
+            CHROMIUM_BIN, "--headless", "--no-sandbox", "--disable-gpu",
+            "--disable-dev-shm-usage", "--disable-crash-reporter",
+            "--disable-breakpad", "--no-zygote", "--single-process",
             "--user-data-dir=" + os.path.join(workdir, "ud"),
             "--no-pdf-header-footer", "--virtual-time-budget=8000",
             "--print-to-pdf=" + out_pdf, "file://" + in_html,

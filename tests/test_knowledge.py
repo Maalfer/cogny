@@ -3,51 +3,21 @@
 Lo que se comprueba aquí, por orden de importancia:
 
 1. Que apagada no existe, y encendida no deja escribir nada.
-2. Que el filtro por dominio de origen deja pasar a quien debe y para al resto.
-3. Que el permiso firmado sobrevive a la navegación (sin él, el filtro echaría
-   al visitante en la segunda página) pero muere al revocar el enlace maestro.
+2. Que la única puerta de entrada es el enlace maestro: sin uno válido no se
+   pasa, y revocarlo echa también a quien ya había entrado con él.
+3. Que el permiso firmado sobrevive a la navegación una vez canjeado el
+   enlace (no hay que repetirlo en cada página).
 """
 from django.db import IntegrityError, transaction
 
 from apps.accounts.models import User
-from apps.knowledge.access import COOKIE_NAME, host_matches
-from apps.knowledge.models import MasterLink, PublicVault, normalize_domain
+from apps.knowledge.access import COOKIE_NAME
+from apps.knowledge.models import MasterLink, PublicVault
 
 from .base import VaultTestCase
 
 READER = "/conocimiento/"
 API = "/conocimiento/api"
-
-
-class DomainMatchingTests(VaultTestCase):
-    """Reglas de dominio, sin HTTP de por medio."""
-
-    def test_normaliza_lo_que_pegue_el_usuario(self):
-        for raw, expected in [
-            ("https://ElRinconDelHacker.es/cursos/", "elrincondelhacker.es"),
-            ("  dockerlabs.es  ", "dockerlabs.es"),
-            ("http://localhost:8002/algo?x=1", "localhost"),
-            ("*.elrincondelhacker.es", "*.elrincondelhacker.es"),
-            ("", ""),
-        ]:
-            self.assertEqual(normalize_domain(raw), expected, raw)
-
-    def test_el_comodin_cubre_el_dominio_y_sus_subdominios(self):
-        pattern = "*.elrincondelhacker.es"
-        for host in ("elrincondelhacker.es", "www.elrincondelhacker.es", "foro.elrincondelhacker.es"):
-            self.assertTrue(host_matches(host, pattern), host)
-        for host in ("elrincondelhacker.es.evil.com", "otroelrincondelhacker.es", ""):
-            self.assertFalse(host_matches(host, pattern), host)
-
-    def test_sin_comodin_el_dominio_es_exacto(self):
-        self.assertTrue(host_matches("dockerlabs.es", "dockerlabs.es"))
-        self.assertFalse(host_matches("www.dockerlabs.es", "dockerlabs.es"))
-
-    def test_la_lista_se_guarda_ya_normalizada(self):
-        cfg = PublicVault.get()
-        cfg.allowed_domains = "https://Foo.ES/x\n\n  bar.com  \n# comentario\nfoo.es"
-        cfg.save()
-        self.assertEqual(cfg.domain_list(), ["foo.es", "bar.com"])
 
 
 class PublicVaultClosedTests(VaultTestCase):
@@ -62,7 +32,7 @@ class PublicVaultClosedTests(VaultTestCase):
 
 
 class PublicVaultOpenTests(VaultTestCase):
-    """Encendida y sin lista de dominios: abierta a quien tenga el enlace."""
+    """Encendida: sin un enlace maestro canjeado, nadie entra."""
 
     def setUp(self):
         super().setUp()
@@ -71,76 +41,11 @@ class PublicVaultOpenTests(VaultTestCase):
         cfg.save()
         self.write_note("Linux/Permisos.md", "# Permisos\nchmod y chown")
 
-    def test_se_entra_sin_cuenta_y_se_lee_el_arbol(self):
-        self.assertEqual(self.client.get(READER).status_code, 200)
-        tree = self.client.get(API + "/tree").json()["tree"]
-        self.assertEqual([n["name"] for n in tree], ["Linux"])
-
-    def test_se_lee_una_nota_y_se_busca(self):
-        note = self.client.get(API + "/note?path=Linux/Permisos.md").json()
-        self.assertEqual(note["name"], "Permisos")
-        self.assertIn("chmod", note["content"])
-        hits = self.client.get(API + "/search?q=chown").json()["results"]
-        self.assertEqual([h["path"] for h in hits], ["Linux/Permisos.md"])
-
-    def test_no_se_puede_salir_de_la_boveda(self):
-        resp = self.client.get(API + "/note?path=../../etc/passwd")
-        self.assertEqual(resp.status_code, 400)
-
-    def test_la_superficie_publica_no_tiene_por_donde_escribir(self):
-        """Ni siquiera con el método correcto: estas vistas son sólo GET."""
-        for url in (API + "/note", API + "/tree", API + "/search"):
-            self.assertEqual(self.client.post(url, {}).status_code, 405, url)
-        # Y las rutas de escritura de la web con sesión siguen pidiendo login
-        # aunque la bóveda pública esté encendida.
-        self.assertEqual(self.client.post(
-            "/api/notes/save", data="{}", content_type="application/json").status_code, 302)
-
-    def test_los_adjuntos_se_sirven_endurecidos(self):
-        (self.vault_dir / "Adjuntos").mkdir()
-        (self.vault_dir / "Adjuntos" / "diagrama.svg").write_text("<svg/>", encoding="utf-8")
-        resp = self.client.get(API + "/asset?path=Adjuntos/diagrama.svg")
-        self.assertEqual(resp.status_code, 200)
-        # Un SVG servido en línea ejecuta JavaScript en nuestro propio origen.
-        self.assertIn("attachment", resp["Content-Disposition"])
-        self.assertEqual(resp["X-Content-Type-Options"], "nosniff")
-
-    def test_las_notas_no_se_bajan_por_la_ruta_de_adjuntos(self):
-        self.assertEqual(self.client.get(API + "/asset?path=Linux/Permisos.md").status_code, 404)
-
-
-class DomainGateTests(VaultTestCase):
-    """Encendida y con lista: sólo pasa quien llega desde los dominios."""
-
-    def setUp(self):
-        super().setUp()
-        cfg = PublicVault.get()
-        cfg.enabled = True
-        cfg.allowed_domains = "*.elrincondelhacker.es"
-        cfg.save()
-        self.write_note("nota.md", "contenido")
-
-    def test_sin_dominio_de_origen_no_se_entra(self):
+    def test_sin_permiso_no_se_entra(self):
         resp = self.client.get(READER)
         self.assertEqual(resp.status_code, 403)
         self.assertTemplateUsed(resp, "knowledge/blocked.html")
         self.assertNotIn(COOKIE_NAME, resp.cookies)
-
-    def test_desde_un_dominio_ajeno_no_se_entra(self):
-        resp = self.client.get(READER, HTTP_REFERER="https://otrositio.com/post")
-        self.assertEqual(resp.status_code, 403)
-
-    def test_desde_un_dominio_permitido_se_entra_y_se_firma_el_permiso(self):
-        resp = self.client.get(READER, HTTP_REFERER="https://www.elrincondelhacker.es/cursos/")
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(COOKIE_NAME, resp.cookies)
-
-    def test_el_permiso_aguanta_la_navegacion_siguiente(self):
-        """Sin esto, el visitante entraría y se quedaría fuera a la segunda página:
-        el Referer sólo viaja en el clic que llega de fuera."""
-        self.client.get(READER, HTTP_REFERER="https://elrincondelhacker.es/")
-        self.assertEqual(self.client.get(READER).status_code, 200)
-        self.assertEqual(self.client.get(API + "/tree").status_code, 200)
 
     def test_la_api_rechaza_en_json_no_con_la_pagina_de_bloqueo(self):
         resp = self.client.get(API + "/tree")
@@ -157,18 +62,59 @@ class MasterLinkTests(VaultTestCase):
         super().setUp()
         cfg = PublicVault.get()
         cfg.enabled = True
-        cfg.allowed_domains = "*.elrincondelhacker.es"
         cfg.save()
-        self.write_note("nota.md", "contenido")
+        self.write_note("Linux/Permisos.md", "# Permisos\nchmod y chown")
         self.link = MasterLink.objects.create(name="Ponentes")
 
-    def test_el_enlace_maestro_entra_desde_cualquier_sitio(self):
+    def test_el_enlace_maestro_entra_y_firma_el_permiso(self):
         resp = self.client.get(f"/conocimiento/m/{self.link.token}/")
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp["Location"], READER)
         self.assertIn(COOKIE_NAME, resp.cookies)
-        # Y a partir de ahí navega sin traer dominio de origen ninguno.
+
+    def test_el_permiso_aguanta_la_navegacion_siguiente(self):
+        """Sin esto, habría que repetir el enlace maestro en cada página."""
+        self.client.get(f"/conocimiento/m/{self.link.token}/")
         self.assertEqual(self.client.get(READER).status_code, 200)
+        tree = self.client.get(API + "/tree").json()["tree"]
+        self.assertEqual([n["name"] for n in tree], ["Linux"])
+
+    def test_se_lee_una_nota_y_se_busca(self):
+        self.client.get(f"/conocimiento/m/{self.link.token}/")
+        note = self.client.get(API + "/note?path=Linux/Permisos.md").json()
+        self.assertEqual(note["name"], "Permisos")
+        self.assertIn("chmod", note["content"])
+        hits = self.client.get(API + "/search?q=chown").json()["results"]
+        self.assertEqual([h["path"] for h in hits], ["Linux/Permisos.md"])
+
+    def test_no_se_puede_salir_de_la_boveda(self):
+        self.client.get(f"/conocimiento/m/{self.link.token}/")
+        resp = self.client.get(API + "/note?path=../../etc/passwd")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_la_superficie_publica_no_tiene_por_donde_escribir(self):
+        """Ni siquiera con el método correcto: estas vistas son sólo GET."""
+        self.client.get(f"/conocimiento/m/{self.link.token}/")
+        for url in (API + "/note", API + "/tree", API + "/search"):
+            self.assertEqual(self.client.post(url, {}).status_code, 405, url)
+        # Y las rutas de escritura de la web con sesión siguen pidiendo login
+        # aunque la bóveda pública esté encendida.
+        self.assertEqual(self.client.post(
+            "/api/notes/save", data="{}", content_type="application/json").status_code, 302)
+
+    def test_los_adjuntos_se_sirven_endurecidos(self):
+        self.client.get(f"/conocimiento/m/{self.link.token}/")
+        (self.vault_dir / "Adjuntos").mkdir()
+        (self.vault_dir / "Adjuntos" / "diagrama.svg").write_text("<svg/>", encoding="utf-8")
+        resp = self.client.get(API + "/asset?path=Adjuntos/diagrama.svg")
+        self.assertEqual(resp.status_code, 200)
+        # Un SVG servido en línea ejecuta JavaScript en nuestro propio origen.
+        self.assertIn("attachment", resp["Content-Disposition"])
+        self.assertEqual(resp["X-Content-Type-Options"], "nosniff")
+
+    def test_las_notas_no_se_bajan_por_la_ruta_de_adjuntos(self):
+        self.client.get(f"/conocimiento/m/{self.link.token}/")
+        self.assertEqual(self.client.get(API + "/asset?path=Linux/Permisos.md").status_code, 404)
 
     def test_el_enlace_maestro_puede_abrir_una_nota_concreta(self):
         resp = self.client.get(f"/conocimiento/m/{self.link.token}/?n=nota.md")
@@ -221,12 +167,6 @@ class AdminEndpointTests(VaultTestCase):
         self.assertTrue(PublicVault.get().enabled)
         self.json_post("/api/knowledge/config/save", {"enabled": False})
         self.assertFalse(PublicVault.get().enabled)
-
-    def test_los_dominios_se_guardan_normalizados(self):
-        self.client.force_login(self.owner)
-        resp = self.json_post("/api/knowledge/config/save",
-                              {"allowed_domains": "https://Foo.ES/ruta\n\n*.bar.com\n"})
-        self.assertEqual(resp.json()["domains"], ["foo.es", "*.bar.com"])
 
     def test_la_duracion_del_permiso_tiene_limites(self):
         self.client.force_login(self.owner)

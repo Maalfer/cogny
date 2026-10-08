@@ -3,7 +3,7 @@
    de tema salvo por el acento. El bloque TEMA CLARO más abajo sigue
    pisando estos tres valores porque el claro necesita justo lo contrario. */
 :root{--vault-bg:var(--bg,#15151f);--vault-side:var(--bg2,#1b1b27);--vault-line:rgba(255,255,255,.07);--vault-accent:var(--cyan,#06b6d4);}
-.vault{display:flex;height:calc(100vh - 56px);height:calc(100dvh - 56px);overflow:hidden;background:var(--vault-bg)}
+.vault{display:flex;height:calc(100vh - 56px);height:calc(100dvh - 56px);overflow:hidden;background:var(--vault-bg);position:relative}
 /* Sidebar */
 .vault-side{width:290px;flex-shrink:0;background:var(--vault-side);border-right:1px solid var(--vault-line);display:flex;flex-direction:column;transition:margin-left .25s ease}
 .vault-side-head{display:flex;align-items:center;gap:.3rem;padding:.55rem .65rem .35rem;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.4);font-weight:700}
@@ -35,22 +35,28 @@
 .search-section{padding:.5rem .6rem .25rem;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.4);font-weight:700}
 .search-spin{font-weight:400;text-transform:none;letter-spacing:0;color:rgba(255,255,255,.3)}
 .vault-tree{flex:1;overflow-y:auto;padding:.4rem .35rem 2rem;-webkit-overflow-scrolling:touch;touch-action:pan-y}
-.tree-row{display:flex;align-items:center;gap:.35rem;padding:.32rem .4rem;border-radius:7px;cursor:pointer;color:rgba(255,255,255,.78);font-size:.87rem;user-select:none;position:relative;touch-action:pan-y}
-.tree-row:hover{background:rgba(255,255,255,.06)}
+.tree-row{display:flex;align-items:center;gap:.35rem;padding:.32rem .4rem;border-radius:7px;cursor:pointer;color:rgba(255,255,255,.78);font-size:.87rem;user-select:none;position:relative;touch-action:pan-y;transition:background-color .18s ease,color .18s ease,box-shadow .18s ease}
+.tree-row::before{content:'';position:absolute;left:.14rem;top:18%;bottom:18%;width:2.5px;border-radius:2px;background:var(--vault-accent);transform:scaleY(0);transform-origin:center;opacity:0;transition:transform .2s cubic-bezier(.4,0,.2,1),opacity .18s ease}
+.tree-row:hover{background:color-mix(in srgb,var(--vault-accent) 8%,transparent);color:#fff;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--vault-accent) 20%,transparent)}
+.tree-row:hover::before{transform:scaleY(1);opacity:1}
+.tree-row:hover .ico{opacity:1;transform:scale(1.06);filter:drop-shadow(0 0 3px color-mix(in srgb,var(--vault-accent) 55%,transparent))}
 .tree-row.active{background:var(--vault-accent);color:#fff}
 .tree-row .twirl{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:transform .15s}
 .tree-row .twirl svg{width:12px;height:12px;opacity:.6}
 .tree-row.collapsed .twirl{transform:rotate(-90deg)}
-.tree-row .ico{width:17px;height:17px;flex-shrink:0;opacity:.85}
+.tree-row .ico{width:17px;height:17px;flex-shrink:0;opacity:.85;transition:opacity .18s ease,transform .18s ease,filter .18s ease}
 .tree-row.is-file{color:rgba(255,255,255,.55)}
-/* Nota privada: invisible desde /conocimiento (ver apps.knowledge). Más
-   apagada que .is-file para que se distinga de "es un adjunto" a simple vista. */
+/* Privado: invisible desde /conocimiento (ver apps.knowledge). Vale para la
+   nota o carpeta marcada y para todo lo que hereda esa marca — el gris dice
+   "esto no se ve desde fuera", que es igual de cierto en los dos casos. Más
+   apagado que .is-file para que se distinga de "es un adjunto" a simple vista. */
 .tree-row.is-private{color:rgba(255,255,255,.38)}
-.tree-row .label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tree-row .row-menu{opacity:0;background:none;border:none;color:inherit;cursor:pointer;padding:2px;border-radius:5px;flex-shrink:0}
+.tree-row .label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:transform .18s ease;transform-origin:left center}
+.tree-row:hover .label{transform:scale(1.04)}
+.tree-row .row-menu{opacity:0;transform:translateX(3px);background:none;border:none;color:inherit;cursor:pointer;padding:2px;border-radius:5px;flex-shrink:0;transition:opacity .16s ease,transform .16s ease,background-color .16s ease,color .16s ease}
 .tree-row .row-menu svg{width:16px;height:16px}
-.tree-row:hover .row-menu{opacity:.65}
-.tree-row .row-menu:hover{opacity:1;background:rgba(255,255,255,.15)}
+.tree-row:hover .row-menu{opacity:.65;transform:translateX(0)}
+.tree-row .row-menu:hover{opacity:1;transform:translateX(0);background:rgba(255,255,255,.15)}
 @media(hover:none){.tree-row .row-menu{opacity:.65}}   /* siempre visible en táctil (sin :hover) */
 .tree-children{margin-left:.7rem;border-left:1px solid var(--vault-line);padding-left:.15rem;min-height:10px}
 .tree-children.hidden{display:none}
@@ -109,9 +115,9 @@
 :root:is([data-theme="light"]) .format-bar button{background:rgba(0,0,0,.05);color:#1f2533}
 :root:is([data-theme="light"]) .format-bar button:hover{background:var(--vault-accent);color:#fff}
 :root:is([data-theme="light"]) .fmt-label{color:#64748b}
-.vault-title{flex:1;font-size:.95rem;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vault-title .crumb{color:rgba(255,255,255,.4);font-weight:500}.vault-title .crumb-link{cursor:pointer;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(255,255,255,.25);transition:color .12s,text-decoration-color .12s}.vault-title .crumb-link:hover{color:rgba(255,255,255,.9);text-decoration-color:rgba(255,255,255,.7)}
-.vault-title .crumb-note{cursor:pointer;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(255,255,255,.25);transition:color .12s,text-decoration-color .12s}.vault-title .crumb-note:hover{color:var(--vault-accent);text-decoration-color:var(--vault-accent)}
+.vault-title{flex:1;min-width:0;font-size:.92rem;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:.15rem;padding:.32rem .75rem;margin-right:.25rem;background:rgba(255,255,255,.035);border:1px solid var(--vault-line);border-radius:9px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);transition:border-color .15s ease,background-color .15s ease}
+.vault-title .crumb{color:rgba(255,255,255,.35);font-weight:500;flex-shrink:0}.vault-title .crumb-link{cursor:pointer;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(255,255,255,.25);transition:color .12s,text-decoration-color .12s}.vault-title .crumb-link:hover{color:rgba(255,255,255,.9);text-decoration-color:rgba(255,255,255,.7)}
+.vault-title .crumb-note{cursor:pointer;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(255,255,255,.25);transition:color .12s,text-decoration-color .12s,transform .18s ease;transform-origin:left center;display:inline-block}.vault-title .crumb-note:hover{color:var(--vault-accent);text-decoration-color:var(--vault-accent);transform:scale(1.04)}
 @keyframes crumbFlash{0%{background:color-mix(in srgb,var(--vault-accent) 45%,transparent)}100%{background:transparent}}
 .tree-row.flash-locate{animation:crumbFlash 1.2s ease-out}
 .vault-status{font-size:.72rem;color:rgba(255,255,255,.4);white-space:nowrap}
@@ -133,7 +139,7 @@
 /* Editor Live Preview (CodeMirror) — una sola vista que se renderiza al escribir */
 .vault-cm{flex:1;min-width:0;min-height:0;display:flex;overflow:hidden}
 /* Modo lectura: nota renderizada, sin edición, con el mismo aspecto que la vista pública. */
-.vault-reader{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;font-size:calc(var(--note-fs,1) * 1rem)}
+.vault-reader{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:auto;font-size:calc(var(--note-fs,1) * 1rem)}
 /* Botón lectura/edición: por defecto (editando) muestra el ojo; en lectura muestra el lápiz. */
 #btn-view-toggle .ico-edit{display:none}
 #btn-view-toggle.reading .ico-read{display:none}
@@ -200,6 +206,20 @@
 .split #editor-pane{border-right:1px solid var(--vault-line)}
 /* Markdown preview (Obsidian-like) */
 .markdown-body{padding:1.1rem 1.5rem 5rem;color:#dcdce6;line-height:1.7;max-width:820px;margin-left:auto;margin-right:auto}
+
+/* Fix scroll (2026-09-08): el reader estaba limitado a max-width:820px y
+   centrado con margin:auto, lo que dejaba los márgenes laterales dentro de
+   .vault-body (que no tiene overflow). Resultado: la rueda del ratón sólo
+   funcionaba sobre el texto centrado, no en los huecos laterales. Ahora el
+   reader ocupa todo el ancho del vault-body y centra el contenido con
+   padding (igual que .cm-content en el editor). */
+#cm-reader{
+  max-width:none !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+  padding-left:max(1.5rem, calc((100% - 820px)/2)) !important;
+  padding-right:max(1.5rem, calc((100% - 820px)/2)) !important;
+}
 .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{color:#fff;line-height:1.3;margin:1.3em 0 .5em;font-weight:700}
 .markdown-body h1{font-size:1.8rem;border-bottom:1px solid var(--vault-line);padding-bottom:.25em}
 .markdown-body h2{font-size:1.4rem;border-bottom:1px solid var(--vault-line);padding-bottom:.2em}
@@ -216,6 +236,12 @@
   background:rgba(255,255,255,.08);color:#c9d1d9;cursor:pointer;opacity:0;
   transition:opacity .15s,background .15s,color .15s}
 .markdown-body pre:hover .code-copy,.code-copy:focus-visible{opacity:1}
+/* Bloque "raw" generado junto al <pre> por `addCopyBtn` (notes.js) con el
+   texto plano del código, pensado para la exportación a PDF: oculto aquí
+   porque en el editor ya está el botón "copiar" funcional sobre el bloque
+   resaltado y duplicar el texto sería ruido visual y de DOM. La visibilidad
+   para el PDF la activa notes_print.css. */
+.code-source-wrap{display:none}
 .code-copy:hover{background:rgba(255,255,255,.16);color:#fff}
 .code-copy svg{width:16px;height:16px}
 .code-copy.copied{color:#22c55e;border-color:rgba(34,197,94,.5);opacity:1}
@@ -231,6 +257,8 @@
 .markdown-body table{border-collapse:collapse;margin:.7em 0;width:auto}
 .markdown-body th,.markdown-body td{border:1px solid var(--vault-line);padding:.4em .7em}
 .markdown-body th{background:rgba(255,255,255,.05)}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.7em 0;border-radius:8px;max-width:100%}
+.table-wrap table{margin:0}
 .markdown-body input[type=checkbox]{margin-right:.5em;transform:translateY(1px)}
 .markdown-body hr{border:none;border-top:1px solid var(--hr-color,var(--vault-line));margin:1.4em 0}
 .markdown-body mark{background:#fde68a;color:#1a1a1a;padding:0 .15em;border-radius:3px}
@@ -259,6 +287,29 @@
 .shared-note-wrap{padding:1.4rem 1.5rem 4rem}
 .shared-note-banner{display:flex;align-items:center;gap:.5rem;max-width:820px;margin:0 auto 1rem;padding:.55rem .9rem;border-radius:10px;background:color-mix(in srgb,var(--vault-accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--vault-accent) 30%,transparent);color:var(--vault-accent);font-size:.82rem;font-weight:600}
 .shared-note-wrap .markdown-body{padding:0}
+/* `.markdown-body` trae su propio display, que gana al [hidden] del navegador:
+   sin esto, alternar Leer/Editar dejaría las dos vistas a la vez. */
+.shared-note-wrap [hidden]{display:none !important}
+/* Enlace compartido CON escritura: la cinta lleva además el conmutador de
+   modo y el estado de guardado, así que deja de ser sólo una etiqueta. */
+.shared-note-banner.is-write{flex-wrap:wrap}
+.shared-note-banner.is-write .shared-mode-seg{margin-left:auto}
+.shared-note-banner.is-write .vault-status{font-weight:600}
+/* Botón "descargar imágenes en .zip" — mismo tamaño/forma en las dos
+   variantes de la cinta (sólo lectura y editable); en la de sólo lectura no
+   hay ningún otro elemento con `margin-left:auto`, así que lo lleva él. */
+.shared-dl-btn{display:flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border-radius:6px;color:inherit;background:rgba(255,255,255,.08);transition:background .15s}
+.shared-dl-btn:hover{background:rgba(255,255,255,.16)}
+.shared-note-banner:not(.is-write) .shared-dl-btn{margin-left:auto}
+.shared-editor{max-width:820px;margin:0 auto;display:flex;height:min(70vh,720px);
+  border:1px solid var(--vault-line);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02)}
+/* El editor de la app reserva media pantalla de aire al final para poder
+   escribir sin pegarse al borde; aquí la caja es fija y ese hueco sobra. */
+.shared-editor .cm-content{padding-bottom:2rem !important}
+.shared-fallback-editor{flex:1;min-width:0;background:transparent;border:none;outline:none;resize:none;
+  color:#dcdce6;font:1rem/1.7 ui-monospace,Menlo,Consolas,monospace;padding:1.1rem 1.4rem}
+:root:is([data-theme="light"]) .shared-editor{background:rgba(0,0,0,.02)}
+:root:is([data-theme="light"]) .shared-fallback-editor{color:#1f2533}
 
 /* Modal "Mover nota" */
 .modal.move-modal{max-width:440px}
@@ -269,26 +320,27 @@
 /* Modal "Compartir nota" */
 .share-link-row{display:flex;gap:.5rem;margin-bottom:1rem}
 .share-link-row input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--vault-line);border-radius:9px;padding:.55rem .7rem;color:#fff;font-size:.85rem}
-.share-copy-btn{flex-shrink:0;background:rgba(255,255,255,.08);border:none;border-radius:9px;padding:0 .8rem;color:#fff;cursor:pointer;display:flex;align-items:center;gap:.35rem;font-size:.85rem;font-weight:600}
+.share-copy-btn{flex-shrink:0;background:rgba(255,255,255,.08);border:1px solid var(--vault-line);border-radius:9px;padding:0 .8rem;color:#fff;cursor:pointer;display:flex;align-items:center;gap:.35rem;font-size:.85rem;font-weight:600;transition:background-color .15s ease,border-color .15s ease}
+.share-copy-btn:hover{background:color-mix(in srgb,var(--vault-accent) 18%,rgba(255,255,255,.06));border-color:color-mix(in srgb,var(--vault-accent) 45%,var(--vault-line))}
 .share-copy-btn.copied{background:#16a34a}
-.share-pw-toggle{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.15rem 0 .8rem}
-.share-pw-toggle span{font-size:.88rem;color:#fff;font-weight:600}
-.share-pw-toggle small{display:block;color:rgba(255,255,255,.5);font-size:.76rem;font-weight:400;margin-top:.1rem}
-.share-switch{position:relative;width:42px;height:24px;flex-shrink:0;border-radius:99px;background:rgba(255,255,255,.15);border:none;cursor:pointer}
+.share-pw-toggle{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%;padding:.65rem .8rem;margin-bottom:.6rem;text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--vault-line);border-radius:10px;cursor:pointer;transition:background-color .15s ease,border-color .15s ease}
+.share-pw-toggle:hover{background:rgba(255,255,255,.055);border-color:color-mix(in srgb,var(--vault-accent) 32%,var(--vault-line))}
+.share-pw-toggle span{font-size:.88rem;color:#fff;font-weight:600;line-height:1.3}
+.share-pw-toggle small{display:block;color:rgba(255,255,255,.5);font-size:.76rem;font-weight:400;line-height:1.35;margin-top:.15rem}
+.share-switch{position:relative;width:42px;height:24px;flex-shrink:0;border-radius:99px;background:rgba(255,255,255,.15);border:none;cursor:pointer;transition:background-color .18s ease,box-shadow .18s ease}
 .share-switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s}
-.share-switch.on{background:var(--vault-accent)}
+.share-switch.on{background:var(--vault-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--vault-accent) 22%,transparent)}
 .share-switch.on::after{transform:translateX(18px)}
-.share-pw-field{display:none;margin-bottom:1rem}
+.share-pw-toggle:has(+ .share-pw-field.show){border-radius:10px 10px 0 0;border-bottom-color:transparent;margin-bottom:0}
+.share-pw-field{display:none;margin:0 0 1rem;padding:.7rem .8rem 1rem;background:rgba(255,255,255,.02);border:1px solid var(--vault-line);border-top:none;border-radius:0 0 10px 10px}
 .share-pw-field.show{display:block}
+/* Aviso del enlace editable: sólo se enseña con el interruptor encendido, y
+   entonces sí ocupa sitio — es la advertencia de que el enlace da escritura. */
+.share-warn{display:none;margin:-.4rem 0 .9rem;padding:.55rem .7rem;border-radius:9px;font-size:.78rem;line-height:1.35;
+  background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);color:#fcd34d}
+.share-warn.show{display:block}
 .share-status-row{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:rgba(255,255,255,.5);margin:-.3rem 0 1rem}
 .share-status-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0}
-
-/* Modal "Token para IA" */
-.ai-token-item{margin-bottom:1.1rem;padding-bottom:1.1rem;border-bottom:1px solid var(--vault-line)}
-.ai-token-item:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
-.ai-token-item .share-status-row{margin-bottom:.5rem}
-.ai-token-revoke{background:none;border:none;padding:0;color:#f87171;font-size:.78rem;font-weight:600;cursor:pointer;text-decoration:underline}
-.ai-token-empty{color:rgba(255,255,255,.5);font-size:.85rem;text-align:center;padding:1.4rem 0}
 
 /* Modal "Enlaces compartidos" */
 .shared-links-list{display:flex;flex-direction:column;gap:.5rem;max-height:52vh;overflow-y:auto;margin:0 0 1rem}
@@ -334,6 +386,9 @@
 .sync-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-left:.4rem;opacity:0;transition:opacity .3s;vertical-align:middle}
 .sync-dot.visible{opacity:1}
 .vault-hdr-btn{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;padding:6px;border-radius:8px;display:none}
+/* Visible solo en escritorio/tablet. En móvil el handle lateral cumple el
+   mismo rol (toggle del sidebar): tener los dos a la vez es redundante. */
+@media(min-width:761px){.vault-hdr-btn{display:flex}}
 .vault-hdr-btn:hover{background:rgba(255,255,255,.12)}
 /* context menu */
 .ctx-menu{position:fixed;z-index:1200;background:#222232;border:1px solid var(--vault-line);border-radius:10px;padding:.3rem;min-width:170px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:none}
@@ -342,6 +397,9 @@
 .ctx-menu button.danger{color:#f87171}
 .ctx-menu svg{width:15px;height:15px;flex-shrink:0}
 .ctx-sep{height:1px;background:var(--vault-line);margin:.25rem .2rem}
+/* Aviso, no acción: lo que hereda la privacidad de su carpeta no tiene aquí
+   nada que alternar (ver `ctxPrivateEntry` en notes.js). */
+.ctx-hint{display:flex;align-items:center;gap:.5rem;padding:.5rem .65rem;font-size:.85rem;color:rgba(255,255,255,.45);cursor:default}
 /* modal */
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1300;display:none;align-items:center;justify-content:center;padding:1rem}
 .modal-back.show{display:flex}
@@ -368,15 +426,40 @@
 /* Selector de carpeta de imágenes */
 /* mobile */
 @media(max-width:760px){
-  .vault-hdr-btn{display:flex}
   .vault-resizer{display:none}
   .cm-content{padding:1rem 1.15rem max(40vh,280px) !important}
   .cm-lp-block.markdown-body img{max-width:100% !important;max-height:300px !important}   /* imágenes coherentes y niveladas en móvil */
-  .vault-side{position:absolute;z-index:50;height:100%;box-shadow:6px 0 24px rgba(0,0,0,.5)}
-  .vault.side-hidden .vault-side{margin-left:-291px}
+  .vault-side{position:absolute;z-index:50;height:100%;box-shadow:6px 0 24px rgba(0,0,0,.5);
+              left:-291px;transition:left .28s cubic-bezier(.2,.7,.2,1)}
+  .vault.vault-mobile-open .vault-side{left:0}    /* en móvil, por defecto SIEMPRE cerrado: JS añade .vault-mobile-open al pulsar el handle (sin FOUC, sin depender del orden de scripts) */
+  /* Backdrop: oscurece el editor cuando el sidebar móvil está abierto. Al
+     tocarlo se cierra. Es el patrón estándar de drawer en iOS/Android y
+     evita clicks accidentales en el editor de fondo. */
+  .vault-side-backdrop{
+    position:fixed;left:0;right:0;top:56px;bottom:0;
+    background:rgba(0,0,0,.55);
+    opacity:0;pointer-events:none;
+    transition:opacity .25s ease;
+    z-index:49;
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  }
+  .vault.vault-mobile-open .vault-side-backdrop{opacity:1;pointer-events:auto}
+  /* Bloqueo de scroll de fondo mientras el sidebar móvil está abierto.
+     `overflow:hidden` en el body basta para parar el scroll de fondo; el scroll
+     del propio sidebar (.vault-tree, overflow-y:auto) sigue funcionando porque
+     `touch-action` no se hereda y los descendientes declaran `pan-y`. */
+  body.vault-side-mobile-open{overflow:hidden;overscroll-behavior:contain}
+  /* Swipe-to-close: arrastrar el sidebar hacia la izquierda lo cierra. El JS
+     traduce el touch horizontal a inline --swipe-x; si supera el umbral, el
+     sidebar se desliza y se cierra. */
+  .vault-side{will-change:transform}
   .split #editor-pane{display:none}
   .split #preview-pane{display:block}
   #md-editor{font-size:16px}             /* evita el zoom automático de iOS al enfocar */
+  /* Tablas: scroll horizontal en vez de cortar */
+  .table-wrap{border:1px solid var(--vault-line);border-radius:8px}
+  .note-props{overflow-x:auto}
+  .shared-note-wrap{padding:.8rem .6rem 3rem}
   /* Modal como hoja inferior (bottom sheet) en móvil */
   .modal-back{align-items:flex-end;justify-content:stretch;padding:0}
   .modal{max-width:none;width:100%;border-radius:20px 20px 0 0;border-left:none;border-right:none;border-bottom:none;
@@ -388,6 +471,67 @@
   .modal label{padding:.85rem}
   .modal-actions{flex-direction:column-reverse;gap:.5rem;margin-top:.6rem}
   .modal-actions button{width:100%;padding:.85rem;font-size:.95rem}
+
+  /* ── Pestaña flotante del sidebar (móvil/tablet) ──────────────────
+     Antes era una raya de 14px que ocupaba TODA la altura de la pantalla
+     (top:56px a bottom:0): dentro de una nota partía la lectura de arriba
+     a abajo. Ahora es una pestaña corta y centrada verticalmente —como el
+     tirador de un cajón lateral en iOS/Android—, que no toca ni el borde
+     superior ni el inferior, así que dentro de una nota se percibe como un
+     detalle discreto en el borde, no como una barra que cruza la pantalla.
+     En reposo va semitransparente (opacity:.55) y sólo se realza al tocarla
+     o al abrir el sidebar; el slide-in al cargar la hace notar una vez sin
+     necesidad de gritar todo el rato. */
+  .vault-side-handle{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;left:0;top:calc(50% - 32px);
+    width:16px;height:64px;padding:0;
+    border:none;border-radius:0 14px 14px 0;
+    background:color-mix(in srgb,var(--vault-accent) 16%,var(--vault-bg));
+    color:#fff;cursor:pointer;
+    box-shadow:0 3px 10px rgba(0,0,0,.3),
+               0 0 0 1px color-mix(in srgb,var(--vault-accent) 22%,transparent);
+    opacity:.55;
+    z-index:60;
+    transition:left .28s cubic-bezier(.2,.7,.2,1),
+               opacity .25s ease,background .2s,box-shadow .2s,transform .15s;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    animation:handle-in .42s cubic-bezier(.2,.7,.2,1) both;
+  }
+  .vault-side-handle svg{display:block;pointer-events:none;position:relative;z-index:1}
+  .vault-side-handle-chev{
+    width:13px;height:13px;
+    transition:transform .32s cubic-bezier(.4,0,.2,1),opacity .18s;
+    opacity:.9;
+  }
+  .vault-side-handle:hover,
+  .vault-side-handle:focus-visible,
+  .vault-side-handle.open{opacity:1}
+  .vault-side-handle:hover{
+    background:color-mix(in srgb,var(--vault-accent) 28%,var(--vault-bg));
+  }
+  .vault-side-handle:active{
+    transform:scale(.92);
+  }
+  .vault-side-handle.open .vault-side-handle-chev{transform:rotate(180deg)}
+  .vault-side-handle.open{left:290px}
+  .vault-side-handle:focus-visible{outline:2px solid #fff;outline-offset:-3px}
+  @keyframes handle-in{
+    from{transform:translateX(-10px);opacity:0}
+    to{transform:translateX(0);opacity:.55}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .vault-side-handle{animation:none}
+    .vault-side-handle,.vault-side-handle.open{transition:left .15s linear}
+  }
+}
+/* Oculto en escritorio/tablet grande (>=761px). El bloque "display:flex" del
+   media query móvil viene antes y por orden de cascada lo sobreescribe sólo
+   cuando el ancho es <=760px. Si esto se pusiera antes, quedaría tapado por
+   el "display:flex" que siempre gana por orden. */
+@media (min-width:761px){
+  .vault-side-handle{display:none !important}
 }
 @keyframes sheet-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
 
@@ -414,18 +558,20 @@
 :root:is([data-theme="light"]) .tree-row.search-hit .hit-path,
 :root:is([data-theme="light"]) .tree-row.search-hit .hit-snippet{color:#8a92a6}
 :root:is([data-theme="light"]) .tree-row{color:#374151}
-:root:is([data-theme="light"]) .tree-row:hover{background:rgba(0,0,0,.05)}
+:root:is([data-theme="light"]) .tree-row:hover{background:color-mix(in srgb,var(--vault-accent) 9%,rgba(0,0,0,.02));color:#111;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--vault-accent) 26%,transparent)}
 :root:is([data-theme="light"]) .tree-row.is-file{color:#6b7280}
 :root:is([data-theme="light"]) .tree-row.is-private{color:#9ca3af}
 :root:is([data-theme="light"]) .tree-row.active{color:#fff}
 :root:is([data-theme="light"]) .tree-row .row-menu:hover{background:rgba(0,0,0,.1)}
 :root:is([data-theme="light"]) .tree-empty{color:#9aa2b4}
-:root:is([data-theme="light"]) .vault-title{color:#1a1f2e}
+:root:is([data-theme="light"]) .vault-title{color:#1a1f2e;background:rgba(0,0,0,.03);box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
 :root:is([data-theme="light"]) .vault-title .crumb{color:#8a92a6}:root:is([data-theme="light"]) .vault-title .crumb-link,:root:is([data-theme="light"]) .vault-title .crumb-note{text-decoration-color:rgba(0,0,0,.2)}
 :root:is([data-theme="light"]) .vault-status{color:#8a92a6}
 :root:is([data-theme="light"]) .vault-tool-btn{background:rgba(0,0,0,.05);color:#4d5566}
 :root:is([data-theme="light"]) .vault-tool-btn:hover{background:rgba(0,0,0,.1);color:#111}
 :root:is([data-theme="light"]) .seg{background:rgba(0,0,0,.05)}
+:root:is([data-theme="light"]) .shared-dl-btn{background:rgba(0,0,0,.06)}
+:root:is([data-theme="light"]) .shared-dl-btn:hover{background:rgba(0,0,0,.12)}
 :root:is([data-theme="light"]) .seg button{color:#5b6373}
 :root:is([data-theme="light"]) .seg button.active{color:#fff}
 :root:is([data-theme="light"]) .cm-editor,
@@ -433,6 +579,17 @@
 :root:is([data-theme="light"]) .vault-hdr-btn{color:#4d5566}
 :root:is([data-theme="light"]) .vault-hdr-btn:hover{background:rgba(0,0,0,.08)}
 :root:is([data-theme="light"]) .vault-empty{color:#9aa2b4}
+:root:is([data-theme="light"]) .vault-side-handle,
+:root:is([data-theme="pink"]) .vault-side-handle{
+  color:var(--text);
+  background:color-mix(in srgb,var(--vault-accent) 14%,var(--bg2));
+  box-shadow:0 3px 10px rgba(20,40,60,.18),
+             0 0 0 1px color-mix(in srgb,var(--vault-accent) 32%,transparent);
+}
+:root:is([data-theme="light"]) .vault-side-handle:hover,
+:root:is([data-theme="pink"]) .vault-side-handle:hover{
+  background:color-mix(in srgb,var(--vault-accent) 28%,var(--bg2));
+}
 /* Vista renderizada (markdown) */
 :root:is([data-theme="light"]) .markdown-body{color:#1f2533}
 :root:is([data-theme="light"]) .markdown-body h1,
@@ -449,6 +606,7 @@
 :root:is([data-theme="light"]) .ctx-menu{background:#ffffff;box-shadow:0 10px 30px rgba(20,30,60,.18)}
 :root:is([data-theme="light"]) .ctx-menu button{color:#1f2533}
 :root:is([data-theme="light"]) .ctx-menu button:hover{background:rgba(0,0,0,.06)}
+:root:is([data-theme="light"]) .ctx-hint{color:#8a92a6}
 :root:is([data-theme="light"]) .modal{background:#ffffff}
 :root:is([data-theme="light"]) .modal h3{color:#0f1320}
 /* Sólo los elementos "caja" llevan fondo: agrupar aquí el texto del modal le
@@ -512,6 +670,14 @@
 .lightbox-close:hover,.lightbox-close:focus-visible{background:rgba(255,255,255,.3);outline:2px solid rgba(255,255,255,.5);outline-offset:2px}
 .btn-danger{background:#ef4444}.btn-danger:hover{background:#dc2626}
 :root:is([data-theme="light"]) .vault-input-field{background:#fff;color:#1a1f2e;border-color:#d1d5db}
+:root:is([data-theme="light"]) .share-pw-toggle{background:rgba(0,0,0,.03)}
+:root:is([data-theme="light"]) .share-pw-toggle:hover{background:rgba(0,0,0,.055)}
+:root:is([data-theme="light"]) .share-pw-toggle span{color:#1f2533}
+:root:is([data-theme="light"]) .share-pw-toggle small{color:#5b6373}
+:root:is([data-theme="light"]) .share-switch{background:rgba(0,0,0,.14)}
+:root:is([data-theme="light"]) .share-copy-btn{background:rgba(0,0,0,.06);color:#1f2533}
+:root:is([data-theme="light"]) .share-copy-btn:hover{background:color-mix(in srgb,var(--vault-accent) 16%,rgba(0,0,0,.05))}
+:root:is([data-theme="light"]) .share-link-row input{background:#fff;color:#1a1f2e;border-color:#d1d5db}
 :root:is([data-theme="light"]) .vault-input-field::placeholder{color:#9aa2b4}
 
 /* ════════════ Exportar a PDF: estilos y temas propios ════════════
@@ -610,10 +776,9 @@
 .theme-add-img svg{width:14px;height:14px}
 
 .pdf-error{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#fca5a5;border-radius:9px;padding:.5rem .7rem;font-size:.8rem;margin:.8rem 0 0}
-/* El editor es más alto que el modal (que ya scrollea): los botones se quedan
-   pegados abajo para no tener que bajar hasta el final para guardar. */
-.modal-back .pdf-modal .modal-actions{position:sticky;bottom:0;z-index:3;background:var(--bg2);
-  padding:.75rem 0 .1rem;margin-top:.2rem}
+/* Los botones del editor de temas siguen el flujo del contenido (el modal ya
+   scrollea): hacerlos sticky los fusionaba con la plantilla en scroll. */
+.modal-back .pdf-modal .modal-actions{padding:.9rem 0 .1rem;margin-top:.2rem}
 
 @media(max-width:900px){
   .theme-cols{grid-template-columns:1fr}

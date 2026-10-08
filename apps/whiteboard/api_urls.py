@@ -13,4 +13,5 @@ urlpatterns = [
     path("scene/save", views.scene_save, name="scene_save"),
     path("thumb/save", views.thumb_save, name="thumb_save"),
     path("thumb", views.thumb, name="thumb"),
+    path("pdf", views.pdf_export, name="pdf"),
 ]

@@ -1,4 +1,4 @@
-"""Utilidades compartidas por las dos capas HTTP (web con sesión y API v1).
+"""Utilidades compartidas por las capas HTTP (web con sesión).
 
     from apps.core.api import error_response as _err
     from apps.core.api import json_body
@@ -6,8 +6,8 @@
 Aquí viven también los tres coercionadores de tipos (`as_int`, `as_text`,
 `as_optional_text`). El cuerpo JSON lo escribe el cliente, así que un número
 donde se espera texto reventaría el `.strip()` de turno con un 500: en vez de
-repetir la comprobación en cada vista —y que se olvide en alguna—, la API v1 y
-los endpoints de sesión usan estos mismos.
+repetir la comprobación en cada vista —y que se olvide en alguna—, los
+endpoints de sesión usan estos mismos.
 """
 import functools
 import json

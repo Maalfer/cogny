@@ -1,4 +1,4 @@
-/* Página de Ajustes (/settings/): tema, enlaces compartidos y claves de API.
+/* Página de Ajustes (/settings/): tema y enlaces compartidos.
 
    Antes esto era un modal global inyectado en TODAS las páginas (base.html +
    settings-modal.js). Ahora es una página propia, así que este script se carga
@@ -165,138 +165,9 @@
     });
   }
 
-  /* ═══════════════════════ Claves de API ═══════════════════════ */
-  const keysList = $('apikeys-list');
-
-  function renderApiKeys(keys) {
-    if (!keys.length) {
-      keysList.innerHTML = '';
-      $('apikeys-empty').style.display = 'flex';
-      return;
-    }
-    $('apikeys-empty').style.display = 'none';
-    keysList.innerHTML = keys.map(k => `
-      <div class="stx-item" data-id="${k.id}">
-        <div class="stx-item-info">
-          <div class="stx-item-name"><span>${esc(k.name)}</span>${k.read_only ? '<span class="stx-tag">sólo lectura</span>' : ''}</div>
-          <div class="stx-item-meta">${iconKey}<span>${esc(k.masked)} · ${lastUsed(k.last_used_at)}</span></div>
-        </div>
-        <div class="stx-item-actions">
-          <button class="stx-btn stx-revoke apikey-revoke" title="Revocar esta clave" aria-label="Revocar la clave ${esc(k.name)}">${iconTrash}</button>
-        </div>
-      </div>`).join('');
-  }
-
-  async function loadApiKeys() {
-    if (!keysList) return;
-    const loading = $('apikeys-loading');
-    loading.style.display = '';
-    keysList.innerHTML = '';
-    $('apikeys-empty').style.display = 'none';
-    try {
-      const res = await fetch('/api/apikeys/list').then(r => r.json());
-      renderApiKeys(res.keys || []);
-    } catch (_) {
-      $('apikeys-empty').style.display = 'flex';
-      toast('No se han podido cargar las claves', false);
-    }
-    loading.style.display = 'none';
-  }
-
-  /* Permisos de la clave nueva: mismo selector de dos opciones que usa el
-     perfil para los accesos invitados. */
-  let newKeyReadOnly = false;
-  const perm = $('apikey-perm');
-  if (perm) {
-    perm.addEventListener('click', e => {
-      const btn = e.target.closest('.acc-perm-btn');
-      if (!btn) return;
-      newKeyReadOnly = btn.dataset.readonly === '1';
-      perm.querySelectorAll('.acc-perm-btn').forEach(b => {
-        b.classList.toggle('active', b === btn);
-        b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
-      });
-    });
-  }
-
-  const createBtn = $('apikey-create');
-  if (createBtn) {
-    createBtn.addEventListener('click', async () => {
-      const label = createBtn.querySelector('span');
-      const prev = label.textContent;
-      createBtn.disabled = true;
-      label.textContent = 'Generando…';
-      try {
-        const res = await api('/api/apikeys/create', {
-          name: $('apikey-name').value.trim(),
-          read_only: newKeyReadOnly,
-        });
-        if (res.error) { toast(res.error, false); return; }
-        $('apikey-name').value = '';
-        $('apikey-new-secret').textContent = res.key.secret;
-        $('apikey-new').style.display = '';
-        await loadApiKeys();
-        toast('Clave generada — cópiala ahora');
-      } catch (_) {
-        toast('No se pudo generar la clave', false);
-      } finally {
-        createBtn.disabled = false;
-        label.textContent = prev;
-      }
-    });
-    $('apikey-name').addEventListener('keydown', e => { if (e.key === 'Enter') createBtn.click(); });
-  }
-
-  const newCopy = $('apikey-new-copy');
-  if (newCopy) {
-    newCopy.innerHTML = iconCopyLink;
-    newCopy.addEventListener('click', async () => {
-      await copyToClipboard($('apikey-new-secret').textContent);
-      flashCopied(newCopy, iconCopyLink);
-      toast('Clave copiada');
-    });
-  }
-
-  if (keysList) {
-    keysList.addEventListener('click', async e => {
-      const item = e.target.closest('.stx-item');
-      if (!item || !e.target.closest('.apikey-revoke')) return;
-      if (!confirm('¿Revocar esta clave? Todo lo que la use dejará de funcionar al instante.')) return;
-      const res = await api('/api/apikeys/revoke', { id: Number(item.dataset.id) });
-      if (res.error) { toast(res.error, false); return; }
-      item.remove();
-      if (!keysList.children.length) $('apikeys-empty').style.display = 'flex';
-      toast('Clave revocada');
-    });
-  }
-
-  /* ═══════════════ Bóveda pública (/conocimiento) ═══════════════ */
+  /* ═══════════════ Enlaces maestros (/conocimiento) ═══════════════ */
 
   const knCard = $('kn-card');
-
-  function knSetEnabledUI(on) {
-    $('kn-enabled').checked = on;
-    $('kn-enabled-label').textContent = on ? 'Activada' : 'Desactivada';
-    knCard.classList.toggle('is-on', on);
-    // El cuerpo sólo estorba cuando está apagada: no hay nada que configurar
-    // hasta que se enciende.
-    $('kn-body').hidden = !on;
-  }
-
-  function knFillConfig(cfg) {
-    knSetEnabledUI(!!cfg.enabled);
-    $('kn-domains').value = cfg.allowed_domains || '';
-    $('kn-days').value = cfg.grant_days;
-    $('kn-url').textContent = cfg.url || '';
-  }
-
-  async function knSave(patch, okMsg) {
-    const res = await api('/api/knowledge/config/save', patch);
-    if (res.error) { toast(res.error, false); return null; }
-    knFillConfig(res);
-    if (okMsg) toast(okMsg);
-    return res;
-  }
 
   function knRenderLinks(links) {
     const list = $('kn-links');
@@ -335,32 +206,6 @@
   }
 
   if (knCard) {
-    $('kn-enabled').addEventListener('change', async e => {
-      const on = e.target.checked;
-      knSetEnabledUI(on);   // respuesta inmediata; si falla, knFillConfig lo revierte
-      await knSave({ enabled: on },
-                   on ? 'Bóveda pública activada' : 'Bóveda pública desactivada');
-      if (on) knLoadLinks();
-    });
-
-    $('kn-save').addEventListener('click', async () => {
-      const btn = $('kn-save'), label = btn.querySelector('span');
-      const prev = label.textContent;
-      btn.disabled = true; label.textContent = 'Guardando…';
-      await knSave({
-        allowed_domains: $('kn-domains').value,
-        grant_days: Number($('kn-days').value),
-      }, 'Ajustes guardados');
-      btn.disabled = false; label.textContent = prev;
-    });
-
-    $('kn-url-copy').innerHTML = iconCopyLink;
-    $('kn-url-copy').addEventListener('click', async () => {
-      await copyToClipboard($('kn-url').textContent);
-      flashCopied($('kn-url-copy'), iconCopyLink);
-      toast('Enlace copiado');
-    });
-
     $('kn-link-create').addEventListener('click', async () => {
       const btn = $('kn-link-create'), label = btn.querySelector('span');
       const prev = label.textContent;
@@ -400,105 +245,7 @@
     });
   }
 
-  async function knLoad() {
-    if (!knCard) return;
-    try {
-      const cfg = await fetch('/api/knowledge/config').then(r => r.json());
-      knFillConfig(cfg);
-      if (cfg.enabled) knLoadLinks();
-    } catch (_) {
-      toast('No se ha podido cargar la bóveda pública', false);
-    }
-  }
-
-  /* ═══════════════ Bóveda comunitaria (/comunidad) ═══════════════ */
-
-  const cmCard = $('cm-card');
-
-  function cmRenderLinks(links) {
-    const list = $('cm-links');
-    if (!links.length) {
-      list.innerHTML = '';
-      $('cm-links-empty').style.display = 'flex';
-      return;
-    }
-    $('cm-links-empty').style.display = 'none';
-    list.innerHTML = links.map(l => `
-      <div class="stx-item" data-id="${l.id}" data-url="${esc(l.url)}">
-        <div class="stx-item-info">
-          <div class="stx-item-name"><span>${esc(l.name || l.url)}</span></div>
-          <div class="stx-item-meta">${iconKey}<span>${l.visits} ${l.visits === 1 ? 'visita' : 'visitas'} · ${createdOn(l.created_at)} · ${lastUsed(l.last_used_at)}</span></div>
-        </div>
-        <div class="stx-item-actions">
-          <button class="stx-btn cm-link-copy" title="Copiar enlace" aria-label="Copiar el enlace de ${esc(l.name || 'este enlace')}">${iconCopyLink}</button>
-          <button class="stx-btn stx-revoke cm-link-revoke" title="Revocar" aria-label="Revocar el enlace de ${esc(l.name || 'este enlace')}">${iconTrash}</button>
-        </div>
-      </div>`).join('');
-  }
-
-  async function cmLoadLinks() {
-    const loading = $('cm-links-loading');
-    loading.style.display = '';
-    $('cm-links').innerHTML = '';
-    $('cm-links-empty').style.display = 'none';
-    try {
-      const res = await fetch('/api/community/links').then(r => r.json());
-      cmRenderLinks(res.links || []);
-    } catch (_) {
-      $('cm-links-empty').style.display = 'flex';
-      toast('No se han podido cargar los enlaces de la bóveda comunitaria', false);
-    }
-    loading.style.display = 'none';
-  }
-
-  if (cmCard) {
-    $('cm-link-create').addEventListener('click', async () => {
-      const btn = $('cm-link-create'), label = btn.querySelector('span');
-      const prev = label.textContent;
-      btn.disabled = true; label.textContent = 'Creando…';
-      try {
-        const res = await api('/api/community/links/create', { name: $('cm-link-name').value.trim() });
-        if (res.error) { toast(res.error, false); return; }
-        $('cm-link-name').value = '';
-        await cmLoadLinks();
-        await copyToClipboard(res.link.url);
-        toast('Enlace creado y copiado');
-      } catch (_) {
-        toast('No se pudo crear el enlace', false);
-      } finally {
-        btn.disabled = false; label.textContent = prev;
-      }
-    });
-    $('cm-link-name').addEventListener('keydown', e => { if (e.key === 'Enter') $('cm-link-create').click(); });
-
-    $('cm-links').addEventListener('click', async e => {
-      const item = e.target.closest('.stx-item');
-      if (!item) return;
-      if (e.target.closest('.cm-link-copy')) {
-        const btn = e.target.closest('.cm-link-copy');
-        await copyToClipboard(item.dataset.url);
-        flashCopied(btn, iconCopyLink);
-        toast('Enlace copiado');
-      } else if (e.target.closest('.cm-link-revoke')) {
-        if (!confirm('¿Revocar este enlace? Dejará de funcionar al instante, ' +
-                     'también para quien ya hubiera entrado con él.')) return;
-        const res = await api('/api/community/links/revoke', { id: Number(item.dataset.id) });
-        if (res.error) { toast(res.error, false); return; }
-        item.remove();
-        if (!$('cm-links').children.length) $('cm-links-empty').style.display = 'flex';
-        toast('Enlace revocado');
-      }
-    });
-  }
-
-  function cmLoad() {
-    if (!cmCard) return;
-    cmLoadLinks();
-  }
-
   /* ── Arranque ── */
   loadSharedLinks();
-  loadApiKeys();
-  knLoad();
-  cmLoad();
+  if (knCard) knLoadLinks();
 })();

@@ -9,9 +9,8 @@ Dos capas bien separadas:
 * Lo **administrativo** (`config_*`, `links_*`) es del propietario con sesión, y
   es lo que consume la tarjeta de Ajustes.
 
-El contenido sale de `apps.notes.vault`, el mismo módulo que usan la web con
-sesión y la API v1: una sola implementación de las reglas del sistema de
-ficheros.
+El contenido sale de `apps.notes.vault`, el mismo módulo que usa la web con
+sesión: una sola implementación de las reglas del sistema de ficheros.
 """
 import mimetypes
 
@@ -26,7 +25,7 @@ from apps.notes import vault
 from apps.notes.vault import VaultError
 
 from . import access
-from .models import MasterLink, PublicVault, normalize_domain
+from .models import MasterLink, PublicVault
 
 # Cuántos resultados devuelve el buscador público. Más bajo que el de la web
 # con sesión: aquí cada búsqueda recorre la bóveda entera y la pide gente que
@@ -65,9 +64,13 @@ def master_entry(request, token):
 
 
 def _strip_private(items: list) -> list:
-    """Quita del árbol las notas marcadas como privadas antes de mandarlo al
-    lector público. Recursivo: una nota privada dentro de una subcarpeta
-    también debe desaparecer, no sólo las de primer nivel.
+    """Quita del árbol lo marcado como privado antes de mandarlo al lector
+    público. Recursivo: una nota privada dentro de una subcarpeta también debe
+    desaparecer, no sólo las de primer nivel.
+
+    Una CARPETA privada se corta entera aquí mismo (no se baja a sus hijos):
+    lo que cuelga de ella ya no viaja al cliente, así que da igual que sus
+    notas no lleven marca propia.
     """
     out = []
     for it in items:
@@ -151,7 +154,7 @@ def api_asset(request):
     # sirven igual que siempre, por diseño — no hay forma de saber si "la"
     # nota dueña está privada cuando puede haber varias, o ninguna registrada.
     owner = vault.attachment_owner(root, target)
-    if owner and owner in vault.read_private(root):
+    if owner and vault.is_private(root, owner):
         raise Http404
 
     content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
@@ -170,8 +173,6 @@ def api_asset(request):
 def _config_json(request, cfg: PublicVault) -> dict:
     return {
         "enabled": cfg.enabled,
-        "allowed_domains": cfg.allowed_domains,
-        "domains": cfg.domain_list(),
         "grant_days": cfg.grant_days,
         "url": request.build_absolute_uri("/conocimiento/"),
     }
@@ -204,14 +205,6 @@ def config_save(request):
 
     if "enabled" in request.data:
         cfg.enabled = bool(request.data.get("enabled"))
-
-    if "allowed_domains" in request.data:
-        raw = as_text(request.data.get("allowed_domains"))
-        # Se guarda ya normalizado: lo que el propietario vuelva a ver en el
-        # cuadro es exactamente lo que el filtro va a comparar, sin sorpresas
-        # del tipo "pegué la URL entera y no filtraba".
-        cleaned = [normalize_domain(line) for line in raw.splitlines()]
-        cfg.allowed_domains = "\n".join(d for d in cleaned if d)
 
     if "grant_days" in request.data:
         days = as_int(request.data.get("grant_days"))

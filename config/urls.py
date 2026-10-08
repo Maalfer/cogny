@@ -2,36 +2,31 @@
 from django.urls import include, path
 
 from apps.core import views as core_views
-from apps.notes import pdf_headless, views as notes_views
+from apps.notes import views as notes_views
 
 
 urlpatterns = [
     # Página raíz: el vault (autenticado) o el login (anónimo).
     path("", core_views.root, name="root"),
 
-    # Login de un solo uso para el Chromium interno de exportación a PDF vía
-    # API (ver `apps.notes.pdf_headless`) — sólo responde a peticiones desde
-    # loopback, nunca expuesto por nginx hacia fuera.
-    path("internal/pdf-headless/<str:token>/", pdf_headless.headless_login,
-         name="pdf_headless_login"),
-
     # Cuentas (login, perfil, ajustes).
     path("", include("apps.accounts.urls")),
 
     # Nota compartida públicamente (sin login; contraseña opcional por nota).
+    # `save` y el API de la nota/adjuntos (`note`, `assets`) sólo responden si
+    # el enlace se creó como editable (`can_write`) — el API está pensado para
+    # dárselo a una IA que gestione la nota por HTTP sin sesión.
     path("s/<str:token>/", notes_views.shared_note_view, name="shared_note"),
     path("s/<str:token>/asset", notes_views.shared_note_asset, name="shared_note_asset"),
-
-    # Token de IA: lee y reescribe UNA nota por HTTP, sin login (el token en
-    # la URL es la credencial). Pensado para pasárselo a Claude u otra IA.
-    path("n/<str:token>/", notes_views.note_token_view, name="note_token"),
+    path("s/<str:token>/images.zip", notes_views.shared_note_images_zip, name="shared_note_images_zip"),
+    path("s/<str:token>/save", notes_views.shared_note_save, name="shared_note_save"),
+    path("s/<str:token>/note", notes_views.shared_note_note, name="shared_note_note"),
+    path("s/<str:token>/assets", notes_views.shared_note_assets, name="shared_note_assets"),
+    path("s/<str:token>/assets/<str:name>", notes_views.shared_note_asset_detail,
+         name="shared_note_asset_detail"),
 
     # Bóveda pública de sólo lectura (sin login; filtrada por dominio de origen).
     path("", include("apps.knowledge.urls")),
-
-    # Bóveda comunitaria: lectura y escritura sin login, por enlace (o sesión
-    # del propietario). Bóveda propia en disco, separada de la privada.
-    path("", include("apps.community.urls")),
 
     # Pizarra: galería + lienzo tipo Excalidraw (con sesión).
     path("", include("apps.whiteboard.urls")),
@@ -39,11 +34,7 @@ urlpatterns = [
     # APIs JSON internas (sesión + CSRF) — las consume el frontend.
     path("api/notes/", include("apps.notes.api_urls")),
     path("api/knowledge/", include("apps.knowledge.api_urls")),
-    path("api/community/", include("apps.community.api_urls")),
     path("api/pizarra/", include("apps.whiteboard.api_urls")),
-
-    # API pública v1 (clave de API) + Swagger en /api/docs/.
-    path("api/", include("apps.api.urls")),
 
     # Service worker + manifest a nivel raíz (necesario para PWA scope).
     path("sw.js", core_views.service_worker, name="sw"),

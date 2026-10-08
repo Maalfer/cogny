@@ -18,7 +18,6 @@ urlpatterns = [
     path("asset", views.asset, name="asset"),
     path("export", views.export_vault, name="export"),
     path("import", views.import_vault, name="import"),
-    path("copy-to-community", views.copy_to_community, name="copy_to_community"),
     path("storage", views.storage, name="storage"),
     path("pdf", views.notes_pdf, name="pdf"),
     path("themes", views.themes_list, name="themes"),
@@ -33,7 +32,4 @@ urlpatterns = [
     path("share/status", views.share_status, name="share_status"),
     path("share/list", views.share_list, name="share_list"),
     path("share/revoke", views.share_revoke, name="share_revoke"),
-    path("ai-token/list", views.ai_token_list, name="ai_token_list"),
-    path("ai-token/create", views.ai_token_create, name="ai_token_create"),
-    path("ai-token/revoke", views.ai_token_revoke, name="ai_token_revoke"),
 ]

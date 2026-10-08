@@ -9,78 +9,274 @@ html,body{margin:0;padding:0}
 body{
   background:#fff;color:#1a1a1a;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* `font-feature-settings` activa ligaduras y números proporcionales viejos
+     donde la fuente los tenga (Segoe UI / Inter / Charter): los números
+     "2026" en una fecha salen como cifras con gracia en vez de monoespacio
+     rígido. Sin coste visible si la fuente no los soporta. */
+  font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
+  font-variant-numeric: oldstyle-nums proportional-nums;
   line-height:1.7;
   -webkit-print-color-adjust:exact;print-color-adjust:exact;
 }
-.markdown-body{max-width:none;margin:0;padding:0;color:inherit;line-height:1.7;word-wrap:break-word}
+.markdown-body{max-width:none;margin:0;padding:0;color:inherit;line-height:1.7;word-wrap:break-word;font-feature-settings:inherit;font-variant-numeric:inherit}
 
-/* Encabezados */
-.markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{color:#000;line-height:1.3;margin:1.3em 0 .5em;font-weight:700}
-.markdown-body h1{font-size:1.8rem;border-bottom:1px solid #ccc;padding-bottom:.25em}
-.markdown-body h2{font-size:1.4rem;border-bottom:1px solid #ccc;padding-bottom:.2em}
-.markdown-body h3{font-size:1.15rem}
-.markdown-body h4{font-size:1rem}
-.markdown-body h1,.markdown-body h2,.markdown-body h3{break-after:avoid}
+/* ───────────── Encabezados ─────────────
+   La numeración tipográfica va de mayor a menor. Cada nivel trae su propio
+   `margin-top` para que un H3 después de un párrafo se separe (no se
+   "pegue"), pero un H3 después de otro H2 no deje hueco (el H2 ya trae
+   aire debajo). `break-after:avoid` evita que un encabezado quede solo
+   al final de una página, con su contenido en la siguiente — es feo y un
+   click más para el lector. */
+.markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4,
+.markdown-body h5,.markdown-body h6{
+  color:#111;line-height:1.25;margin:1.4em 0 .5em;font-weight:700;
+  letter-spacing:-.012em;     /* slight tightening: encaja con la fuente */
+  break-after:avoid;
+}
+.markdown-body h1{font-size:1.95rem;border-bottom:.8px solid #d0d0d0;padding-bottom:.3em;font-weight:800;letter-spacing:-.02em}
+.markdown-body h2{font-size:1.45rem;border-bottom:.6px solid #e2e2e2;padding-bottom:.25em;font-weight:700}
+.markdown-body h3{font-size:1.18rem;font-weight:700}
+.markdown-body h4{font-size:1.02rem;font-weight:600;color:#444}
+.markdown-body h5{font-size:.92rem;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.06em}
+.markdown-body h6{font-size:.82rem;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.08em}
+/* Primer encabezado del documento: sin aire arriba (la cabecera de página
+   ya marca el inicio). Es lo que se ve en la primera página, sin margen
+   blanco muerto entre el borde y el título. */
+.markdown-body>:first-child{margin-top:0}
 
-/* Texto / enlaces */
-.markdown-body p{margin:.6em 0}
-.markdown-body a,.markdown-body .wikilink{color:#1a56db;text-decoration:none;border:none}
-.markdown-body .wikilink.missing{color:#b91c1c}
-
-/* Código: bloques oscuros (igual que en pantalla, legibles sobre papel) */
-.markdown-body code{background:#eef0f2;color:#111;padding:.15em .4em;border-radius:5px;font-size:.88em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.markdown-body pre{background:#0d1117;padding:.9rem 1rem;border-radius:8px;border:1px solid #30363d;overflow:hidden;white-space:pre-wrap;word-break:break-word;break-inside:avoid}
-.markdown-body pre code{background:none;padding:0;font-size:.86rem;color:#e6edf3}
-
-/* Citas, listas, tablas, imágenes */
-.markdown-body blockquote{border-left:3px solid #1a56db;margin:.7em 0;padding:.1em .9em;color:#444}
-.markdown-body ul,.markdown-body ol{padding-left:1.5em;margin:.5em 0}
-.markdown-body li{margin:.2em 0}
+/* ───────────── Texto / listas / enlaces ───────────── */
+.markdown-body p{margin:.55em 0}
+.markdown-body a,.markdown-body .wikilink{color:#1a56db;text-decoration:none;border-bottom:.5px solid rgba(26,86,219,.3);padding-bottom:.5px}
+.markdown-body a:hover,.markdown-body .wikilink:hover{border-bottom-color:#1a56db}
+.markdown-body .wikilink.missing{color:#b91c1c;border-bottom-color:rgba(185,28,28,.3)}
+.markdown-body strong{font-weight:700;color:#000}
+.markdown-body em{font-style:italic}
+/* Viñetas y numeración: por defecto son feas (negro puro, sin respirar).
+   Un sangrado mayor y un poco de aire entre puntos las hace más amables sin
+   tocar el contenido. */
+.markdown-body ul,.markdown-body ol{padding-left:1.6em;margin:.5em 0}
+.markdown-body ul{list-style:disc}
+.markdown-body ul ul{list-style:circle}
+.markdown-body ul ul ul{list-style:square}
+.markdown-body ol{list-style:decimal}
+.markdown-body li{margin:.25em 0;padding-left:.2em}
+.markdown-body li>p{margin:.3em 0}
+.markdown-body li+li{margin-top:.15em}
 .markdown-body li.task-list-item{list-style:none;margin-left:-1.3em}
-.markdown-body input[type=checkbox]{margin-right:.5em}
-.markdown-body img{max-width:100%;height:auto;border-radius:8px;break-inside:avoid}
-/* Un diagrama Mermaid (o un <svg> pegado a mano en la nota) no tenía esta
-   protección: se podía partir a media figura entre dos páginas igual que le
-   pasaría a una tabla o una imagen sin este `break-inside`. */
+.markdown-body input[type=checkbox]{margin-right:.5em;accent-color:currentColor}
+
+/* ───────────── Código ─────────────
+   Bloques `<pre>` oscuros (igual que en pantalla) sobre inline code claro:
+   el bloque llama la atención porque rompe la línea base; el inline se
+   camufla. Sin `box-shadow` (queda "web 2.0"). Borde superior fino de
+   color de marca para que se note al hojear — el tema puede sobreescribirlo. */
+.markdown-body code{background:#eef0f2;color:#111;padding:.15em .42em;border-radius:4px;font-size:.87em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:500}
+.markdown-body pre{
+  background:#0d1117;padding:.95rem 1.05rem;border-radius:6px;
+  border:.5px solid #30363d;
+  overflow:hidden;white-space:pre-wrap;word-break:break-word;break-inside:avoid;
+  position:relative;
+}
+.markdown-body pre code{background:none;padding:0;font-size:.85rem;color:#e6edf3;font-weight:400;line-height:1.55}
+/* Etiqueta de lenguaje discreta arriba a la derecha (`.lang-bash`, `.lang-python`,
+   etc.) — la pone `addCopyBtn`/postProcess en notes.js al identificar el
+   bloque. Pequeña, monoespaciada, en un mostaza apagado: identifica sin
+   estridencia. */
+.markdown-body pre .lang-label{
+  display:block;position:absolute;top:.45em;right:.7em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:.65rem;color:#7d8590;letter-spacing:.05em;
+  text-transform:lowercase;font-weight:600;
+  pointer-events:none;
+}
+
+/* ───────────── Citas ───────────── */
+.markdown-body blockquote{
+  border-left:3px solid #1a56db;margin:.7em 0;padding:.15em .95em;
+  color:#444;font-style:italic;
+}
+.markdown-body blockquote>:first-child{margin-top:.2em}
+.markdown-body blockquote>:last-child{margin-bottom:.2em}
+
+/* ───────────── Separador horizontal ─────────────
+   En vez de una línea fina y sosa, tres rombos centrados: ornamental pero
+   discreto, deja respirar el texto sin pedir atención. Los temas pueden
+   sobreescribirlo (Tunivers usa mostaza). */
+.markdown-body hr{
+  border:none;height:0;margin:1.8em auto;text-align:center;
+  position:relative;
+}
+.markdown-body hr::after{
+  content:"◆  ◆  ◆";letter-spacing:.6em;color:#aaa;font-size:.65em;
+  display:inline-block;
+}
+
+/* ───────────── Tablas ─────────────
+   Filas alternas muy claras (casi imperceptibles) para que la vista recorra
+   las columnas sin perder la fila. Cabecera en gris oscuro, no negro: las
+   mayúsculas con letter-spacing ya piden atención suficiente. Tabular-nums
+   alinea los números en columna sin monoespacio. Los temas sobreescriben
+   el color de cabecera (Tunivers = malva). */
+.markdown-body table{
+  border-collapse:separate;border-spacing:0;
+  border:.5px solid #d6d6d6;border-radius:4px;
+  margin:.8em 0;width:auto;break-inside:avoid;
+  font-variant-numeric:tabular-nums;
+  overflow:hidden;
+}
+.markdown-body th,.markdown-body td{border:none;border-bottom:.5px solid #e6e6e6;padding:.5em .85em;text-align:left;vertical-align:top}
+.markdown-body th{
+  background:#f4f4f4;color:#222;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;font-size:.78em;
+}
+.markdown-body tr:nth-child(even) td{background:#fafafa}
+.markdown-body tr:last-child td{border-bottom:none}
+.markdown-body td>:first-child{margin-top:0}
+.markdown-body td>:last-child{margin-bottom:0}
+
+/* Imágenes y figuras (mermaid, svg pegado): mismas reglas de no-partirse. */
+.markdown-body img{max-width:100%;height:auto;border-radius:6px;break-inside:avoid}
 .markdown-body .mermaid,.markdown-body svg{max-width:100%;break-inside:avoid}
-.markdown-body table{border-collapse:collapse;margin:.7em 0;width:auto;break-inside:avoid}
-.markdown-body th,.markdown-body td{border:1px solid #ccc;padding:.4em .7em}
-.markdown-body th{background:#f0f0f0}
-.markdown-body hr{border:none;border-top:1px solid #ccc;margin:1.4em 0}
-.markdown-body mark{background:#fde68a;color:#1a1a1a;padding:0 .15em;border-radius:3px}
+.markdown-body figure{margin:.8em 0;break-inside:avoid}
+.markdown-body figcaption{font-size:.82em;color:#666;text-align:center;margin-top:.3em}
 
-/* Etiquetas / propiedades (frontmatter) */
-.tag-pill{background:#e0f2fe;color:#0369a1;border-radius:10px;padding:.05em .55em;font-size:.82em;font-weight:600;text-decoration:none}
-.note-props{border:1px solid #ddd;border-radius:8px;margin:0 0 1.2em;overflow:hidden}
-.note-props table{margin:0;width:100%;border:none}
-.note-props th,.note-props td{border:none;border-bottom:1px solid #eee;text-align:left;font-size:.85rem;padding:.45em .8em}
+/* ───────────── Marca / highlight / sub / sup ───────────── */
+.markdown-body mark{
+  background:linear-gradient(transparent 55%,#fde68a 55%);
+  color:#1a1a1a;padding:0 .15em;border-radius:2px;
+}
+.markdown-body sub,.markdown-body sup{font-size:.72em;line-height:0;position:relative;vertical-align:baseline}
+.markdown-body sub{bottom:-.25em}
+.markdown-body sup{top:-.5em}
+
+/* ───────────── Etiquetas / propiedades (frontmatter) ─────────────
+   El frontmatter (YAML entre --- al principio) sale como una "tarjeta de
+   metadatos": borde fino + una franja de color a la izquierda. Los temas
+   sobreescriben el color de la franja. La cabecera va en versalitas con
+   letter-spacing para que se lea como "clave" y no como "etiqueta suelta". */
+.tag-pill{
+  display:inline-block;
+  background:#e0f2fe;color:#0369a1;
+  border-radius:11px;padding:.1em .6em;
+  font-size:.8em;font-weight:600;
+  letter-spacing:.02em;text-decoration:none;
+  margin-right:.25em;
+}
+.note-props{
+  border:.5px solid #ddd;border-left:3px solid #1a56db;
+  border-radius:4px;margin:0 0 1.4em;overflow:hidden;
+}
+.note-props table{margin:0;width:100%;border:none;border-radius:0}
+.note-props th,.note-props td{
+  border:none;border-bottom:.5px solid #eee;
+  text-align:left;font-size:.85rem;padding:.5em .85em;
+  vertical-align:top;background:transparent !important;
+  text-transform:none;letter-spacing:0;
+}
 .note-props tr:last-child th,.note-props tr:last-child td{border-bottom:none}
-.note-props th{color:#555;font-weight:600;width:30%;white-space:nowrap}
+.note-props th{
+  color:#1a56db;font-weight:600;width:30%;white-space:nowrap;
+}
 
-/* Callouts */
-.callout{border:1px solid #ddd;border-left:4px solid var(--cl,#1a56db);border-radius:8px;margin:.9em 0;padding:.7em .9em;background:#fafafa;break-inside:avoid}
-.callout-title{display:flex;align-items:center;gap:.45em;font-weight:700;color:var(--cl,#333);margin-bottom:.2em}
-.callout-title svg{width:18px;height:18px}
+/* ───────────── Callouts ─────────────
+   13 tipos según Obsidian (note/info/todo, tip/success, question, warning,
+   danger/bug, example, quote…) con un color de marca y un icono distinto.
+   La franja lateral gruesa marca el bloque; un fondo muy claro refuerza
+   la separación sin tapar el contenido. El icono y el título comparten
+   color para jerarquía visual. El tema Tunivers sobreescribe los colores
+   con su paleta. */
+.callout{
+  --cl:#1a56db;
+  border:.5px solid rgba(0,0,0,.08);
+  border-left:3px solid var(--cl);
+  border-radius:5px;
+  margin:.95em 0;padding:.7em .95em .75em;
+  background:color-mix(in srgb,var(--cl) 6%,#fff);
+  break-inside:avoid;
+  position:relative;
+}
+.callout-title{
+  display:flex;align-items:center;gap:.5em;
+  font-weight:700;color:var(--cl);
+  margin:0 0 .35em;
+  font-size:.92em;
+  letter-spacing:.01em;
+}
+.callout-title svg{width:16px;height:16px;flex-shrink:0}
 .callout-content>:first-child{margin-top:0}
 .callout-content>:last-child{margin-bottom:0}
-.callout[data-cl="note"],.callout[data-cl="info"],.callout[data-cl="todo"]{--cl:#1a56db}
-.callout[data-cl="tip"],.callout[data-cl="abstract"],.callout[data-cl="summary"]{--cl:#0e7490}
-.callout[data-cl="success"],.callout[data-cl="check"],.callout[data-cl="done"]{--cl:#15803d}
+.callout[data-cl="note"],
+.callout[data-cl="info"],
+.callout[data-cl="todo"]{--cl:#1a56db}
+.callout[data-cl="tip"],
+.callout[data-cl="abstract"],
+.callout[data-cl="summary"]{--cl:#0e7490}
+.callout[data-cl="success"],
+.callout[data-cl="check"],
+.callout[data-cl="done"]{--cl:#15803d}
 .callout[data-cl="question"]{--cl:#a16207}
-.callout[data-cl="warning"],.callout[data-cl="caution"],.callout[data-cl="attention"]{--cl:#b45309}
-.callout[data-cl="failure"],.callout[data-cl="danger"],.callout[data-cl="error"],.callout[data-cl="bug"]{--cl:#b91c1c}
+.callout[data-cl="warning"],
+.callout[data-cl="caution"],
+.callout[data-cl="attention"]{--cl:#b45309}
+.callout[data-cl="failure"],
+.callout[data-cl="danger"],
+.callout[data-cl="error"],
+.callout[data-cl="bug"]{--cl:#b91c1c}
 .callout[data-cl="example"]{--cl:#7e22ce}
 .callout[data-cl="quote"]{--cl:#6b7280}
 
-/* Embeds */
-.internal-embed{display:block;border:1px solid #ddd;border-radius:8px;margin:.7em 0;overflow:hidden;break-inside:avoid}
-.embed-title{font-size:.8rem;color:#1a56db;padding:.45em .8em;border-bottom:1px solid #eee;font-weight:600}
-.embed-body{padding:.2em .9em;font-size:.95em}
+/* ───────────── Embeds (notas incrustadas) ─────────────
+   Una nota ![[incrustada]] sale como una cajita con cabecera y cuerpo:
+   cabecera en color de marca con un punto/viñeta, cuerpo con padding.
+   Se distingue de un callout por tener un borde completo (no solo la
+   franja izquierda) y por la cabecera fina en versalitas. */
+.internal-embed{
+  display:block;border:.5px solid #ddd;border-radius:5px;
+  margin:.75em 0;overflow:hidden;break-inside:avoid;
+}
+.embed-title{
+  font-size:.74rem;color:#1a56db;
+  padding:.5em .85em;border-bottom:.5px solid #eee;
+  font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.embed-body{padding:.2em .85em .35em;font-size:.95em}
 .embed-missing{color:#b91c1c;font-size:.85em;font-style:italic}
-.katex-display{overflow:visible}
+
+/* ───────────── Math ───────────── */
+.katex-display{overflow:visible;margin:.9em 0}
+.katex{font-size:1em !important}
+
+/* ───────────── Notas al pie ─────────────
+   El ref [1] sale como un superíndice malva: pequeño, redondo y legible
+   sin que parezca un error tipográfico. La lista al pie de página va en
+   versalitas pequeñas y separadas del cuerpo por una línea muy fina. */
+.fn-ref{
+  color:#1a56db;font-weight:600;font-size:.72em;
+  text-decoration:none;padding:0 .15em;
+}
+.fn-ref a{color:inherit;border:none}
+.markdown-body .footnotes{
+  margin-top:2em;padding-top:.8em;
+  border-top:.5px solid #e6e6e6;
+  font-size:.82em;color:#555;
+  list-style:decimal;
+}
+.markdown-body .footnotes li{margin-bottom:.3em}
+.markdown-body .footnotes li:target{background:rgba(26,86,219,.06);border-radius:2px}
 
 /* No imprimir el botón "copiar" de los bloques de código */
 .code-copy{display:none !important}
+
+/* Bloque "raw" hermano del <pre> resaltado, generado por `addCopyBtn`
+   (notes.js). En el editor ya está oculto (`.code-source-wrap{display:none}`
+   en notes.css) y aquí también: se imprimía para que copiar desde el visor
+   de PDF devolviera el código sin markup de highlight.js, pero los visores
+   modernos (Adobe, Preview, Chrome PDF) ya extraen el texto plano al
+   copiar — el duplicado era ruido puro. El DOM lo sigue conteniendo (por
+   si alguien lo necesita desde CSS o JS), pero aquí no se imprime. */
+.code-source-wrap,
+.code-source-label,
+.code-source{display:none !important}
 
 /* A4 explícito: sin `size` Chromium headless imprime en Letter (216×279mm),
    que es lo que NO se usa aquí. La regla la reemite `pdf.py` según la
@@ -111,7 +307,7 @@ body.landscape .markdown-body{column-count:2;column-gap:12mm}
 body.landscape .markdown-body>h1,
 body.landscape .markdown-body>.pdf-wide,
 body.landscape .markdown-body>.note-props,
-body.landscape .markdown-body>.katex-display{column-span:all}
+body.landscape .markdown-body>.katex-display,
 /* Un bloque partido entre dos columnas se lee fatal (media tabla arriba a la
    derecha, la otra media abajo a la izquierda): los que tienen forma de
    "figura" se mantienen enteros. */
@@ -119,7 +315,7 @@ body.landscape .markdown-body :is(pre,table,img,blockquote,.callout,.internal-em
 /* Las columnas son estrechas: el código y las tablas aprietan un poco la
    tipografía para que quepan sin partir palabras a lo bestia. */
 body.landscape .markdown-body pre code{font-size:.78rem}
-body.landscape .markdown-body th,body.landscape .markdown-body td{padding:.3em .5em;font-size:.92em}
+body.landscape .markdown-body th,body.landscape .markdown-body td{padding:.32em .55em;font-size:.92em}
 body.landscape .markdown-body .pdf-wide pre code{font-size:.86rem}
 /* Una tabla que ya no cabía en una columna aprovecha la banda entera en vez de
    quedarse pegada a la izquierda con medio folio en blanco al lado. */
@@ -146,27 +342,39 @@ body.landscape .markdown-body>.pdf-wide:has(>img),
 body.landscape .markdown-body>.pdf-wide:has(>svg){text-align:center}
 body.landscape .markdown-body .pdf-wide img,
 body.landscape .markdown-body .pdf-wide svg{max-height:135mm}
-body.landscape .markdown-body h1{font-size:1.6rem;margin-top:0}
-body.landscape .markdown-body h2{font-size:1.25rem}
+body.landscape .markdown-body h1{font-size:1.7rem;margin-top:0}
+body.landscape .markdown-body h2{font-size:1.3rem}
+body.landscape .markdown-body h3{font-size:1.1rem}
+body.landscape .markdown-body hr{margin:1.3em auto}
 
 /* ───────────── Variante OSCURA (hoja negra, texto blanco) ───────────── */
 /* La clase está en <html> y en <body>: el fondo de `body` sólo cubre su caja,
    y sin pintar también la raíz los márgenes de página quedan en blanco. */
 html.print-dark,body.print-dark{background:#0d1117}
 body.print-dark{color:#e6edf3}
+body.print-dark .markdown-body{color:#e6edf3}
 body.print-dark .markdown-body h1,body.print-dark .markdown-body h2,
 body.print-dark .markdown-body h3,body.print-dark .markdown-body h4{color:#fff;border-color:#30363d}
-body.print-dark .markdown-body a,body.print-dark .markdown-body .wikilink{color:#58a6ff}
+body.print-dark .markdown-body a,body.print-dark .markdown-body .wikilink{color:#58a6ff;border-bottom-color:rgba(88,166,255,.3)}
+body.print-dark .markdown-body strong{color:#fff}
 body.print-dark .markdown-body code{background:#161b22;color:#e6edf3}
-body.print-dark .markdown-body blockquote{color:#9da7b3;border-left-color:#30363d}
-body.print-dark .markdown-body hr{border-top-color:#30363d}
-body.print-dark .markdown-body th,body.print-dark .markdown-body td{border-color:#30363d}
-body.print-dark .markdown-body th{background:#161b22}
-body.print-dark .markdown-body mark{background:#9e6a03;color:#fff}
+body.print-dark .markdown-body blockquote{color:#9da7b3;border-left-color:#58a6ff}
+body.print-dark .markdown-body blockquote{border-left-color:#30363d}
+body.print-dark .markdown-body hr{border:none}
+body.print-dark .markdown-body hr::after{color:#444}
+body.print-dark .markdown-body table{border-color:#30363d}
+body.print-dark .markdown-body th,body.print-dark .markdown-body td{border-bottom-color:#262c36}
+body.print-dark .markdown-body th{background:#161b22;color:#e6edf3}
+body.print-dark .markdown-body tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+body.print-dark .markdown-body mark{
+  background:linear-gradient(transparent 55%,#9e6a03 55%);color:#fff;
+}
 body.print-dark .tag-pill{background:rgba(88,166,255,.18);color:#79c0ff}
-body.print-dark .note-props{border-color:#30363d}
-body.print-dark .note-props th,body.print-dark .note-props td{border-bottom-color:#30363d}
-body.print-dark .note-props th{color:#9da7b3}
-body.print-dark .callout{background:#161b22;border-color:#30363d}
+body.print-dark .note-props{border-color:#30363d;border-left-color:#58a6ff}
+body.print-dark .note-props th,body.print-dark .note-props td{border-bottom-color:#262c36}
+body.print-dark .note-props th{color:#79c0ff}
+body.print-dark .callout{background:rgba(255,255,255,.02);border-color:#30363d}
 body.print-dark .internal-embed{border-color:#30363d}
-body.print-dark .embed-title{border-bottom-color:#30363d}
+body.print-dark .embed-title{border-bottom-color:#30363d;color:#79c0ff}
+body.print-dark .fn-ref{color:#79c0ff}
+body.print-dark .markdown-body .footnotes{border-top-color:#30363d;color:#9da7b3}
