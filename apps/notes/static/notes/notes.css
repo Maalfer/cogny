@@ -427,6 +427,12 @@
 /* mobile */
 @media(max-width:760px){
   .vault-resizer{display:none}
+  /* El breadcrumb (carpeta / nota) y el estado "Guardado" son informacion de
+     escritorio: en movil el toolbar se aprieta demasiado, asi que se ocultan.
+     Al desaparecer el titulo (que llevaba flex:1) los botones se alinean a la
+     derecha, como en escritorio. */
+  #vault-title, #vault-status{display:none}
+  .vault-toolbar{justify-content:flex-end}
   .cm-content{padding:1rem 1.15rem max(40vh,280px) !important}
   .cm-lp-block.markdown-body img{max-width:100% !important;max-height:300px !important}   /* imágenes coherentes y niveladas en móvil */
   .vault-side{position:absolute;z-index:50;height:100%;box-shadow:6px 0 24px rgba(0,0,0,.5);
