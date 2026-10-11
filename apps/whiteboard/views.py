@@ -4,6 +4,8 @@ Mismo reparto que `apps.notes`: aquí sólo la capa HTTP, el disco lo toca
 `storage.py`. Las pizarras se editan desde el navegador, no existe API
 pública sin sesión.
 """
+import base64
+import binascii
 import json
 import re
 import uuid
@@ -219,9 +221,8 @@ def pdf_export(request):
     # (502) — sin esto, bytes que no son PNG cruzan la frontera como 502
     # cuando el cliente claramente nos ha mandado algo que no es una imagen.
     try:
-        import base64 as _b64
-        head = _b64.b64decode(data_url.split(",", 1)[1], validate=True)[:8]
-    except (binascii.Error, ValueError):
+        head = base64.b64decode(data_url.split(",", 1)[1], validate=True)[:8]
+    except (binascii.Error, ValueError, TypeError):
         return _err("Imagen no valida")
     if head != b"\x89PNG\r\n\x1a\n":
         return _err("Imagen no valida")

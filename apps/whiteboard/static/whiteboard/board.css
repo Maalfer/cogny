@@ -90,6 +90,25 @@
 
 .pz-hidden-input{ display:none; }
 
+/* ───────────── Móvil ─────────────
+   La pizarra también se usa desde el móvil: la toolbar pasa a ser una fila
+   única deslizable (todas las herramientas al alcance sin gastar la altura
+   del lienzo en 3-4 filas) y crece un poco el blanco táctil de botones y
+   zoom. Los menús de iconos/fondo los ancla fixed board.js para que la
+   toolbar con scroll no los recorte. */
+@media (max-width: 760px){
+  .pz-toolbar{ flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:.45rem .55rem; }
+  .pz-toolbar::-webkit-scrollbar{ display:none; }
+  .pz-toolbar .pz-tool-group{ flex-shrink:0; }
+  .pz-tool{ padding:.5rem; }
+  .pz-tool svg{ width:21px; height:21px; }
+  .pz-color{ width:32px; height:32px; }
+  .pz-select{ padding:.4rem .45rem; }
+  .pz-zoom button{ width:32px; height:32px; }
+  .pz-save-status{ bottom:.65rem; right:.65rem; }
+  .pz-ctx-menu{ max-width:calc(100vw - 1rem); }
+}
+
 /* ───────────── Título editable en el header ─────────────
    El header pone el título a la izquierda (después de la flecha de "Volver").
    El <span> se comporta como texto normal hasta que se le hace clic (sólo

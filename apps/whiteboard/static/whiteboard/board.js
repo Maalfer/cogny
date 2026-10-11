@@ -334,7 +334,7 @@
           ? { kind: 'image', url: item.url, w: item.w, h: item.h }
           : { kind: 'path', name: item.key };
         setTool('icon');
-        iconMenu.classList.add('hidden');
+        closeDropdown(iconMenu);
       });
       gridEl.appendChild(b);
     });
@@ -574,8 +574,12 @@
 
     // Puntos de fondo (referencia visual del lienzo infinito). El contraste
     // se adapta al fondo elegido para que sigan visibles sobre uno claro.
+    // El paso del mundo sube al alejar: con 32px fijos, a zoom 0.15 quedan
+    // ~90.000 puntos por frame y el pan/dibujo se degrada; escalándolo en
+    // potencias de 2 la densidad visual se mantiene y la cuenta se acota.
     const rect = wrap.getBoundingClientRect();
-    const step = 32;
+    let step = 32;
+    while (step * zoom < 20) step *= 2;
     const tl = screenToWorld(0, 0), br = screenToWorld(rect.width, rect.height);
     ctx.fillStyle = isLightColor(bgColor) ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
     const startX = Math.floor(tl.x / step) * step, startY = Math.floor(tl.y / step) * step;
@@ -930,7 +934,9 @@
       wrap.classList.remove('panning');
     } else if (dragMode === 'draw' && draftElement) {
       const b = bbox(draftElement);
-      const tooSmall = draftElement.type !== 'pencil' && draftElement.type !== 'line' && draftElement.type !== 'arrow' && b.w < 2 && b.h < 2;
+      const tooSmall =
+        (draftElement.type !== 'pencil' && draftElement.type !== 'line' && draftElement.type !== 'arrow' && b.w < 2 && b.h < 2) ||
+        (draftElement.type === 'pencil' && draftElement.points.length < 2);
       if (!tooSmall) {
         snapshot();
         elements.push(draftElement);
@@ -968,7 +974,17 @@
     // `position:fixed` va relativo al viewport, así que basta con la posición
     // en pantalla del punto del mundo — no hace falta restar scroll alguno.
     const sx = canvasRect.left + worldPos.x * zoom + offsetX;
-    const sy = canvasRect.top + worldPos.y * zoom + offsetY;
+    let sy = canvasRect.top + worldPos.y * zoom + offsetY;
+    // En táctil el teclado virtual cubre la zona baja de la vista y un
+    // `position:fixed` no se desplaza con él: si el toque cayó ahí, el cuadro
+    // quedaría escribiendo "a ciegas" bajo las teclas. Lo acercamos a la zona
+    // visible; el texto se inserta en el punto tocado igualmente (worldPos es
+    // el que se usa al crear el elemento).
+    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+      const vv = window.visualViewport;
+      const limit = (vv ? vv.height : window.innerHeight) * 0.42;
+      sy = Math.max(0, Math.min(sy, limit));
+    }
     ta.style.left = sx + 'px'; ta.style.top = sy + 'px';
     document.body.appendChild(ta);
     // El propio clic que abre el cuadro de texto sigue su curso como mousedown
@@ -1197,22 +1213,49 @@
   document.getElementById('pz-delete').addEventListener('click', deleteSelected);
 
   /* ════════════ Barra de herramientas ════════════ */
+  /* ─ Menús desplegables (iconos / fondo) ─
+     En móvil la toolbar hace scroll horizontal; un menú absoluto dentro de
+     ella quedaría recortado. Al abrirlo lo anclamos `position:fixed` bajo su
+     botón (fuera del flujo de scroll) y al cerrarlo restauramos el CSS. */
+  function openDropdown(btn, menu) {
+    menu.classList.remove('hidden');
+    const left = Math.max(8, Math.min(btn.getBoundingClientRect().left, window.innerWidth - (menu.offsetWidth || 260) - 8));
+    menu.style.position = 'fixed';
+    menu.style.left = left + 'px';
+    menu.style.top = (btn.getBoundingClientRect().bottom + 6) + 'px';
+  }
+  function closeDropdown(menu) {
+    menu.classList.add('hidden');
+    menu.style.position = '';
+    menu.style.left = '';
+    menu.style.top = '';
+  }
+  const bgMenuEl = document.getElementById('pz-bg-menu');
+  const bgBtn = document.getElementById('pz-bg-btn');
   document.querySelectorAll('.pz-tool[data-tool]').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (btn.dataset.tool === 'icon') {
-        iconMenu.classList.toggle('hidden');
+        if (iconMenu.classList.contains('hidden')) openDropdown(btn, iconMenu); else closeDropdown(iconMenu);
         return;
       }
       setTool(btn.dataset.tool);
     });
   });
-  document.getElementById('pz-bg-btn').addEventListener('click', () => {
-    document.getElementById('pz-bg-menu').classList.toggle('hidden');
-  });
+  if (bgBtn && bgMenuEl) {
+    bgBtn.addEventListener('click', () => {
+      if (bgMenuEl.classList.contains('hidden')) openDropdown(bgBtn, bgMenuEl); else closeDropdown(bgMenuEl);
+    });
+  }
   document.addEventListener('click', (e) => {
-    if (!document.getElementById('pz-icon-wrap').contains(e.target)) iconMenu.classList.add('hidden');
-    if (!document.getElementById('pz-bg-wrap').contains(e.target)) document.getElementById('pz-bg-menu').classList.add('hidden');
+    if (!document.getElementById('pz-icon-wrap').contains(e.target)) closeDropdown(iconMenu);
+    if (!document.getElementById('pz-bg-wrap').contains(e.target)) closeDropdown(bgMenuEl);
   });
+  // Si la toolbar se desliza con un menú abierto (móvil), su ancla se movió y
+  // un menú fixed descolgado confunde — mejor cerrarlo.
+  const toolbarEl = document.getElementById('pz-toolbar');
+  if (toolbarEl) toolbarEl.addEventListener('scroll', () => {
+    closeDropdown(iconMenu); closeDropdown(bgMenuEl);
+  }, { passive: true });
 
   document.getElementById('pz-color').addEventListener('input', (e) => {
     color = e.target.value;
@@ -1252,6 +1295,11 @@
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size) { e.preventDefault(); deleteSelected(); return; }
     if (!CAN_WRITE) return;
+    // Con un modificador pulsado no cambiamos de herramienta: Ctrl/Cmd+R/P/T/
+    // O/L dispararían además el atajo del navegador, y Alt+letra compone
+    // caracteres en algunos layouts. Las combinaciones de edición (z,c,v,d,a)
+    // ya se manejaron arriba.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const map = { v: 'select', h: 'pan', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', p: 'pencil', t: 'text' };
     const k = e.key.toLowerCase();
     if (map[k]) setTool(map[k]);
@@ -1347,6 +1395,18 @@
     }).catch(() => {});
   }
 
+  function drawArrowHeadOn(c, x1, y1, x2, y2, size) {
+    // Misma geometría que drawArrowHead() del lienzo, pero sobre un contexto
+    // arbitrario (miniatura de galería / canvas offscreen del PDF).
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    c.beginPath();
+    c.moveTo(x2, y2);
+    c.lineTo(x2 - size * Math.cos(angle - Math.PI / 7), y2 - size * Math.sin(angle - Math.PI / 7));
+    c.moveTo(x2, y2);
+    c.lineTo(x2 - size * Math.cos(angle + Math.PI / 7), y2 - size * Math.sin(angle + Math.PI / 7));
+    c.stroke();
+  }
+
   function drawElementOn(c, el) {
     switch (el.type) {
       case 'rect': c.strokeRect(el.x, el.y, el.w, el.h); break;
@@ -1360,6 +1420,9 @@
         break;
       case 'arrow':
         c.beginPath(); c.moveTo(el.x1, el.y1); c.lineTo(el.x2, el.y2); c.stroke();
+        // La miniatura y el PDF reusan drawElementOn: sin la cabeza, la flecha
+        // saldría como una simple línea en la galería y en el PDF exportado.
+        drawArrowHeadOn(c, el.x1, el.y1, el.x2, el.y2, Math.max(10, (el.strokeWidth || 2) * 3));
         break;
       case 'pencil':
         if (el.points.length > 1) {
@@ -1369,7 +1432,7 @@
         }
         break;
       case 'text':
-        c.font = `${el.fontSize || 20}px sans-serif`; c.textBaseline = 'top';
+        c.font = `${el.fontSize || 20}px "Assistant", sans-serif`; c.textBaseline = 'top';
         (el.text || '').split('\n').forEach((line, i) => c.fillText(line, el.x, el.y + i * (el.fontSize || 20) * 1.3));
         break;
       case 'image': {
@@ -1394,8 +1457,9 @@
   }
 
   function showContextMenu(e) {
-    e.preventDefault();
+    // Modo solo lectura: no hay menú propio, no robamos el nativo.
     if (!CAN_WRITE) return;
+    e.preventDefault();
     const rect = wrap.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
     const w = screenToWorld(sx, sy);
@@ -1435,7 +1499,9 @@
     if (!ctxMenu.contains(e.target)) hideContextMenu();
   });
   window.addEventListener('blur', hideContextMenu);
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { hideContextMenu(); closeDropdown(iconMenu); closeDropdown(bgMenuEl); }
+  });
 
 /* ════════════ Título editable inline ════════════ */
 const titleWrap = document.getElementById('pz-title-wrap');
