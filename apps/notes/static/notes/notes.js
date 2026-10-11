@@ -1354,6 +1354,34 @@ function initEditor(){
       view.dispatch(st.replaceSelection('\t'));
     }
   });
+  // ── Auto-cierre de bloques de código ───────────────────────────────
+  // El keymap de Markdown no cierra los cercados: al teclear la 3ª comilla
+  // de un ``` al principio de una línea, CM6 inserta la comilla y ahí se
+  // queda, obligando a teclear el cierre a mano. Lo interceptamos en
+  // `beforeinput` (fase de captura, antes que el manejador de CM6) y
+  // completamos el bloque dejando el cursor en el hueco del medio:
+  //
+  //     ```
+  //     <cursor>
+  //     ```
+  //
+  ED.view.dom.addEventListener('beforeinput', e=>{
+    if(e.inputType!=='insertText' || e.data!=='`') return;
+    const v=ED.view; if(!v) return;
+    const st=v.state, sel=st.selection.main;
+    if(!sel.empty) return;                                      // con selección, no tocar
+    const pos=sel.head, line=st.doc.lineAt(pos);
+    if(line.to!==pos) return;                                   // sólo al final de la línea
+    const m=/^([ \t]*)``$/.exec(st.doc.sliceString(line.from, pos));
+    if(!m) return;                                              // ésta es la 3ª comilla
+    e.preventDefault(); e.stopPropagation();
+    const indent=m[1];
+    v.dispatch({
+      changes:{from:line.from, to:pos, insert:indent+'```\n\n'+indent+'```'},
+      selection:{anchor:line.from+indent.length+4},             // hueco entre las vallas
+      userEvent:'input',
+    });
+  }, true);
   // Aislar el editor del teclado: cualquier pérdida de foco que NO venga de un clic/touch
   // reciente (ni de un input/textarea legítimo como la búsqueda o un modal) vuelve a
   // poner el foco en el editor. Solo el ratón puede sacarte del editor.
