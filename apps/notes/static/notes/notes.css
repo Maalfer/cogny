@@ -533,6 +533,11 @@
 @media (min-width:761px){
   .vault-side-handle{display:none !important}
 }
+/* Con cualquier modal abierto (exportar a PDF, importar, compartir…), el
+   tirador del sidebar — fixed y con z-index máximo — queda colgado a media
+   altura sobre el overlay (.modal-back, z-index:1300). Lo ocultamos
+   mientras dure el modal y reaparece sólo al cerrarlo. */
+body:has(.modal-back.show) #btn-side-handle{display:none !important}
 @keyframes sheet-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
 
 /* ════════════ TEMA CLARO ════════════
