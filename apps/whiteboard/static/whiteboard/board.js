@@ -960,6 +960,10 @@
     const fontSize = (existing && existing.fontSize) || 20;
     const fontStr = `${fontSize * zoom}px "Assistant", sans-serif`;
     ta.style.font = fontStr;
+    // app.css fija `input,textarea,select{font-size:16px !important}` (anti-zoom
+    // en iOS) y eso pisaba este tamano: al escribir se veia a 16px y al
+    // confirmar el texto saltaba al tamano real. Lo reponemos con `important`.
+    ta.style.setProperty('font-size', `${fontSize * zoom}px`, 'important');
     ta.style.color = (existing && existing.color) || color;
     // `position:fixed` va relativo al viewport, así que basta con la posición
     // en pantalla del punto del mundo — no hace falta restar scroll alguno.
