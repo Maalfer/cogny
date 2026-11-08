@@ -537,6 +537,54 @@ def iter_files(base: Path):
             yield p
 
 
+_WIKILINK_RE = re.compile(r"!?\[\[([^\]\n|#]+)")
+
+
+def build_graph(base: Path) -> dict:
+    """Nodos = notas, enlaces = wikilinks `[[...]]`/`![[...]]` que resuelven a
+    otra nota de la bóveda (vista de grafo, estilo Obsidian).
+
+    La resolución de cada enlace replica `findFileByName` del cliente (JS):
+    primero por ruta exacta, si no por nombre de archivo en toda la bóveda
+    (primera coincidencia gana), para que el grafo vea los mismos enlaces
+    "rotos" o resueltos que ve el editor.
+    """
+    notes = list(iter_notes(base))
+    by_path = {}
+    by_base = {}
+    for p in notes:
+        rel = rel_of(base, p)
+        by_path[rel.lower()] = rel
+        by_base.setdefault(p.stem.lower(), rel)
+
+    def resolve(target: str):
+        target = target.strip().replace("\\", "/")
+        if not target:
+            return None
+        hit = by_path.get(target.lower()) or by_path.get(f"{target.lower()}.md")
+        if hit:
+            return hit
+        name = target.rsplit("/", 1)[-1].lower()
+        return by_base.get(name) or by_base.get(re.sub(r"\.[^.]+$", "", name))
+
+    edges = set()
+    for p in notes:
+        src = rel_of(base, p)
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for m in _WIKILINK_RE.finditer(text):
+            dst = resolve(m.group(1))
+            if dst and dst != src:
+                edges.add(tuple(sorted((src, dst))))
+
+    return {
+        "nodes": [{"path": rel_of(base, p), "name": p.stem} for p in notes],
+        "links": [{"source": a, "target": b} for a, b in edges],
+    }
+
+
 def search_notes(base: Path, terms: list, limit: int, snippet_before: int, snippet_after: int,
                  exclude: set = frozenset()):
     """Notas que contienen TODOS los términos. Devuelve `(path, texto, idx)`.
@@ -625,6 +673,33 @@ def to_webp(data: bytes):
         return None
 
 
+# Extensión según el formato real que Pillow detecta al abrir los bytes —
+# nunca el `Content-Type` que manda el cliente, que podría falsearse — para
+# los casos en que el navegador no le da al `File` pegado del portapapeles
+# un nombre con extensión reconocible (varía según navegador/SO: Chrome suele
+# poner "image.png", pero no es garantía universal). Sin esto el adjunto se
+# guardaba sin extensión y `safe_content_type` lo servía como descarga
+# forzada en vez de pintarse en el <img>: la imagen "se pegaba" (el POST
+# devolvía éxito) pero nunca llegaba a verse — el bug era 100% dependiente
+# del navegador/método usado para copiar, de ahí que fuera intermitente.
+_PILLOW_FORMAT_EXT = {
+    "JPEG": ".jpg", "PNG": ".png", "GIF": ".gif", "BMP": ".bmp",
+    "WEBP": ".webp", "TIFF": ".tiff",
+}
+
+
+def _sniff_image_ext(data: bytes):
+    """Extensión real de `data` según Pillow, o `None` si no reconoce el formato."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        return _PILLOW_FORMAT_EXT.get(Image.open(io.BytesIO(data)).format)
+    except Exception:
+        return None
+
+
 def save_upload(base: Path, uploaded_file, note_path: str = "") -> Path:
     """Guarda un adjunto en la bóveda y devuelve su ruta final.
 
@@ -647,11 +722,22 @@ def save_upload(base: Path, uploaded_file, note_path: str = "") -> Path:
     name = sanitize_name(uploaded_file.name)
     ext = Path(uploaded_file.name or "").suffix.lower()
 
+    data = None
+    if ext not in IMAGE_EXTS and ext != ".svg":
+        # Sin extensión reconocible: puede ser cualquier adjunto legítimo
+        # (un .zip, un .pdf…) o una imagen pegada sin nombre útil. Miramos
+        # los bytes para no perder el segundo caso.
+        data = b"".join(uploaded_file.chunks())
+        real_ext = _sniff_image_ext(data)
+        if real_ext:
+            ext = real_ext
+            name = (Path(name).stem or "imagen") + real_ext
+
     optimized = None
     if ext in IMAGE_EXTS and ext not in KEEP_AS_IS:
         # Sólo leemos el fichero entero en memoria si es una imagen ráster
         # candidata; para un pdf o un zip nos ahorramos el viaje.
-        optimized = to_webp(b"".join(uploaded_file.chunks()))
+        optimized = to_webp(data if data is not None else b"".join(uploaded_file.chunks()))
 
     if optimized is not None:
         target = free_path(target_dir, Path(name).stem or "imagen", ".webp")
@@ -659,9 +745,12 @@ def save_upload(base: Path, uploaded_file, note_path: str = "") -> Path:
     else:
         stem, suffix = Path(name).stem, Path(name).suffix
         target = free_path(target_dir, stem, suffix)
-        with open(target, "wb") as fp:
-            for chunk in uploaded_file.chunks():
-                fp.write(chunk)
+        if data is not None:
+            target.write_bytes(data)
+        else:
+            with open(target, "wb") as fp:
+                for chunk in uploaded_file.chunks():
+                    fp.write(chunk)
 
     if note_path:
         _record_attachment_owner(target_dir, target.name, note_path)
@@ -690,13 +779,71 @@ def _record_attachment_owner(attachments_dir: Path, filename: str, note_path: st
 def attachment_owner(base: Path, attachment_path: Path):
     """Ruta (relativa a la bóveda) de la nota que subió este adjunto, o `None`
     si no hay registro — adjunto anterior a este control, o fuera de
-    `Adjuntos/`."""
+    `Adjuntos/`.
+
+    Lee `.owners.json` del disco en cada llamada: bien para resolver UN
+    adjunto suelto, pero quien necesite la respuesta para TODOS los
+    adjuntos de una carpeta (un bucle sobre `iterdir()`/`rglob()`) debe usar
+    `read_attachment_owners` una vez y mirar el dict en memoria — llamar a
+    esta función dentro de ese bucle repite la misma lectura+parseo de
+    fichero una vez por adjunto (con la bóveda ya en varios miles, eso pasó
+    de milisegundos a minutos; fue justo el fallo que `shared_note_assets`
+    tenía hasta que el backfill de dueños hizo el fichero lo bastante grande
+    para notarlo)."""
     attachments_dir = base / ATTACHMENTS_DIR
     try:
         rel = attachment_path.relative_to(attachments_dir)
     except ValueError:
         return None
     return _read_attachment_owners(attachments_dir).get(str(rel).replace("\\", "/"))
+
+
+def read_attachment_owners(base: Path) -> dict:
+    """Todo el mapa `{nombre_de_adjunto: ruta_de_nota}` de una sola vez —
+    una única lectura+parseo de `.owners.json`, para quien necesite mirar la
+    propiedad de MUCHOS adjuntos en el mismo bucle (ver el aviso en
+    `attachment_owner`)."""
+    return _read_attachment_owners(base / ATTACHMENTS_DIR)
+
+
+def set_attachment_owner(base: Path, attachment_path: Path, note_path: str) -> None:
+    """Registra a mano qué nota es la dueña de un adjunto ya existente.
+
+    `save_upload` ya hace esto al subir uno nuevo; esta versión pública
+    existe para el caso contrario: un adjunto que YA está en `Adjuntos/` sin
+    dueño registrado (típicamente, de antes de que existiera este control) y
+    que un proceso de mantenimiento (ver el comando de gestión
+    `backfill_attachment_owners`) determina sin ambigüedad a qué nota
+    pertenece. No valida que `attachment_path` esté dentro de `Adjuntos/`
+    el que llama ya lo sabe por construcción (viene de listar esa carpeta).
+    """
+    attachments_dir = base / ATTACHMENTS_DIR
+    _record_attachment_owner(attachments_dir, attachment_path.name, note_path)
+
+
+# ── Referencias a adjuntos dentro del markdown de una nota ──────────────────
+# Las tres sintaxis que el vault entiende para "esto es una imagen/adjunto":
+# wikilink de Obsidian (`![[nombre]]`, con alias opcional `|...`), markdown
+# estándar (`![alt](ruta)`) y un `<img src="...">` suelto. La usa tanto la
+# resolución del enlace público (`apps.notes.views._resolve_asset_ref`) como
+# cualquier proceso de mantenimiento que necesite saber qué adjuntos
+# menciona una nota (ver `backfill_attachment_owners`).
+ASSET_REF_RE = re.compile(
+    r'!\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]|!\[[^\]]*\]\(([^)\s]+)\)|<img\s[^>]*src=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+
+
+def extract_asset_refs(content: str) -> set:
+    """Referencias a adjuntos (nombres o rutas, tal cual aparecen en el
+    texto) dentro del markdown de una nota. Descarta URLs externas
+    (`http(s):`, `data:`, `mailto:`) — nunca son un adjunto del vault."""
+    refs = set()
+    for m in ASSET_REF_RE.finditer(content or ""):
+        ref = (m.group(1) or m.group(2) or m.group(3) or "").strip()
+        if ref and not re.match(r"^(https?:|data:|mailto:)", ref, re.IGNORECASE):
+            refs.add(ref)
+    return refs
 
 
 def optimize_images(base: Path):

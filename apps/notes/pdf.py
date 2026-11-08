@@ -695,8 +695,10 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
             fh.write(doc)
         cmd = [
             CHROMIUM_BIN, "--headless", "--no-sandbox", "--disable-gpu",
+            # Sin --single-process: el chromium de Debian 155 (el que se usa al no haber
+            # chrome-headless-shell de Playwright) muere con SIGTRAP con ese flag.
             "--disable-dev-shm-usage", "--disable-crash-reporter", "--disable-breakpad",
-            "--no-zygote", "--single-process",
+            "--no-zygote",
             # La defensa real contra SSRF no es `_is_safe_http_host()`: ese
             # chequeo resuelve y valida la URL UNA VEZ, en Python, antes de
             # escribir el HTML a disco — pero Chromium hace su PROPIA
@@ -866,7 +868,7 @@ def render_image(data_url: str, title: str = "", landscape: bool = False) -> byt
         cmd = [
             CHROMIUM_BIN, "--headless", "--no-sandbox", "--disable-gpu",
             "--disable-dev-shm-usage", "--disable-crash-reporter",
-            "--disable-breakpad", "--no-zygote", "--single-process",
+            "--disable-breakpad", "--no-zygote",
             "--user-data-dir=" + os.path.join(workdir, "ud"),
             "--no-pdf-header-footer", "--virtual-time-budget=8000",
             "--print-to-pdf=" + out_pdf, "file://" + in_html,
