@@ -353,6 +353,11 @@
           return;
         }
       }
+      // Fallback: algún navegador no lista el archivo en `items` pero sí en `files`.
+      const files = (e.clipboardData && e.clipboardData.files) || [];
+      for (const f of files) {
+        if (f && f.type && f.type.startsWith('image/')) { e.preventDefault(); handleSharedImageFile(f); return; }
+      }
     });
     // Arrastrar y soltar imágenes.
     ['dragover', 'dragenter'].forEach(ev => target.addEventListener(ev, e => {
@@ -369,16 +374,23 @@
     });
   }
 
-  let imgBusy = false;
-  async function handleSharedImageFile(file) {
-    if (!file || !file.type.startsWith('image/')) return;
-    if (imgBusy) { setStatus('Subiendo de una en una…', false); return; }
-    imgBusy = true;
+  // Cola en vez de un flag "ocupado": si llega una imagen mientras se sube la
+  // anterior, antes se descartaba en silencio. Ahora se encola y sube en orden.
+  let imgQueue = Promise.resolve();
+  function handleSharedImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) return imgQueue;
+    imgQueue = imgQueue.then(() => uploadQueuedSharedImage(file));
+    return imgQueue;
+  }
+  async function uploadQueuedSharedImage(file) {
     setStatus('Subiendo imagen…', false);
     try {
       const fd = new FormData();
       fd.append('file', file, file.name || 'imagen' + (file.type.replace('image/', '.') || '.png'));
-      const r = await fetch(ASSETS_URL, { method: 'POST', body: fd });
+      const ctrl = new AbortController();
+      // Sin timeout, una red caída dejaba la cola colgada para siempre.
+      const timer = setTimeout(() => ctrl.abort(), 30000);
+      const r = await fetch(ASSETS_URL, { method: 'POST', body: fd, signal: ctrl.signal }).finally(() => clearTimeout(timer));
       const res = await r.json().catch(() => ({}));
       if (r.ok && res.success && res.name) {
         // El adjunto recién subido pertenece a esta nota: darlo de alta en el
@@ -394,8 +406,6 @@
       }
     } catch (_) {
       setStatus('Error al subir la imagen', false);
-    } finally {
-      imgBusy = false;
     }
   }
 

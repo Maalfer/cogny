@@ -15,15 +15,17 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
+from django.core.cache import cache
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.permissions import require_owner, require_write
 from apps.core.api import as_int, as_text, error_response as _err, json_body
 
-from . import pdf, themes, vault
+from . import imagesexport, pdf, themes, vault, worddoc
 from .models import PdfTheme, PdfThemeImage, SharedNote
 from .vault import VaultError
 
@@ -288,6 +290,12 @@ def search(request):
 
 @login_required
 @require_GET
+def graph(request):
+    return JsonResponse(vault.build_graph(vault.root()))
+
+
+@login_required
+@require_GET
 def storage(request):
     """Estadísticas de la bóveda: total, desglose por tipo y conteos."""
     return JsonResponse({"success": True, **vault.stats(vault.root())})
@@ -409,6 +417,64 @@ def notes_pdf(request):
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
     resp["Content-Length"] = str(len(pdf_bytes))
+    return resp
+
+
+# ════════════ Exportar nota a DOC ════════════
+
+@login_required
+@require_POST
+@json_body
+def notes_doc(request):
+    """Documento `.docx` de la nota que el cliente manda ya renderizada.
+
+    Sin tema ni Chromium de por medio (a diferencia de `notes_pdf`): el mismo
+    HTML que ya prepara `prepareExportHtml` en el cliente (saneado con el
+    mismo saneador que el PDF) se convierte aquí a OOXML nativo — ver el
+    docstring de `worddoc.py` para por qué no es un HTML/MHTML con extensión
+    `.doc` (las imágenes no sobrevivían). Sin plantilla ni picker de estilos
+    antes de descargar: la nota sale con el aspecto por defecto.
+    """
+    body_html = pdf.sanitize_html(request.data.get("html") or "")
+    if not body_html.strip():
+        return _err("Nada que exportar")
+    display_title = as_text(request.data.get("title")).strip()[:120]
+    filename = vault.sanitize_name(display_title or "nota") or "nota"
+    doc_bytes = worddoc.render(body_html, title=display_title)
+    resp = HttpResponse(
+        doc_bytes,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{filename}.docx"'
+    resp["Content-Length"] = str(len(doc_bytes))
+    return resp
+
+
+# ════════════ Exportar imágenes de la nota a ZIP ════════════
+
+@login_required
+@require_POST
+@json_body
+def notes_images(request):
+    """Zip con todas las imágenes de la nota, cada una convertida a `.png`.
+
+    Mismo HTML ya renderizado que `notes_pdf`/`notes_doc` (imágenes del vault
+    ya incrustadas como `data:` URI por `prepareExportHtml` en el cliente) —
+    ver `imagesexport.py` para por qué se reconvierte todo a PNG en vez de
+    conservar el formato original.
+    """
+    body_html = pdf.sanitize_html(request.data.get("html") or "")
+    if not body_html.strip():
+        return _err("Nada que exportar")
+    display_title = as_text(request.data.get("title")).strip()[:120]
+    filename = vault.sanitize_name(display_title or "nota") or "nota"
+    try:
+        zip_bytes = imagesexport.render_zip(body_html)
+    except imagesexport.ImagesExportError as exc:
+        return _err(str(exc), exc.status)
+    resp = HttpResponse(zip_bytes, content_type="application/zip")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}-imagenes.zip"'
+    resp["Content-Length"] = str(len(zip_bytes))
     return resp
 
 
@@ -643,23 +709,50 @@ def share_revoke(request):
 # notas (![[OtraNota]]) no se exponen (evita que compartir una nota filtre el
 # resto de la bóveda por transclusión) y se muestran como "no disponible".
 _SHARE_ASSET_EXTS = vault.IMAGE_EXTS | {".pdf"}
-_EMBED_REF_RE = re.compile(
-    r'!\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]|!\[[^\]]*\]\(([^)\s]+)\)|<img\s[^>]*src=["\']([^"\']+)["\']',
-    re.IGNORECASE,
-)
 _SHARE_ASSET_SALT = "cogny.notes.share_asset"
 
-
-def _extract_asset_refs(content: str) -> set:
-    refs = set()
-    for m in _EMBED_REF_RE.finditer(content or ""):
-        ref = (m.group(1) or m.group(2) or m.group(3) or "").strip()
-        if ref and not re.match(r"^(https?:|data:|mailto:)", ref, re.IGNORECASE):
-            refs.add(ref)
-    return refs
+# La extracción de referencias (`![[nombre]]`, `![alt](ruta)`, `<img src>`)
+# vive en `vault.extract_asset_refs` — no es nada específico de la vista
+# pública, lo reutiliza también el comando de mantenimiento
+# `backfill_attachment_owners`.
 
 
-def _resolve_asset_ref(root: Path, ref: str, note_path: str):
+def _attachment_candidates(attachments_dir: Path) -> list:
+    """Ficheros válidos de `Adjuntos/` (filtrados por extensión), en el mismo
+    orden de recorrido que `rglob` — construidos en una única pasada por
+    disco.
+
+    `_resolve_asset_ref` resolvía el fallback por nombre recorriendo la
+    carpeta entera (`rglob`, con su `is_file`/`suffix` por archivo) una vez
+    POR REFERENCIA de la nota; con una nota de varias imágenes eso repetía el
+    mismo recorrido de miles de ficheros —el coste real son las llamadas a
+    disco, no la comparación— varias veces en la misma petición. Quien
+    necesite resolver más de una referencia construye esta lista una sola vez
+    y la reutiliza.
+
+    Es una lista, no un `dict` indexado por nombre/stem: los nombres de
+    adjunto NO son únicos en la bóveda (es una carpeta plana, compartida por
+    todas las notas — `1.webp`, `2.webp`... se repiten entre notas distintas
+    con total normalidad), así que indexar por nombre forzaría a decidir qué
+    archivo "gana" cuando dos coinciden. `_resolve_asset_ref` recorre esta
+    lista en orden y se queda con el primero que calce, exactamente el mismo
+    desempate que hacía el `rglob` original — importa, porque el siguiente
+    paso es comprobar el DUEÑO registrado: si el primer homónimo en orden de
+    disco no es de esta nota, no se resuelve, aunque haya otro más abajo en
+    la lista que sí lo sea (ese límite ya existía antes de este cambio)."""
+    candidates = []
+    if not attachments_dir.is_dir():
+        return candidates
+    for p in attachments_dir.rglob("*"):
+        try:
+            if p.is_file() and p.suffix.lower() in _SHARE_ASSET_EXTS:
+                candidates.append(p)
+        except OSError:
+            continue
+    return candidates
+
+
+def _resolve_asset_ref(root: Path, ref: str, note_path: str, owners: dict, candidates: list):
     """Resuelve una referencia de embed a un archivo del vault (o None) para
     el enlace PÚBLICO de `note_path`.
 
@@ -670,7 +763,7 @@ def _resolve_asset_ref(root: Path, ref: str, note_path: str):
     `Adjuntos/` (fuera de ahí no hay ningún adjunto legítimo, sólo hace falta
     escribir a mano `![alt](OtraCarpeta/archivo.pdf)` para apuntar a
     cualquier cosa) Y, dentro de `Adjuntos/`, el archivo tiene que estar
-    registrado como subido para ESTA nota exacta (`vault.attachment_owner`).
+    registrado como subido para ESTA nota exacta.
     Sin la segunda condición, cualquier adjunto ya existente en la bóveda
     compartida —de cualquier nota, de cualquier usuario— se publicaría con
     sólo nombrarlo desde una nota sin relación real con él; con ella, el
@@ -678,6 +771,13 @@ def _resolve_asset_ref(root: Path, ref: str, note_path: str):
     nota. Adjuntos anteriores a este control quedan sin dueño registrado a
     propósito: no se resuelven en el enlace público (fail-closed), aunque la
     bóveda autenticada los sigue viendo sin restricción.
+
+    `owners` (mapa completo de `.owners.json`, vía `vault.read_attachment_owners`)
+    y `candidates` (vía `_attachment_candidates`) se piden ya construidos —
+    y no se recalculan aquí — para que resolver varias referencias en la
+    misma petición no releea el disco ni reparsee el JSON una vez por
+    referencia (ver el aviso de `vault.attachment_owner` sobre ese mismo
+    coste).
     """
     cleaned = ref.replace("\\", "/").split("#")[0].strip().lstrip("./")
     if not cleaned:
@@ -692,15 +792,10 @@ def _resolve_asset_ref(root: Path, ref: str, note_path: str):
     except VaultError:
         pass
 
-    if candidate is None and attachments_dir.is_dir():
+    if candidate is None:
         base = cleaned.rsplit("/", 1)[-1].lower()
         base_noext = re.sub(r"\.[^.]+$", "", base)
-        for p in attachments_dir.rglob("*"):
-            try:
-                if not p.is_file() or p.suffix.lower() not in _SHARE_ASSET_EXTS:
-                    continue
-            except OSError:
-                continue
+        for p in candidates:
             if p.name.lower() == base or p.stem.lower() == base_noext:
                 candidate = p
                 break
@@ -708,10 +803,10 @@ def _resolve_asset_ref(root: Path, ref: str, note_path: str):
     if candidate is None:
         return None
     try:
-        candidate.relative_to(attachments_dir)
+        rel = candidate.relative_to(attachments_dir)
     except ValueError:
         return None
-    if vault.attachment_owner(root, candidate) != note_path:
+    if owners.get(str(rel).replace("\\", "/")) != note_path:
         return None
     return candidate
 
@@ -721,10 +816,13 @@ def _build_share_assets(root: Path, token: str, content: str, note_path: str):
     por ESTA nota — nunca la bóveda entera. El segundo valor devuelto dice si
     hay al menos una IMAGEN entre ellos (a diferencia de un PDF suelto) — lo
     usa la plantilla para mostrar u ocultar el botón de "descargar en .zip"."""
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+    owners = vault.read_attachment_owners(root)
+    candidates = _attachment_candidates(attachments_dir)
     out = {}
     has_images = False
-    for ref in _extract_asset_refs(content):
-        hit = _resolve_asset_ref(root, ref, note_path)
+    for ref in vault.extract_asset_refs(content):
+        hit = _resolve_asset_ref(root, ref, note_path, owners, candidates)
         if hit:
             rel = vault.rel_of(root, hit)
             sig = quote(signing.dumps({"t": token, "p": rel}, salt=_SHARE_ASSET_SALT), safe="")
@@ -736,6 +834,29 @@ def _build_share_assets(root: Path, token: str, content: str, note_path: str):
 
 def _share_gate_key(token: str) -> str:
     return f"shared_verified_{token}"
+
+
+# Mismo criterio que `GlobalContextMiddleware._owner_theme` (apps.core.middleware):
+# una caché corta evita repetir trabajo de disco en cada petición anónima.
+# Aquí el trabajo es la lectura de la nota + resolución de sus adjuntos
+# (`_build_share_assets`, que a su vez lee `.owners.json` y recorre
+# `Adjuntos/`) — si varias personas abren el mismo enlace a la vez, o la
+# misma persona recarga, sólo la primera paga ese coste; el resto, dentro de
+# la ventana, se sirve de memoria. El mtime del fichero forma parte de la
+# clave: si la nota cambia (enlace editable), la entrada vieja deja de
+# encontrarse sola, sin tener que invalidarla a mano.
+_SHARE_PAGE_CACHE_TTL = 30
+
+
+def _shared_page_data(root: Path, token: str, target: Path, note_path: str):
+    key = f"cogny:shared_note:{token}:{target.stat().st_mtime_ns}"
+    data = cache.get(key)
+    if data is None:
+        content = target.read_text(encoding="utf-8")
+        assets, has_images = _build_share_assets(root, token, content, note_path)
+        data = (content, assets, has_images)
+        cache.set(key, data, _SHARE_PAGE_CACHE_TTL)
+    return data
 
 
 def _shared_target(share: SharedNote):
@@ -775,9 +896,9 @@ def shared_note_view(request, token):
         if not request.session.get(gate_key):
             return render(request, "notes/shared_gate.html", {"error": error})
 
-    content = target.read_text(encoding="utf-8")
-    assets, has_images = _build_share_assets(root, token, content, share.path)
-    return render(request, "notes/shared.html", {
+    content, assets, has_images = _shared_page_data(root, token, target, share.path)
+    response = render(request, "notes/shared.html", {
+        "token": token,
         "note_name": target.stem,
         "content": content,
         # `can_edit`, no `can_write`: ese nombre ya lo pone el contexto global
@@ -787,6 +908,256 @@ def shared_note_view(request, token):
         "assets": assets,
         "has_images": has_images,
     })
+    if share.can_write:
+        # Misma guía que el `<link rel="alternate">` de `shared.html` y el
+        # aviso visible del banner, pero como cabecera HTTP: la vía que
+        # encuentra una herramienta que inspecciona `curl -I`/headers de la
+        # respuesta en vez de parsear el HTML (o en vez de parsear el body,
+        # que en este SPA llega vacío sin ejecutar JS).
+        llms_url = request.build_absolute_uri(
+            reverse("shared_note_llms_txt", args=[token])
+        )
+        response["Link"] = f'<{llms_url}>; rel="alternate"; type="text/plain"; title="Guia de API para IA"'
+    return response
+
+
+# ── Guía del API en texto plano, pensada para que la lea una IA ─────────────
+# Convención `llms.txt`: un fichero de texto plano, pensado para agentes, que
+# describe cómo usar el sitio. Aquí va scopeado al token: cada enlace
+# editable tiene el suyo, con sus propias URLs ya resueltas (nada de
+# plantillas que la IA tenga que rellenar a mano).
+#
+# A propósito NO exige la contraseña de la nota (a diferencia de
+# `_shared_api_target`, que sí la exige para leer o escribir contenido real):
+# si no, un enlace con contraseña sería una guía inútil, porque la IA
+# necesita leer ESTA guía para enterarse de que primero tiene que autenticarse
+# posteando la contraseña. Es el mismo criterio que ya usa
+# `shared_gate.html`: la existencia del enlace (y que es editable) no es
+# secreta, el CONTENIDO de la nota sí. Por eso tampoco se incluye el nombre
+# real de la nota cuando hay contraseña de por medio.
+def shared_note_llms_txt(request, token):
+    share = SharedNote.objects.filter(token=token, can_write=True).first()
+    if not share:
+        raise Http404
+    root, target = _shared_target(share)
+
+    base = request.build_absolute_uri(f"/s/{token}/")
+    gated = bool(share.password_hash) and not request.session.get(_share_gate_key(token))
+    note_name = "(nombre oculto hasta introducir la contraseña)" if gated else target.stem
+
+    lines = [
+        f"# Guía de API — nota compartida en Cogny",
+        f"",
+        f"Nota: {note_name}",
+        f"Enlace: {base}",
+        f"",
+        "Si has llegado aquí con sólo este enlace (o el enlace base",
+        f"{base}) para leer o editar la nota: usa el API de más abajo con",
+        "peticiones HTTP normales (curl, fetch, requests...). NO abras un",
+        "navegador, no uses Playwright/Puppeteer/automatización de UI, ni",
+        "intentes averiguar a base de prueba y error cómo funciona la",
+        "página — todo lo que hace esa interfaz (leer el contenido, guardar",
+        "cambios, subir o listar adjuntos) está aquí documentado como texto",
+        "plano y es más fiable por API: no depende de JavaScript, de que la",
+        "página termine de cargar, ni de clicar en el sitio correcto.",
+        "",
+        "Este enlace es un token de edición: quien lo tiene puede leer y",
+        "reescribir ESTA nota (y sólo esta nota) por HTTP, sin cuenta ni",
+        "sesión previa. El token de la URL ES la credencial — no hace falta",
+        "ninguna cabecera de autenticación aparte.",
+        "",
+        "No hay forma de listar la bóveda, ver otras notas, ni renombrar o",
+        "borrar esta nota desde este API: sólo leer/escribir su contenido y",
+        "gestionar los adjuntos (imágenes, PDFs...) que ESTA nota use o suba.",
+        "",
+        "## Cómo debe quedar una nota mejorada en este vault",
+        "",
+        "Lee esto ANTES de reescribir nada, sobre todo si lo que te han pedido",
+        "es \"mejorar\"/\"reescribir mejor\" la nota: no es sobre el API, es el",
+        "criterio editorial del vault — para que, sin haber visto ninguna otra",
+        "nota, puedas dejar ésta al mismo nivel que las ya revisadas.",
+        "",
+        "Idioma y voz: español, narrado en primera persona del plural, como",
+        "quien cuenta lo que \"hicimos\" paso a paso (\"desplegamos\", \"vemos\",",
+        "\"interceptamos\", \"entramos\"). Nunca en imperativo de manual",
+        "(\"despliega\", \"observa\"): es un cuaderno de quien hizo el laboratorio,",
+        "escrito para que otra persona que no sabe nada del tema lo entienda",
+        "sin salir de la nota.",
+        "",
+        "Estructura (es la FORMA a seguir, no una plantilla rígida de huecos —",
+        "adapta el número y nombre de las secciones a lo que el contenido",
+        "real sea: una cadena de pasos cronológica si es un laboratorio o un",
+        "writeup, temática si es una nota conceptual):",
+        "",
+        "    # <emoji> <Título> — <de dónde viene: DockerLabs / PortSwigger / ...>",
+        "",
+        "    > [!info] Objetivo (de la práctica / del laboratorio / de la nota)",
+        "    > Un párrafo: qué es esto, qué entorno es, qué hay que conseguir y",
+        "    > por qué importa. Si hay una meta concreta (un flag, un usuario a",
+        "    > borrar, un valor a encontrar), dilo aquí explícitamente.",
+        "",
+        "    > [!warning] Antes de empezar          (opcional, pero habitual)",
+        "    > Que es un entorno de laboratorio/práctica, IPs o dominios",
+        "    > ficticios, prerequisitos — lo que el lector deba saber antes de",
+        "    > seguir.",
+        "",
+        "    ---",
+        "",
+        "    ## 1. <emoji> <Primera sección>",
+        "    ## 2. <emoji> <Segunda sección>",
+        "    ...",
+        "",
+        "    ## N. 📋 Resumen          (la última sección, casi siempre)",
+        "    Tabla paso/pregunta → respuesta/resultado → por qué, y un",
+        "    callout final [!tip] con la idea de fondo más allá de los pasos",
+        "    (\"la vista de pájaro\"): qué es lo que de verdad hay que entender.",
+        "",
+        "    El emoji del título y de cada sección es libre pero relevante al",
+        "    tema (💉 inyección, 📧 phishing, 🔌 API, ⏱️ condición de carrera...),",
+        "    nunca decorativo porque sí.",
+        "",
+        "Callouts: úsalos para TODA explicación de un concepto, no sólo para",
+        "narrar pasos — es lo que separa un \"log de lo que hice\" de una nota",
+        "que enseña. Sintaxis exacta (bloque de cita, el tipo entre corchetes",
+        "justo tras `[!` en la primera línea):",
+        "",
+        "    > [!tip] Título corto de la idea",
+        "    > Cuerpo de la explicación, tantas líneas como haga falta, cada",
+        "    > una empezando por `> `.",
+        "",
+        "Los tres que vertebran casi cualquier nota:",
+        "  `[!info]`    — qué es esto / objetivo (casi siempre al principio)",
+        "  `[!warning]` — avisos, prerequisitos, \"ojo con esto\"",
+        "  `[!tip]`     — para parar a explicar UN concepto que el lector",
+        "                 puede no conocer (un EventID, una cabecera HTTP, un",
+        "                 término técnico...): qué es y, sobre todo, POR QUÉ",
+        "                 importa aquí. Es el que más se usa.",
+        "Otros tipos reconocidos (icono propio, no uno genérico de relleno):",
+        "`note`, `todo`, `abstract`, `summary`, `success`, `check`, `done`,",
+        "`question`, `caution`, `attention`, `failure`, `danger`, `error`,",
+        "`bug`, `example`, `quote`. Usa sólo nombres de esta lista — uno que",
+        "no esté aquí cae en el icono genérico de `info`, así que no inventes",
+        "tipos nuevos.",
+        "",
+        "Reglas que no se negocian:",
+        "  - No inventes nada: ni datos, ni resultados, ni capturas que no",
+        "    estuvieran ya en el contenido original. El trabajo es reorganizar",
+        "    y EXPLICAR mejor lo que ya hay, no añadir hechos nuevos.",
+        "  - Conserva TODOS los `![[...]]` (capturas/adjuntos) que ya tenía la",
+        "    nota, en el mismo orden relativo en que aparecían — se puede",
+        "    mover el texto alrededor de cada una, nunca borrar una captura",
+        "    existente ni inventarse una que no exista (ver `GET .../assets`",
+        "    más abajo para saber qué adjuntos son de verdad de esta nota).",
+        "  - No traduzcas comandos, payloads, URLs, cabeceras HTTP ni código:",
+        "    van literales. Lo que se reescribe es la narración alrededor.",
+        "  - Cualquier comando, petición o payload va en un bloque de código",
+        "    (```bash, ```http, ```json...), nunca suelto en texto corrido.",
+        "  - Si algo del original es ambiguo o falta un detalle técnico, no lo",
+        "    rellenes a tu criterio: consérvalo tal cual antes que inventar",
+        "    precisión que no tienes.",
+        "",
+        "Antes de hacer el POST final a `.../note`, repasa: ¿sigue estando",
+        "cada `![[...]]` original? ¿el título lleva emoji + procedencia?",
+        "¿hay un `[!info]` de objetivo? ¿cada concepto no obvio tiene su",
+        "`[!tip]`? ¿termina en un resumen? Si todo eso es sí, está lista.",
+        "",
+    ]
+
+    if share.password_hash:
+        lines += [
+            "## Paso 0 — esta nota lleva contraseña",
+            "",
+            "Antes de nada, hay que autenticarse UNA vez y reutilizar la",
+            "cookie de sesión que devuelve la respuesta en todas las",
+            "peticiones siguientes (igual que un navegador: guarda y reenvía",
+            "las cookies con cada petición a partir de aquí).",
+            "",
+            f"    curl -i -c cookies.txt -b cookies.txt \\",
+            f"      --data-urlencode 'password=LA_CONTRASEÑA' \\",
+            f"      {base}",
+            "",
+            "Una respuesta 200 (en vez de volver a pedir la contraseña)",
+            "confirma que la sesión quedó autenticada. A partir de aquí, toda",
+            "petición de este documento debe mandar esa misma cookie",
+            "(`-b cookies.txt` en curl, o el jar de cookies equivalente).",
+            "",
+        ]
+
+    lines += [
+        "## Leer y reescribir el contenido",
+        "",
+        f"GET  {base}note",
+        "  → 200 JSON: {\"path\": ..., \"name\": ..., \"content\": \"...markdown...\"}",
+        "",
+        f"POST {base}note",
+        "  Body JSON: {\"content\": \"...markdown completo...\"}",
+        "  → 200 JSON: {\"success\": true, \"updated\": <epoch>}",
+        "  Reescribe la nota ENTERA (no es un parche/diff): hay que mandar",
+        "  siempre el contenido completo, incluido lo que no cambia. Límite:",
+        f"  {vault.MAX_NOTE_BYTES // 1_000_000} MB en UTF-8.",
+        "",
+        "  Ejemplo:",
+        f"    curl -X POST {base}note \\",
+        "      -H 'Content-Type: application/json' \\",
+        "      -d '{\"content\": \"# Título\\n\\nTexto...\"}'" + ("  -b cookies.txt" if share.password_hash else ""),
+        "",
+        "## Adjuntos (imágenes, PDFs...) de esta nota",
+        "",
+        f"GET  {base}assets",
+        "  → 200 JSON: {\"assets\": [{\"name\":..., \"ref\": \"...\"|null, \"url\": \"/s/<token>/assets/<name>\"}]}",
+        "  Lista los adjuntos que esta nota ya referencia en su markdown",
+        "  (`ref` = la referencia tal cual aparece en el texto) MÁS los que",
+        "  ya se subieron para esta nota pero aún no se mencionan en el",
+        "  contenido (`ref: null`) — útil para no volver a subir uno que ya",
+        "  existe.",
+        "",
+        f"POST {base}assets   (multipart/form-data, campo 'file')",
+        "  → 201 JSON: {\"success\": true, \"name\": \"nombre-final.ext\"}",
+        "  Sube un archivo nuevo. OJO: el nombre final puede NO ser el que",
+        "  mandaste — las imágenes ráster (jpg/png/bmp/tiff) se recodifican",
+        "  a .webp automáticamente, y si el nombre ya existe se le añade un",
+        "  sufijo. Usa SIEMPRE el 'name' que devuelve la respuesta, no el",
+        "  nombre del archivo original, al referenciarlo en el markdown.",
+        "",
+        "  Ejemplo:",
+        f"    curl -X POST {base}assets -F 'file=@captura.png'" + ("  -b cookies.txt" if share.password_hash else ""),
+        "",
+        f"GET    {base}assets/<nombre>   → descarga ese adjunto",
+        f"DELETE {base}assets/<nombre>   → lo borra",
+        "  Sólo funciona sobre un adjunto que sea de ESTA nota (uno que ya",
+        "  salga en el GET de arriba). Borrar el archivo NO quita sola la",
+        "  referencia del markdown: si seguía habiendo un `![[nombre]]` en",
+        "  el contenido, hay que quitarlo aparte con un POST a 'note'.",
+        "",
+        "## Cómo insertar un adjunto en el markdown",
+        "",
+        "Formato propio del vault (estilo Obsidian), el que ya verás usado",
+        "en el contenido existente de la nota:",
+        "",
+        "    ![[nombre-del-adjunto.webp]]",
+        "",
+        "También se entienden el markdown estándar (`![alt](nombre.png)`) y",
+        "un `<img src=\"nombre.png\">` suelto, pero usa `![[...]]` para ser",
+        "coherente con el resto de la nota. El nombre basta (no hace falta",
+        "ruta): se resuelve por nombre de archivo entre los adjuntos de esta",
+        "nota. Un adjunto subido por otra nota, o que no conste como de esta",
+        "nota, NO se resolverá aunque lo nombres bien.",
+        "",
+        "## Flujo recomendado para un cambio",
+        "",
+        "1. GET  .../note    — content actual",
+        "2. GET  .../assets  — qué adjuntos ya hay (evita subir duplicados)",
+        "3. POST .../assets  — sube cada imagen nueva, una por una; anota el",
+        "   'name' que devuelva cada una",
+        "4. POST .../note    — manda el markdown completo ya editado,",
+        "   referenciando los adjuntos con `![[name]]`",
+        "",
+        "Cualquier endpoint de este documento responde 404 si el token no",
+        "existe, si el enlace es de sólo lectura, o (salvo este propio",
+        "documento) si la nota lleva contraseña y la sesión aún no la ha",
+        "superado.",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 
 @require_POST
@@ -869,11 +1240,14 @@ def shared_note_images_zip(request, token):
         raise Http404
 
     content = target.read_text(encoding="utf-8")
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+    owners = vault.read_attachment_owners(root)
+    candidates = _attachment_candidates(attachments_dir)
     seen_paths = set()
     used_names = set()
     files = []
-    for ref in _extract_asset_refs(content):
-        hit = _resolve_asset_ref(root, ref, share.path)
+    for ref in vault.extract_asset_refs(content):
+        hit = _resolve_asset_ref(root, ref, share.path, owners, candidates)
         if not hit or hit.suffix.lower() not in vault.IMAGE_EXTS or hit in seen_paths:
             continue
         seen_paths.add(hit)
@@ -969,16 +1343,22 @@ def shared_note_assets(request, token):
         return JsonResponse({"success": True, "name": saved.name}, status=201)
 
     content = target.read_text(encoding="utf-8")
+    attachments_dir = root / vault.ATTACHMENTS_DIR
+    # Una sola lectura de `.owners.json` (y un único recorrido de la carpeta)
+    # para toda esta vista, no una por archivo/referencia: con la bóveda en
+    # varios miles de adjuntos, releer y reparsear el fichero entero dentro
+    # de un bucle pasó de milisegundos a minutos (ver el aviso en
+    # `vault.attachment_owner`).
+    owners = vault.read_attachment_owners(root)
+    candidates = _attachment_candidates(attachments_dir)
     assets = {}
-    for ref in _extract_asset_refs(content):
-        hit = _resolve_asset_ref(root, ref, share.path)
+    for ref in vault.extract_asset_refs(content):
+        hit = _resolve_asset_ref(root, ref, share.path, owners, candidates)
         if hit:
             assets[hit.name] = ref
-    attachments_dir = root / vault.ATTACHMENTS_DIR
     if attachments_dir.is_dir():
         for p in attachments_dir.iterdir():
-            if (p.is_file() and p.name not in assets
-                    and vault.attachment_owner(root, p) == share.path):
+            if p.is_file() and p.name not in assets and owners.get(p.name) == share.path:
                 assets[p.name] = None
     return JsonResponse({"assets": [
         {"name": name, "ref": ref, "url": f"/s/{token}/assets/{name}"}

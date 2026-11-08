@@ -4,11 +4,6 @@
 
 {% block header_title %}<span class="sync-dot" id="sync-dot"></span>{% if user_id and not can_write %}<span class="ro-badge" title="Tu acceso a esta bóveda es de sólo lectura"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>Sólo lectura</span>{% endif %}{% endblock %}
 
-{% block header_actions %}
-<button class="vault-hdr-btn" id="btn-toggle-sidebar" title="Mostrar/ocultar lista" aria-label="Lista de notas" aria-expanded="true">
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h4v18H5a2 2 0 0 1-2-2V5zm8-2h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-8V3z"/></svg>
-</button>
-{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
@@ -36,6 +31,38 @@
 
 {% block content %}
 <div class="vault" id="vault">
+  <aside class="vault-icon-rail" id="vault-icon-rail">
+    <a class="vault-tool-btn vault-rail-brand" href="https://cogny.es/" target="_blank" rel="noopener noreferrer" title="Cogny" aria-label="Sitio de Cogny">
+      <img src="/static/icons/icon-192.png?v={{ ASSET_VERSION }}" alt="" width="22" height="22">
+    </a>
+    <div class="vault-icon-rail-sep"></div>
+    <button class="vault-tool-btn" id="btn-view-toggle" title="Modo lectura" aria-label="Cambiar entre lectura y edición">
+      <svg class="ico-read" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+      <svg class="ico-edit" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 0 0 0-.04z"/></svg>
+    </button>
+    <a class="vault-tool-btn" href="/pizarra/" target="_blank" rel="noopener" title="Pizarra" aria-label="Abrir la pizarra en una pestaña nueva">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l-1 3v1h10v-1l-1-3h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H4V4h16v12z"/><path d="M7.5 13.5 10 10l2 2.5 3-4L18 13.5H7.5z"/></svg>
+    </a>
+    <button class="vault-tool-btn" id="btn-graph" title="Grafo de la bóveda" aria-label="Ver el grafo de notas interconectadas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <line x1="12" y1="7" x2="6.3" y2="16.3"/>
+        <line x1="12" y1="7" x2="17.7" y2="16.3"/>
+        <circle cx="12" cy="5" r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="5" cy="18.5" r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="19" cy="18.5" r="2.2" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+    <div class="vault-icon-rail-spacer"></div>
+    <a class="vault-tool-btn" href="/profile/" title="Mi perfil" aria-label="Mi perfil">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+    </a>
+    <a class="vault-tool-btn" href="/settings/" title="Ajustes" aria-label="Ajustes">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+    </a>
+    <a class="vault-tool-btn" href="https://github.com/Maalfer/cogny" target="_blank" rel="noopener noreferrer" title="Repositorio en GitHub" aria-label="Repositorio en GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.333-1.755-1.333-1.755-1.09-.745.083-.729.083-.729 1.205.084 1.84 1.236 1.84 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57 4.765-1.588 8.2-6.085 8.2-11.385 0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  </aside>
   <aside class="vault-side" id="vault-side">
     <div class="vault-side-head">
       <span>Mi bóveda</span>
@@ -103,13 +130,6 @@
     <div class="vault-toolbar" id="vault-toolbar" style="display:none">
       <div class="vault-title" id="vault-title"></div>
       <span class="vault-status" id="vault-status"></span>
-      <button class="vault-tool-btn" id="btn-view-toggle" title="Modo lectura" aria-label="Cambiar entre lectura y edición">
-        <svg class="ico-read" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
-        <svg class="ico-edit" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 0 0 0-.04z"/></svg>
-      </button>
-      <a class="vault-tool-btn" href="/pizarra/" target="_blank" rel="noopener" title="Pizarra" aria-label="Abrir la pizarra en una pestaña nueva">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l-1 3v1h10v-1l-1-3h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 14H4V4h16v12z"/><path d="M7.5 13.5 10 10l2 2.5 3-4L18 13.5H7.5z"/></svg>
-      </a>
       <button class="vault-tool-btn" id="btn-format" title="Formato: insertar tablas, negritas, callouts…" aria-label="Barra de formato">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v3h5.5v12h3V7H19V4z"/></svg>
         <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
@@ -182,14 +202,6 @@
       <button class="vault-tool-btn" id="btn-nav-fwd" title="Nota siguiente" aria-label="Ir a la nota siguiente" disabled>
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
       </button>
-      <button class="vault-tool-btn" id="btn-zoom" title="Tamaño del texto e imágenes" aria-label="Zoom de notas">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
-      </button>
-      <div class="zoom-pop" id="zoom-pop">
-        <button type="button" id="zoom-out" aria-label="Disminuir">−</button>
-        <button type="button" id="zoom-val" title="Restablecer a 100%">100%</button>
-        <button type="button" id="zoom-in" aria-label="Aumentar">+</button>
-      </div>
     </div>
     <div class="vault-body" id="vault-body" style="display:none">
       <div id="cm-host" class="vault-cm"></div>
@@ -207,6 +219,41 @@
 <div class="ctx-menu" id="ctx-menu"></div>
 <div id="print-pane" class="markdown-body"></div>
 <div id="img-lightbox" class="img-lightbox" aria-hidden="true"><button class="lightbox-close" aria-label="Cerrar imagen" onclick="closeLightbox()">&#215;</button><img alt=""></div>
+
+<div class="graph-overlay" id="graph-overlay" aria-hidden="true">
+  <div class="graph-head">
+    <span class="graph-title">Grafo de la bóveda</span>
+    <button class="graph-close" id="graph-close" aria-label="Cerrar grafo">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+  </div>
+  <div class="graph-controls">
+    <div class="seg" id="graph-mode-seg">
+      <button type="button" data-mode="local" title="Solo la nota abierta y sus conexiones">Local</button>
+      <button type="button" data-mode="global" title="Toda la bóveda">Global</button>
+    </div>
+    <div class="seg" id="graph-hops-seg">
+      <button type="button" data-hops="1" title="Conexiones directas">1 salto</button>
+      <button type="button" data-hops="2" title="Conexiones de las conexiones">2 saltos</button>
+    </div>
+    <button class="vault-tool-btn graph-toggle" id="graph-orphans-btn" aria-label="Mostrar u ocultar notas sin conexiones">
+      <svg class="ico-hide" viewBox="0 0 24 24" fill="currentColor"><path d="M12 6c-5 0-9.27 3.11-11 7.5 1 2.54 2.76 4.67 5 6.07l1.47-1.47A9.6 9.6 0 0 1 3.18 13.5a9.6 9.6 0 0 1 12.6-5.37l1.53-1.53A11.4 11.4 0 0 0 12 6zm-1.07 1.14 1.8 1.8a2.5 2.5 0 0 1 2.33 2.33l1.8 1.8a4.5 4.5 0 0 0-5.93-5.93zM3.27 2 2 3.27l3.2 3.2C3.25 7.73 1.63 9.4.63 11.5c1.73 4.39 6 7.5 11 7.5 1.8 0 3.5-.4 5-1.12l3.5 3.5L21.5 20 3.27 2zm6.27 6.27 1.69 1.69a2.5 2.5 0 0 0 .07.53l2.47 2.47a4.5 4.5 0 0 1-6.18-6.18l1.95 1.49z"/></svg>
+      <svg class="ico-show" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+    </button>
+    <div class="graph-search" id="graph-search">
+      <input type="search" id="graph-search-input" placeholder="Buscar una nota…" autocomplete="off" aria-label="Buscar una nota en el grafo">
+      <button type="button" id="graph-search-clear" class="graph-search-clear" aria-label="Borrar búsqueda" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="graph-search-results hidden" id="graph-search-results"></div>
+    </div>
+    <span class="graph-count" id="graph-count"></span>
+  </div>
+  <div class="graph-body">
+    <canvas id="graph-canvas"></canvas>
+    <div class="graph-hint" id="graph-hint">Rueda: zoom · Arrastra el fondo: mover · Arrastra un nodo: reordenar · Clic en un nodo: abrir la nota</div>
+  </div>
+</div>
 <input type="file" id="import-file" accept=".zip,.md,application/zip,application/x-zip-compressed,application/octet-stream,text/markdown" style="display:none">
 <input type="file" id="asset-file" accept="image/*" multiple style="display:none">
 
@@ -368,7 +415,7 @@
         <span>Permitir editar<small>Quien tenga el enlace podrá escribir en la nota, sin cuenta</small></span>
         <span class="share-switch" id="share-write-switch" role="switch" aria-checked="false"></span>
       </button>
-      <div class="share-warn" id="share-write-warn">El enlace es la única llave: quien lo reciba (o a quien se lo reenvíen) podrá cambiar el contenido de la nota. Combínalo con una contraseña si va a circular. En modo escritura el enlace también da acceso por HTTP (JSON) al contenido y a los adjuntos de la nota, sin cuenta: pásalo a una IA si quieres que gestione esta nota por ti.</div>
+      <div class="share-warn" id="share-write-warn">El enlace es la única llave: quien lo reciba (o a quien se lo reenvíen) podrá cambiar el contenido de la nota. Combínalo con una contraseña si va a circular. En modo escritura el enlace también da acceso por HTTP (JSON) al contenido y a los adjuntos de la nota, sin cuenta: pásalo a una IA si quieres que gestione esta nota por ti — con ese mismo enlace, pidiendo <code>/llms.txt</code> al final, encuentra la guía completa del API.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" id="share-stop" style="margin-right:auto;color:#f87171;display:none">Dejar de compartir</button>

@@ -923,6 +923,63 @@ async function exportNotePDF(it, opts){
   }
 }
 
+// Exporta una nota a un .docx nativo, tal cual y sin tema: a diferencia del
+// PDF no abre ningún modal de estilos ni pasa por Chromium en el servidor
+// (ver `notes_doc`/`worddoc.py`) — reutiliza el mismo HTML ya renderizado
+// (`prepareExportHtml`, el de siempre: KaTeX, código, imágenes incrustadas)
+// y el servidor lo convierte directo a OOXML, para que Word/LibreOffice/
+// Google Docs lo abran con su aspecto por defecto en vez del de una
+// plantilla de la app.
+async function exportNoteDoc(it){
+  setStatus('Generando documento…', false);
+  const pp=$('print-pane');
+  try{
+    const html = await prepareExportHtml(it, {});
+    const base=(((current&&current.name)||it.name||'nota')).replace(/\.md$/i,'');
+    const res=await fetch('/api/notes/doc',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({html, title:base})});
+    if(!res.ok) throw new Error('http '+res.status);
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=(base||'nota')+'.docx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    setStatus('Documento generado', true);
+  }catch(e){
+    setStatus('Error al generar el documento', false);
+  }finally{
+    pp.innerHTML='';
+  }
+}
+
+// Exporta todas las imágenes de la nota a un .zip (cada una como .png):
+// mismo HTML ya renderizado que exportNoteDoc (prepareExportHtml, imágenes
+// del vault incrustadas) — el servidor (notes_images/imagesexport.py) sólo
+// recorta los <img src="data:..."> y reconvierte cada uno a PNG.
+async function exportNoteImages(it){
+  setStatus('Generando zip de imágenes…', false);
+  const pp=$('print-pane');
+  try{
+    const html = await prepareExportHtml(it, {});
+    const base=(((current&&current.name)||it.name||'nota')).replace(/\.md$/i,'');
+    const res=await fetch('/api/notes/images',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({html, title:base})});
+    if(!res.ok) throw new Error('http '+res.status);
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=(base||'nota')+'-imagenes.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    setStatus('Zip de imágenes generado', true);
+  }catch(e){
+    setStatus('Error al exportar las imágenes', false);
+  }finally{
+    pp.innerHTML='';
+  }
+}
+
 /* En apaisado el cuerpo va a dos columnas (~12,8 cm cada una). Lo que no cabe
    ahí dentro se marca para que el PDF lo saque a ancho completo. Se decide en
    el navegador porque es el único sitio donde el contenido ya está medido: el
@@ -1280,11 +1337,6 @@ function renderBlockLP(src, container){ container.innerHTML=renderMarkdown(src);
 // Lightbox: ver una imagen en grande (móvil y escritorio).
 function openLightbox(src){ const lb=$('img-lightbox'); lb.querySelector('img').src=src; lb.classList.add('show'); lb.setAttribute('aria-hidden','false'); }
 function closeLightbox(){ const lb=$('img-lightbox'); lb.classList.remove('show'); lb.setAttribute('aria-hidden','true'); lb.querySelector('img').removeAttribute('src'); }
-// Zoom de la nota completa (texto + imágenes) con Ctrl + / Ctrl - / Ctrl 0.
-let noteFs = parseFloat(localStorage.getItem('note-fs')||'1') || 1;
-function applyNoteFs(){ if(ED) ED.dom.style.setProperty('--note-fs', noteFs.toFixed(2)); const rd=$('cm-reader'); if(rd) rd.style.setProperty('--note-fs', noteFs.toFixed(2)); updateZoomLabel(); }
-function updateZoomLabel(){ const el=document.getElementById('zoom-val'); if(el) el.textContent=Math.round(noteFs*100)+'%'; }
-function setNoteFs(v){ noteFs=Math.max(0.7, Math.min(2.4, +v.toFixed(2))); localStorage.setItem('note-fs', noteFs); applyNoteFs(); }
 function setStatus(t,saved){const el=$('vault-status'); el.textContent=t; el.classList.toggle('saved',!!saved);}
 function onEdit(){ dirty=true; setStatus('Editando…',false);
   clearTimeout(saveTimer); saveTimer=setTimeout(saveNow,900); }
@@ -1330,7 +1382,6 @@ function initEditor(){
   if(ED || !window.BaluCM){ return; }
   ED = BaluCM.create($('cm-host'), { doc:'', renderBlock:renderBlockLP, onChange:()=>onEdit() });
   window.ED = ED;
-  applyNoteFs();
   const dom = ED.dom;
   // Atrapa Tab/Shift+Tab dentro del editor para que el foco no salte a los
   // botones/sidebar de la página (comportamiento por defecto de CM6 por accesibilidad).
@@ -1354,6 +1405,65 @@ function initEditor(){
       view.dispatch(st.replaceSelection('\t'));
     }
   });
+  // ── Flechas ↑/↓ línea a línea (también a través de bloques renderizados) ──
+  // En Live Preview, todo bloque que no tiene el cursor (párrafo, lista, tabla,
+  // cita, código…) es UN widget que ocupa varias líneas del documento. El
+  // movimiento vertical nativo de CM6 salta por encima de esos widgets: desde
+  // la línea de debajo de un párrafo, ↑ lleva el cursor al principio del
+  // bloque (o más allá), sin pasar por sus renglones. Aquí tomamos el control
+  // sólo cuando la flecha va a CAMBIAR de línea del documento (dentro de una
+  // línea que se parte en varios renglones, sigue mandando CM6):
+  //   1. Buscamos la línea vecina; si es una imagen (siempre renderizada) la
+  //      saltamos. Si es un bloque renderizado, su rango entero es el destino.
+  //   2. Colocamos el cursor en el borde cercano (↑ final, ↓ inicio): eso
+  //      "revela" el bloque como texto fuente.
+  //   3. Con el texto ya maquetado, afinamos al último (↑) o primer (↓)
+  //      renglón visual conservando la columna horizontal de partida.
+  // Resultado: el cursor recorre el texto renglón a renglón como en Word u Obsidian.
+  let _navX=null, _navHead=-1;
+  dom.addEventListener('keydown', e=>{
+    if((e.key!=='ArrowUp' && e.key!=='ArrowDown') || e.isComposing) return;
+    if(e.shiftKey||e.ctrlKey||e.altKey||e.metaKey) return;
+    const v=ED.view; if(!v) return;
+    if(dom.querySelector('.cm-tooltip-autocomplete')) return;   // la lista de sugerencias usa las flechas
+    const st=v.state, sel=st.selection.main; if(!sel.empty) return;
+    const forward=e.key==='ArrowDown';
+    const line=st.doc.lineAt(sel.head);
+    try{
+      const t=v.moveVertically(sel, forward).head;
+      if(t>=line.from && t<=line.to) return;                    // se queda en la misma línea (renglón partido)
+    }catch(_){ return; }
+    // Línea vecina, saltando imágenes (no se puede entrar en ellas).
+    let n=line.number, from, to;
+    for(;;){
+      n+=forward?1:-1;
+      if(n<1 || n>st.doc.lines) return;                         // primera/última línea: nada que hacer
+      const adj=st.doc.line(n), blk=v.lineBlockAt(adj.from), w=blk.widget;
+      if(w && w.isImage){ n=st.doc.lineAt(forward?blk.to:blk.from).number; continue; }
+      if(w && typeof w.src==='string'){ from=blk.from; to=blk.to; }
+      else { from=adj.from; to=adj.to; }
+      break;
+    }
+    e.preventDefault(); e.stopPropagation();
+    const c0=v.coordsAtPos(sel.head);
+    const x=(sel.head===_navHead && _navX!=null) ? _navX : (c0 ? c0.left : null);
+    const edge=forward ? from : to;
+    v.dispatch({selection:{anchor:edge}, scrollIntoView:true});
+    _navHead=edge; _navX=x;
+    if(x==null) return;
+    // El bloque acaba de pasar de widget a texto fuente: esperamos a que se maquete.
+    v.requestMeasure({
+      read:()=>{
+        const c=v.coordsAtPos(edge, forward ? 1 : -1);
+        return c ? v.posAtCoords({x, y:(c.top+c.bottom)/2}) : null;
+      },
+      write:pos=>{
+        if(pos==null || v.state.selection.main.head!==edge) return;
+        pos=Math.max(from, Math.min(to, pos));
+        if(pos!==edge){ v.dispatch({selection:{anchor:pos}}); _navHead=pos; }
+      },
+    });
+  }, true);
   // ── Auto-cierre de bloques de código ───────────────────────────────
   // El keymap de Markdown no cierra los cercados: al teclear la 3ª comilla
   // de un ``` al principio de una línea, CM6 inserta la comilla y ahí se
@@ -1467,6 +1577,10 @@ function initEditor(){
   dom.addEventListener('paste', e=>{
     const items=(e.clipboardData&&e.clipboardData.items)||[];
     for(const it of items){ if(it.kind==='file'&&it.type.startsWith('image/')){ e.preventDefault(); const f=it.getAsFile(); if(f) handleImageFile(f); return; } }
+    // Fallback: algún navegador no lista el archivo en `items` pero sí en `files`
+    // (p.ej. ciertas combinaciones de herramienta de captura + navegador en Linux).
+    const files=(e.clipboardData&&e.clipboardData.files)||[];
+    for(const f of files){ if(f&&f.type&&f.type.startsWith('image/')){ e.preventDefault(); handleImageFile(f); return; } }
   });
   // Arrastrar y soltar imágenes.
   ['dragover','dragenter'].forEach(ev=>dom.addEventListener(ev, e=>{
@@ -1654,7 +1768,10 @@ function showCtxMenu(e,it){
   if(it.type==='note'){
     html+=`<button data-act="open-new-tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>Abrir en nueva pestaña</button><div class="ctx-sep"></div>`;
     const pdfIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h1.5a1.5 1.5 0 0 1 0 3H9v2H8v-5zm1.5 2a.5.5 0 0 0 0-1H9v1h.5zM12 13h1.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 13.5 18H12v-5zm1 4a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5v3zm3-4h2v1h-1v1h1v1h-1v2h-1v-5z"/></svg>`;
+    const docIco=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM7 12.25h10v1.5H7v-1.5zm0 3h10v1.5H7v-1.5zm0 3h7v1.5H7v-1.5z"/></svg>`;
     html+=`<button data-act="pdf">${pdfIco}Exportar a PDF…</button>
+    <button data-act="doc">${docIco}Exportar a DOCX</button>
+    <button data-act="images"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>Exportar imágenes (.zip)</button>
     ${CAN_WRITE ? `<button data-act="share"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 1 0 0 6c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>Compartir</button>` : ''}
     ${ctxPrivateEntry(it)}
     ${CAN_WRITE ? `<button data-act="move"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h10v-3l6 4-6 4v-3H3z"/><path d="M21 5v14h-2V5z"/></svg>Mover a carpeta…</button>` : ''}<div class="ctx-sep"></div>`;
@@ -1683,6 +1800,8 @@ function showCtxMenu(e,it){
       if(a==='new-note') newNote(it.path); else if(a==='new-folder') newFolder(it.path);
       else if(a==='open-new-tab') openInNewTab(it.path);
       else if(a==='pdf') openPdfModal(it);
+      else if(a==='doc') exportNoteDoc(it);
+      else if(a==='images') exportNoteImages(it);
       else if(a==='share') openShareModal(it);
       else if(a==='set-private') togglePrivate(it, true);
       else if(a==='unset-private') togglePrivate(it, false);
@@ -1944,15 +2063,29 @@ function uploadAsset(file){
   // el backend registra con ella el dueño del adjunto, para poder resolverlo
   // en el enlace público sólo desde esta misma nota (ver _resolve_asset_ref).
   if(current) fd.append('note', current.path);
-  return fetch('/api/notes/upload',{method:'POST', body:fd}).then(r=>r.json());
+  const ctrl=new AbortController();
+  // Si la red se cae a mitad de subida, sin esto `imgBusy`/la cola se quedaba
+  // colgada para siempre (fetch sin timeout) y ninguna imagen más se podía
+  // pegar hasta recargar la página.
+  const timer=setTimeout(()=>ctrl.abort(), 30000);
+  return fetch('/api/notes/upload',{method:'POST', body:fd, signal:ctrl.signal})
+    .then(r=>r.json())
+    .finally(()=>clearTimeout(timer));
 }
-let imgBusy=false;
-async function handleImageFile(file){
-  if(!guardWrite()) return;
-  if(!file || !file.type.startsWith('image/')) return;
-  if(!current){ alert('Abre o crea una nota antes de añadir una imagen.'); return; }
-  if(imgBusy){ return; }            // sube de una en una para no entrelazar inserciones
-  imgBusy=true; setStatus('Subiendo imagen…', false);
+// Cola (en vez de un simple flag "ocupado"): si llega una imagen mientras se
+// sube la anterior —pegar varias rápido, o pegar justo cuando una tarda por
+// red lenta— antes se descartaba en silencio ("a veces no pega la imagen").
+// Ahora se encola y sube en orden, sin perder ninguna.
+let imgQueue=Promise.resolve();
+function handleImageFile(file){
+  if(!guardWrite()) return imgQueue;
+  if(!file || !file.type.startsWith('image/')) return imgQueue;
+  if(!current){ alert('Abre o crea una nota antes de añadir una imagen.'); return imgQueue; }
+  imgQueue=imgQueue.then(()=>uploadQueuedImage(file));
+  return imgQueue;
+}
+async function uploadQueuedImage(file){
+  setStatus('Subiendo imagen…', false);
   try{
     const res=await uploadAsset(file);
     if(res && res.success){
@@ -1961,7 +2094,6 @@ async function handleImageFile(file){
       setStatus('Imagen añadida', true);
     } else { alert((res&&res.error)||'No se pudo subir la imagen'); setStatus('Editando…', false); }
   }catch(e){ alert('Error al subir la imagen'); setStatus('Editando…', false); }
-  imgBusy=false;
 }
 async function handleImageFiles(files){
   for(const f of files){ if(f.type.startsWith('image/')) await handleImageFile(f); }
@@ -1989,18 +2121,6 @@ $('cm-reader').addEventListener('click', async e=>{
 $('btn-nav-back').addEventListener('click', ()=>navStep(-1));
 $('btn-nav-fwd').addEventListener('click', ()=>navStep(+1));
 updateNavButtons();
-
-// Popover de zoom (lupa): − / % / +. Reaprovecha setNoteFs (clamp 0.7..2.4, paso 0.1).
-$('btn-zoom').addEventListener('click', e=>{ e.stopPropagation();
-  $('zoom-pop').classList.toggle('open'); updateZoomLabel(); });
-$('zoom-in').addEventListener('click', e=>{ e.stopPropagation(); setNoteFs(noteFs+0.1); });
-$('zoom-out').addEventListener('click', e=>{ e.stopPropagation(); setNoteFs(noteFs-0.1); });
-$('zoom-val').addEventListener('click', e=>{ e.stopPropagation(); setNoteFs(1); });
-document.addEventListener('click', e=>{
-  if(!e.target.closest('#zoom-pop') && !e.target.closest('#btn-zoom'))
-    $('zoom-pop').classList.remove('open');
-});
-updateZoomLabel();
 
 /* ════════════ Barra de formato (estilo Word) ════════════ */
 // Envuelve la selección (negrita, cursiva, código en línea, enlace…).
@@ -2097,7 +2217,7 @@ const FMT_ACTIONS={
   const fbar=$('format-bar'), btn=$('btn-format');
   if(!fbar || !btn){ return; }
   btn.addEventListener('click', e=>{ e.stopPropagation();
-    fbar.classList.toggle('open'); $('zoom-pop').classList.remove('open'); });
+    fbar.classList.toggle('open'); });
   // Evita que el editor pierda la selección al pulsar un botón de la barra.
   fbar.addEventListener('mousedown', e=>{ if(e.target.closest('button')) e.preventDefault(); });
   fbar.addEventListener('click', e=>{
@@ -2197,13 +2317,6 @@ document.addEventListener('keydown', e=>{
   if($('move-modal').classList.contains('show')){ closeMoveModal(); return; }
   if($('import-modal').classList.contains('show')){ $('import-cancel').click(); return; }
   if(!$('vault-settings-menu').classList.contains('hidden')){ closeVaultSettingsMenu(); $('btn-img-dir').focus(); return; }
-});
-// Ctrl + / Ctrl - / Ctrl 0 → zoom de la nota (evita el zoom del navegador).
-document.addEventListener('keydown', e=>{
-  if(!(e.ctrlKey||e.metaKey)) return;
-  if(e.key==='+'||e.key==='='){ e.preventDefault(); setNoteFs(noteFs+0.1); }
-  else if(e.key==='-'||e.key==='_'){ e.preventDefault(); setNoteFs(noteFs-0.1); }
-  else if(e.key==='0'){ e.preventDefault(); setNoteFs(1); }
 });
 $('btn-search').addEventListener('click', ()=>toggleSearch());
 // Dropdown de ajustes de la bóveda
@@ -2497,7 +2610,6 @@ $('vault-tree').addEventListener('drop', e=>{
 $('vault-side').addEventListener('dragleave', e=>{
   if(dragSrc && !$('vault-side').contains(e.relatedTarget)) clearDropVisual();
 });
-$('btn-toggle-sidebar').addEventListener('click', ()=>toggleSidebar());
 $('btn-side-handle').addEventListener('click', e=>{ toggleSidebar(); e.currentTarget.blur(); });
 $('vault-side-backdrop').addEventListener('click', ()=>closeSidebarMobile());
 function closeSidebarMobile(){
@@ -2505,27 +2617,17 @@ function closeSidebarMobile(){
   if(!v.classList.contains('vault-mobile-open')) return;
   v.classList.remove('vault-mobile-open');
   document.body.classList.remove('vault-side-mobile-open');
-  $('btn-toggle-sidebar').setAttribute('aria-expanded','false');
   $('btn-side-handle').setAttribute('aria-expanded','false');
   $('btn-side-handle').classList.remove('open');
 }
+// Sólo hace falta la rama móvil: el handle lateral que la llama ya está
+// oculto en escritorio (el toggle de escritorio se quitó al no tener efecto).
 function toggleSidebar(){
   const v=$('vault');
-  if(window.innerWidth<760){
-    const willOpen=v.classList.toggle('vault-mobile-open');
-    v.classList.remove('side-hidden');                 // compatibilidad desktop-only
-    document.body.classList.toggle('vault-side-mobile-open', willOpen);
-    $('btn-toggle-sidebar').setAttribute('aria-expanded',String(willOpen));
-    $('btn-side-handle').setAttribute('aria-expanded',String(willOpen));
-    $('btn-side-handle').classList.toggle('open',willOpen);
-  } else {
-    const hidden=v.classList.toggle('side-hidden');
-    const expanded=String(!hidden);
-    $('btn-toggle-sidebar').setAttribute('aria-expanded',expanded);
-    $('btn-side-handle').setAttribute('aria-expanded',expanded);
-    $('btn-side-handle').classList.toggle('open',!hidden);
-    localStorage.setItem('vault-side-hidden',hidden?'1':'0');
-  }
+  const willOpen=v.classList.toggle('vault-mobile-open');
+  document.body.classList.toggle('vault-side-mobile-open', willOpen);
+  $('btn-side-handle').setAttribute('aria-expanded',String(willOpen));
+  $('btn-side-handle').classList.toggle('open',willOpen);
 }
 /* Escape cierra el sidebar móvil — coherente con el patrón de modales
    (tecla universal para "volver/salir") */
@@ -2566,11 +2668,6 @@ window.addEventListener('beforeunload', ()=>{ if(dirty) saveNow(); });
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden&&dirty) saveNow(); });
 function flashSync(){ const d=$('sync-dot'); d.classList.add('visible'); setTimeout(()=>d.classList.remove('visible'),700); }
 
-if(localStorage.getItem('vault-side-hidden')==='1'&&window.innerWidth>=760){
-  $('vault').classList.add('side-hidden');
-  $('btn-toggle-sidebar').setAttribute('aria-expanded','false');
-  $('btn-side-handle').setAttribute('aria-expanded','false');
-}
 initEditor();
 $('vault-title').addEventListener('click',e=>{
   // Clic en cualquier segmento de la ruta (carpeta o nombre de nota): localizarlo en el
@@ -2580,7 +2677,6 @@ $('vault-title').addEventListener('click',e=>{
   const isNote=crumb.classList.contains('crumb-note');
   const folderParts=isNote?fp.split('/').slice(0,-1):fp.split('/');
   folderParts.forEach((_,i,a)=>expanded.add(a.slice(0,i+1).join('/')));persistExpanded();renderTree();
-  if(window.innerWidth<760)$('vault').classList.remove('side-hidden');
   setTimeout(()=>{const row=document.querySelector('.tree-row[data-path="'+cssEsc(fp)+'"]');if(!row)return;row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.remove('flash-locate');void row.offsetWidth;row.classList.add('flash-locate');},60);
 });
 (async ()=>{
@@ -2655,3 +2751,477 @@ if (window.visualViewport) {
     }, 80);
   });
 }
+
+/* ════════════ Grafo de la bóveda (vista de red, estilo Obsidian) ════════════
+   Nodos = notas, aristas = wikilinks que resuelven a otra nota (`/api/notes/graph`,
+   ver vault.build_graph). La simulación de fuerzas usa un hash espacial (grid de
+   celdas) para la repulsión en vez de comparar cada nodo con todos los demás:
+   con ~1400 notas en la bóveda, O(n²) se nota; O(n) no. */
+(function initGraph(){
+  const overlay=$('graph-overlay'), canvas=$('graph-canvas'), btn=$('btn-graph'),
+        closeBtn=$('graph-close'), countEl=$('graph-count'),
+        modeSeg=$('graph-mode-seg'), hopsSeg=$('graph-hops-seg'), orphansBtn=$('graph-orphans-btn'),
+        searchEl=$('graph-search'), searchInput=$('graph-search-input'),
+        searchClear=$('graph-search-clear'), searchResultsEl=$('graph-search-results');
+  if(!overlay || !canvas || !btn) return;
+  const ctx=canvas.getContext('2d');
+
+  let allNodes=[], allLinks=[], byPath=new Map(), loaded=false, raf=null;
+  let nodes=[], links=[];        // conjunto ACTIVO (filtrado por modo/saltos/aisladas) que ve la simulación
+  let view={x:0,y:0,scale:1};    // cámara: pan/zoom del mundo sobre el canvas
+  let alpha=0;                   // "temperatura" de la simulación: decae hasta el reposo
+  let dragNode=null, panStart=null, moved=false, hoverNode=null, selectedNode=null;
+  const neighbors=new Map();     // path -> Set(path) adyacencia, para resaltar/filtrar
+
+  // ── Estado de la vista: global/local, profundidad de saltos, aisladas ──
+  let mode='global', hops=1, focusPath=null, hideOrphans=true;
+
+  function resizeCanvas(){
+    const r=canvas.parentElement.getBoundingClientRect();
+    const dpr=window.devicePixelRatio||1;
+    canvas.width=Math.round(r.width*dpr); canvas.height=Math.round(r.height*dpr);
+    canvas.style.width=r.width+'px'; canvas.style.height=r.height+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  async function loadGraph(){
+    countEl.textContent='Cargando…';
+    const res=await fetch('/api/notes/graph').then(r=>r.json()).catch(()=>null);
+    if(!res || !res.nodes){ countEl.textContent='Error al cargar el grafo'; return; }
+    allNodes=res.nodes.map(d=>({path:d.path, name:d.name, x:0, y:0, vx:0, vy:0, deg:0, hoverT:0}));
+    byPath=new Map(allNodes.map(nd=>[nd.path,nd]));
+    neighbors.clear();
+    allLinks=res.links.map(l=>({source:byPath.get(l.source), target:byPath.get(l.target)}))
+                       .filter(l=>l.source && l.target);
+    allLinks.forEach(l=>{
+      l.source.deg++; l.target.deg++;
+      if(!neighbors.has(l.source.path)) neighbors.set(l.source.path,new Set());
+      if(!neighbors.has(l.target.path)) neighbors.set(l.target.path,new Set());
+      neighbors.get(l.source.path).add(l.target.path);
+      neighbors.get(l.target.path).add(l.source.path);
+    });
+    loaded=true;
+  }
+
+  // ── Subgrafo local: la nota `focusPath` y sus vecinas hasta `hops` saltos (BFS) ──
+  function localSubgraph(focus, maxHops){
+    const include=new Set([focus]);
+    let frontier=[focus];
+    for(let h=0; h<maxHops && frontier.length; h++){
+      const next=[];
+      frontier.forEach(p=>{
+        const nbrs=neighbors.get(p);
+        if(!nbrs) return;
+        nbrs.forEach(np=>{ if(!include.has(np)){ include.add(np); next.push(np); } });
+      });
+      frontier=next;
+    }
+    return include;
+  }
+
+  function computeActiveSet(){
+    if(mode==='local' && focusPath && byPath.has(focusPath)){
+      const include=localSubgraph(focusPath, hops);
+      const ns=allNodes.filter(nd=>include.has(nd.path));
+      const ls=allLinks.filter(l=>include.has(l.source.path) && include.has(l.target.path));
+      return {ns, ls};
+    }
+    const ns=allNodes.filter(nd=>!hideOrphans || nd.deg>0);
+    return {ns, ls:allLinks};   // los enlaces siempre conectan notas con deg>0: nunca hace falta filtrarlos aparte
+  }
+
+  // Reconstruye el conjunto activo tras cambiar modo/saltos/aisladas. Las notas que
+  // YA estaban visibles conservan su posición (continuidad); sólo las que entran de
+  // nuevas se siembran en una posición aleatoria para que la física las acomode.
+  function rebuildActiveSet(){
+    const prevSet=new Set(nodes.map(nd=>nd.path));
+    const {ns, ls}=computeActiveSet();
+    const spread=Math.max(150, Math.sqrt(ns.length)*42);
+    ns.forEach(nd=>{
+      if(!prevSet.has(nd.path)){
+        nd.x=(Math.random()-0.5)*spread*2; nd.y=(Math.random()-0.5)*spread*2;
+        nd.vx=0; nd.vy=0; nd.hoverT=0;
+      }
+    });
+    nodes=ns; links=ls; alpha=1;
+    updateCountText();
+  }
+
+  function updateCountText(){
+    if(mode==='local'){
+      countEl.textContent=nodes.length+' notas · '+links.length+' enlaces · local ('+hops+(hops===1?' salto':' saltos')+')';
+    } else if(nodes.length<allNodes.length){
+      countEl.textContent=nodes.length+' de '+allNodes.length+' notas · '+links.length+' enlaces';
+    } else {
+      countEl.textContent=nodes.length+' notas · '+links.length+' enlaces';
+    }
+  }
+
+  // Encuadra la cámara para que quepan (con margen) los nodos dados — por defecto,
+  // todo el conjunto activo. `tight` fuerza un acercamiento cómodo a un único nodo
+  // (resultado de búsqueda), en vez de ajustar al grafo entero.
+  function fitView(targetNodes, opts){
+    opts=opts||{};
+    const list=(targetNodes && targetNodes.length) ? targetNodes : nodes;
+    const r=canvas.getBoundingClientRect();
+    if(!list.length){ view={x:0,y:0,scale:1}; return; }
+    if(opts.tight && list.length===1){
+      const scale=1.4;
+      view={x:-list[0].x*scale, y:-list[0].y*scale, scale};
+      return;
+    }
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    list.forEach(nd=>{ minX=Math.min(minX,nd.x); maxX=Math.max(maxX,nd.x); minY=Math.min(minY,nd.y); maxY=Math.max(maxY,nd.y); });
+    const w=Math.max(80,maxX-minX), h=Math.max(80,maxY-minY), pad=1.3;
+    const scale=Math.max(0.12, Math.min(2, Math.min(r.width/(w*pad), r.height/(h*pad))));
+    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+    view={x:-cx*scale, y:-cy*scale, scale};
+  }
+
+  // ── Controles: modo global/local, profundidad de saltos, aisladas ──
+  function applyModeUI(){
+    const hasCurrent=!!(current && current.path);
+    const localBtn=modeSeg.querySelector('[data-mode="local"]');
+    localBtn.disabled=!hasCurrent;
+    localBtn.title=hasCurrent ? 'Solo la nota abierta y sus conexiones' : 'Abre una nota para ver su grafo local';
+    modeSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+    hopsSeg.classList.toggle('show', mode==='local');
+    hopsSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', Number(b.dataset.hops)===hops));
+  }
+  function updateOrphansUI(){
+    orphansBtn.classList.toggle('on', !hideOrphans);
+    orphansBtn.title=hideOrphans ? 'Mostrar notas sin conexiones' : 'Ocultar notas sin conexiones';
+  }
+  modeSeg.addEventListener('click', e=>{
+    const b=e.target.closest('button[data-mode]'); if(!b || b.disabled) return;
+    if(b.dataset.mode===mode) return;
+    mode=b.dataset.mode;
+    if(mode==='local') focusPath=current && current.path;
+    applyModeUI(); rebuildActiveSet(); fitView();
+  });
+  hopsSeg.addEventListener('click', e=>{
+    const b=e.target.closest('button[data-hops]'); if(!b) return;
+    const h=Number(b.dataset.hops); if(h===hops) return;
+    hops=h; applyModeUI(); rebuildActiveSet(); fitView();
+  });
+  orphansBtn.addEventListener('click', ()=>{
+    hideOrphans=!hideOrphans; updateOrphansUI(); rebuildActiveSet(); fitView();
+  });
+
+  // ── Buscador: encuentra una nota entre TODAS (no sólo las visibles en este
+  // momento) y, si hace falta, cambia de modo/aisladas para poder mostrarla. ──
+  let searchResultsList=[], searchSel=-1;
+  function closeSearchResults(){ searchResultsEl.classList.add('hidden'); searchResultsEl.innerHTML=''; searchSel=-1; }
+  function renderSearchResults(matches){
+    searchResultsList=matches; searchSel=-1;
+    searchResultsEl.innerHTML = matches.length
+      ? matches.map((nd,i)=>'<div class="graph-result" data-i="'+i+'"><span class="graph-result-name">'+esc(nd.name)+'</span><span class="graph-result-path">'+esc(nd.path)+'</span></div>').join('')
+      : '<div class="graph-result-empty">Sin resultados</div>';
+    searchResultsEl.classList.remove('hidden');
+  }
+  function doSearch(q){
+    q=q.trim().toLowerCase();
+    searchEl.classList.toggle('has-value', q.length>0);
+    if(!q){ closeSearchResults(); return; }
+    const starts=[], contains=[];
+    allNodes.forEach(nd=>{
+      const name=nd.name.toLowerCase();
+      if(name.startsWith(q)) starts.push(nd);
+      else if(name.includes(q) || nd.path.toLowerCase().includes(q)) contains.push(nd);
+    });
+    starts.sort((a,b)=>b.deg-a.deg); contains.sort((a,b)=>b.deg-a.deg);
+    renderSearchResults([...starts, ...contains].slice(0,8));
+  }
+  function selectSearchResult(nd){
+    if(!nodes.includes(nd)){
+      if(mode==='local'){ mode='global'; focusPath=null; }
+      if(hideOrphans && nd.deg===0) hideOrphans=false;
+      applyModeUI(); updateOrphansUI(); rebuildActiveSet();
+    }
+    selectedNode=nd;
+    fitView([nd], {tight:true});
+    closeSearchResults();
+    searchInput.value=nd.name;
+    searchEl.classList.add('has-value');
+  }
+  function clearSearch(){
+    searchInput.value=''; searchEl.classList.remove('has-value'); closeSearchResults(); selectedNode=null;
+  }
+  searchInput.addEventListener('input', ()=>doSearch(searchInput.value));
+  searchInput.addEventListener('focus', ()=>{ if(searchInput.value.trim()) doSearch(searchInput.value); });
+  searchInput.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){
+      if(searchInput.value){ e.preventDefault(); e.stopPropagation(); clearSearch(); }
+      return;   // vacío: deja que el Escape general cierre el grafo
+    }
+    if(e.key==='Enter'){ e.preventDefault(); const pick=searchResultsList[Math.max(searchSel,0)]; if(pick) selectSearchResult(pick); }
+    else if(e.key==='ArrowDown' && searchResultsList.length){ e.preventDefault(); searchSel=Math.min(searchSel+1, searchResultsList.length-1); highlightSel(); }
+    else if(e.key==='ArrowUp' && searchResultsList.length){ e.preventDefault(); searchSel=Math.max(searchSel-1, 0); highlightSel(); }
+  });
+  function highlightSel(){ searchResultsEl.querySelectorAll('.graph-result').forEach((el,i)=>el.classList.toggle('sel', i===searchSel)); }
+  searchResultsEl.addEventListener('click', e=>{
+    const row=e.target.closest('.graph-result'); if(!row) return;
+    const pick=searchResultsList[Number(row.dataset.i)]; if(pick) selectSearchResult(pick);
+  });
+  searchClear.addEventListener('click', ()=>{ clearSearch(); searchInput.focus(); });
+  document.addEventListener('click', e=>{ if(!e.target.closest('#graph-search')) closeSearchResults(); });
+
+  // ── Simulación de fuerzas ──
+  const CELL=90, REPEL_CUTOFF2=14000, REPEL=2600, LINK_DIST=70, LINK_K=0.06, CENTER_K=0.012;
+  function tick(){
+    if(!nodes.length) return;
+    const grid=new Map();
+    nodes.forEach(nd=>{
+      const k=Math.round(nd.x/CELL)+','+Math.round(nd.y/CELL);
+      if(!grid.has(k)) grid.set(k,[]);
+      grid.get(k).push(nd);
+    });
+    nodes.forEach(nd=>{
+      if(nd===dragNode) return;
+      let fx=0, fy=0;
+      const cx=Math.round(nd.x/CELL), cy=Math.round(nd.y/CELL);
+      for(let gx=cx-1; gx<=cx+1; gx++) for(let gy=cy-1; gy<=cy+1; gy++){
+        const bucket=grid.get(gx+','+gy); if(!bucket) continue;
+        for(const o of bucket){
+          if(o===nd) continue;
+          let dx=nd.x-o.x, dy=nd.y-o.y, d2=dx*dx+dy*dy;
+          if(d2<0.01){ dx=Math.random()-0.5; dy=Math.random()-0.5; d2=1; }
+          if(d2>REPEL_CUTOFF2) continue;
+          const d=Math.sqrt(d2), f=REPEL/d2;
+          fx+=dx/d*f; fy+=dy/d*f;
+        }
+      }
+      fx-=nd.x*CENTER_K; fy-=nd.y*CENTER_K;   // gravedad: mantiene el grafo agrupado
+      nd.vx=(nd.vx+fx*alpha)*0.82; nd.vy=(nd.vy+fy*alpha)*0.82;
+    });
+    links.forEach(l=>{
+      const dx=l.target.x-l.source.x, dy=l.target.y-l.source.y;
+      const d=Math.sqrt(dx*dx+dy*dy)||0.01;
+      const f=(d-LINK_DIST)*LINK_K*alpha, ux=dx/d, uy=dy/d;
+      if(l.source!==dragNode){ l.source.vx+=ux*f; l.source.vy+=uy*f; }
+      if(l.target!==dragNode){ l.target.vx-=ux*f; l.target.vy-=uy*f; }
+    });
+    nodes.forEach(nd=>{ if(nd!==dragNode){ nd.x+=nd.vx; nd.y+=nd.vy; } });
+    alpha=Math.max(0, alpha-0.0065);
+  }
+
+  function nodeRadius(nd){
+    const base=3.2+Math.min(7, Math.sqrt(nd.deg)*1.8);
+    return base*(1+0.55*nd.hoverT);   // crece suavemente al pasar el ratón o seleccionar (hoverT anima 0→1)
+  }
+  function truncateLabel(s, max){ return s.length>max ? s.slice(0,max-1)+'…' : s; }
+
+  // Nº máximo de etiquetas evaluadas/dibujadas por frame: cota dura para que una
+  // bóveda enorme (miles de notas) no convierta el grafo en una pared de texto
+  // ni cueste más por frame por mucho que crezca la bóveda.
+  const MAX_LABEL_CANDIDATES=600, MAX_LABELS_DRAWN=220;
+  // Umbral de zoom a partir del cual se empiezan a ver nombres de notas (por
+  // debajo, alejado, no se muestra ninguno salvo el de la nota bajo el cursor).
+  const LABEL_ZOOM=0.9;
+
+  function draw(){
+    const r=canvas.getBoundingClientRect();
+    ctx.clearRect(0,0,r.width,r.height);
+
+    const localFocusNode=(mode==='local' && focusPath) ? byPath.get(focusPath) : null;
+
+    // Anima el "crecimiento" de hover/selección (lerp hacia 0/1): un salto brusco
+    // de radio se nota tosco, esto da el pequeño efecto de hover/selección pedido.
+    nodes.forEach(nd=>{
+      const goal=(nd===hoverNode || nd===selectedNode)?1:0;
+      if(Math.abs(nd.hoverT-goal)>0.001) nd.hoverT+=(goal-nd.hoverT)*0.25; else nd.hoverT=goal;
+    });
+
+    ctx.save();
+    ctx.translate(r.width/2+view.x, r.height/2+view.y);
+    ctx.scale(view.scale, view.scale);
+    const isLight=document.documentElement.dataset.theme==='light';
+    const accent=(getComputedStyle(document.documentElement).getPropertyValue('--vault-accent')||'').trim()||'#06b6d4';
+    const edgeColor=isLight?'rgba(0,0,0,.14)':'rgba(255,255,255,.14)';
+    const edgeHotColor=isLight?'rgba(0,0,0,.5)':'rgba(255,255,255,.6)';
+    const textColor=isLight?'#1a1f2e':'rgba(255,255,255,.92)';
+    const pillBg=isLight?'rgba(255,255,255,.88)':'rgba(15,15,22,.82)';
+    // "Foco" para resaltar/atenuar: lo que esté bajo el ratón manda; si no hay
+    // hover, el nodo seleccionado por búsqueda hace el mismo papel.
+    const activeFocus=hoverNode || selectedNode;
+    const focusSet=activeFocus ? neighbors.get(activeFocus.path) : null;
+
+    // Límites del mundo visible: con bóvedas grandes, no tiene sentido procesar
+    // (ni mucho menos poner etiqueta a) lo que cae fuera de pantalla.
+    const margin=40;
+    const wx0=(-r.width/2-view.x)/view.scale-margin, wx1=(r.width/2-view.x)/view.scale+margin;
+    const wy0=(-r.height/2-view.y)/view.scale-margin, wy1=(r.height/2-view.y)/view.scale+margin;
+
+    links.forEach(l=>{
+      const hot=activeFocus && (l.source===activeFocus || l.target===activeFocus);
+      ctx.strokeStyle=hot?edgeHotColor:edgeColor;
+      ctx.lineWidth=(hot?2:1)/view.scale;
+      ctx.beginPath(); ctx.moveTo(l.source.x,l.source.y); ctx.lineTo(l.target.x,l.target.y); ctx.stroke();
+    });
+
+    const visible=[];
+    for(const nd of nodes){
+      if(nd.x<wx0 || nd.x>wx1 || nd.y<wy0 || nd.y>wy1) continue;
+      visible.push(nd);
+    }
+
+    visible.forEach(nd=>{
+      const rad=nodeRadius(nd);
+      const isFocusish=nd===hoverNode || nd===selectedNode;
+      const dim=activeFocus && !isFocusish && !(focusSet && focusSet.has(nd.path));
+      ctx.globalAlpha=dim?0.28:1;
+      if(nd===hoverNode){ ctx.shadowColor=accent; ctx.shadowBlur=14/view.scale; }
+      ctx.fillStyle=isFocusish?'#fff':accent;
+      ctx.beginPath(); ctx.arc(nd.x,nd.y,rad,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur=0;
+      // Anillo distintivo: blanco para la nota seleccionada por búsqueda, color
+      // de acento para el centro del grafo local (si ambos coinciden, el blanco gana).
+      if(nd===selectedNode){
+        ctx.lineWidth=2/view.scale; ctx.strokeStyle='#fff';
+        ctx.beginPath(); ctx.arc(nd.x,nd.y,rad+2.5/view.scale,0,Math.PI*2); ctx.stroke();
+      } else if(nd===localFocusNode){
+        ctx.lineWidth=2/view.scale; ctx.strokeStyle=accent;
+        ctx.beginPath(); ctx.arc(nd.x,nd.y,rad+2.5/view.scale,0,Math.PI*2); ctx.stroke();
+      }
+    });
+    ctx.globalAlpha=1;
+
+    // Etiquetas: SOLO con zoom suficiente (LABEL_ZOOM). Alejado, con cientos o
+    // miles de notas a la vista, poner nombre a todas (aunque sea con prioridad
+    // y anti-colisión) sigue siendo una pared de texto — así que alejado no se
+    // muestra ninguna, salvo la de la nota bajo el cursor, la seleccionada por
+    // búsqueda o el centro del grafo local (ésas sí interesa verlas siempre). Al
+    // acercarse, se priorizan las más conectadas (o, con foco activo, sólo esa
+    // nota y sus vecinas) y se descarta cualquiera que choque con una ya colocada.
+    const alwaysShow=[];
+    if(hoverNode) alwaysShow.push(hoverNode);
+    if(selectedNode && !alwaysShow.includes(selectedNode)) alwaysShow.push(selectedNode);
+    if(localFocusNode && !alwaysShow.includes(localFocusNode)) alwaysShow.push(localFocusNode);
+    const labelsEnabled=view.scale>LABEL_ZOOM;
+    if(labelsEnabled || alwaysShow.length){
+      const placed=[];
+      const fits=(x0,y0,x1,y1)=>placed.every(p=>x0>=p.x1||x1<=p.x0||y0>=p.y1||y1<=p.y0);
+      ctx.font=(10/view.scale)+'px -apple-system,BlinkMacSystemFont,sans-serif';
+      ctx.textBaseline='middle';
+      const rest=labelsEnabled ? visible.filter(nd=>!alwaysShow.includes(nd)).sort((a,b)=>b.deg-a.deg) : [];
+      const queue=[...alwaysShow, ...rest];
+      let drawn=0, considered=0;
+      for(const nd of queue){
+        const isAlways=alwaysShow.includes(nd);
+        if(!isAlways){
+          if(drawn>=MAX_LABELS_DRAWN || considered>=MAX_LABEL_CANDIDATES) break;
+          considered++;
+          if(activeFocus && !(focusSet && focusSet.has(nd.path))) continue;
+        }
+        const rad=nodeRadius(nd);
+        const label=isAlways ? nd.name : truncateLabel(nd.name, 26);
+        const w=ctx.measureText(label).width;
+        const pad=3/view.scale, gap=4/view.scale, h=14/view.scale;
+        const x0=nd.x+rad+gap, y0=nd.y-h/2, x1=x0+w+pad*2, y1=y0+h;
+        if(!isAlways && !fits(x0,y0,x1,y1)) continue;
+        placed.push({x0,y0,x1,y1});
+        ctx.globalAlpha=(activeFocus && !isAlways)?0.85:1;
+        ctx.fillStyle=pillBg;
+        ctx.fillRect(x0-pad,y0,x1-x0+pad,y1-y0);
+        ctx.fillStyle=textColor;
+        ctx.fillText(label, x0, (y0+y1)/2+0.5/view.scale);
+        if(!isAlways) drawn++;
+      }
+      ctx.globalAlpha=1;
+    }
+    ctx.restore();
+  }
+
+  function loop(){
+    if(alpha>0) tick();
+    draw();
+    if(overlay.classList.contains('show')) raf=requestAnimationFrame(loop);
+  }
+
+  // ── Coordenadas pantalla↔mundo ──
+  function toWorld(px,py){
+    const r=canvas.getBoundingClientRect();
+    return {x:(px-r.left-r.width/2-view.x)/view.scale, y:(py-r.top-r.height/2-view.y)/view.scale};
+  }
+  function nodeAt(px,py){
+    const w=toWorld(px,py);
+    let hit=null, best=Infinity;
+    for(const nd of nodes){
+      const dx=nd.x-w.x, dy=nd.y-w.y, d2=dx*dx+dy*dy, rad=nodeRadius(nd)+3;
+      if(d2<rad*rad && d2<best){ best=d2; hit=nd; }
+    }
+    return hit;
+  }
+
+  // ── Interacción: rueda=zoom, arrastrar fondo=pan, arrastrar nodo=reordenar, clic=abrir ──
+  canvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const r=canvas.getBoundingClientRect();
+    const mx=e.clientX-r.left-r.width/2-view.x, my=e.clientY-r.top-r.height/2-view.y;
+    const prev=view.scale;
+    view.scale=Math.max(0.08, Math.min(4, view.scale*(e.deltaY<0?1.1:0.9)));
+    const k=view.scale/prev;
+    view.x-=mx*(k-1); view.y-=my*(k-1);
+  }, {passive:false});
+
+  canvas.addEventListener('pointerdown', e=>{
+    canvas.setPointerCapture(e.pointerId);
+    moved=false;
+    const hit=nodeAt(e.clientX,e.clientY);
+    if(hit){ dragNode=hit; dragNode.vx=0; dragNode.vy=0; alpha=Math.max(alpha,0.3); }
+    else{ panStart={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y}; canvas.classList.add('dragging'); }
+  });
+  canvas.addEventListener('pointermove', e=>{
+    if(dragNode){
+      moved=true;
+      const w=toWorld(e.clientX,e.clientY);
+      dragNode.x=w.x; dragNode.y=w.y;
+    } else if(panStart){
+      moved=true;
+      view.x=panStart.vx+(e.clientX-panStart.x);
+      view.y=panStart.vy+(e.clientY-panStart.y);
+    } else {
+      const hit=nodeAt(e.clientX,e.clientY);
+      if(hit!==hoverNode){ hoverNode=hit; canvas.style.cursor=hit?'pointer':'grab'; }
+    }
+  });
+  function endDrag(e){
+    if(dragNode && !moved){ const p=dragNode.path; dragNode=null; closeGraph(); openNote(p); }
+    else if(!dragNode && !moved && selectedNode){ selectedNode=null; }   // clic en vacío: deselecciona
+    dragNode=null; panStart=null; canvas.classList.remove('dragging');
+    try{ canvas.releasePointerCapture(e.pointerId); }catch(_){}
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('pointerleave', ()=>{ hoverNode=null; });
+
+  // Al abrir, si hay una nota abierta en el editor se entra directamente en SU
+  // grafo local (el caso de uso real: "qué conecta con esto") — sin nota abierta,
+  // o si la nota no tiene ninguna conexión, se cae a la vista global.
+  function enterWithSmartDefault(){
+    const hasCurrent=!!(current && current.path);
+    const hasLinks=hasCurrent && neighbors.has(current.path);
+    mode=(hasCurrent && hasLinks) ? 'local' : 'global';
+    focusPath=(mode==='local') ? current.path : null;
+    applyModeUI(); updateOrphansUI();
+    clearSearch();
+    rebuildActiveSet();
+    fitView();
+  }
+  async function openGraph(){
+    overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false');
+    resizeCanvas();
+    if(!loaded) await loadGraph();
+    enterWithSmartDefault();
+    if(raf) cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(loop);
+  }
+  function closeGraph(){
+    overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true');
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+  }
+  btn.addEventListener('click', openGraph);
+  closeBtn.addEventListener('click', closeGraph);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && overlay.classList.contains('show')) closeGraph(); });
+  window.addEventListener('resize', ()=>{ if(overlay.classList.contains('show')) resizeCanvas(); });
+})();

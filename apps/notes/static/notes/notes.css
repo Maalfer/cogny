@@ -2,8 +2,23 @@
    estaban fijos en azul-negro y la bóveda no cambiaba de aspecto al cambiar
    de tema salvo por el acento. El bloque TEMA CLARO más abajo sigue
    pisando estos tres valores porque el claro necesita justo lo contrario. */
-:root{--vault-bg:var(--bg,#15151f);--vault-side:var(--bg2,#1b1b27);--vault-line:rgba(255,255,255,.07);--vault-accent:var(--cyan,#06b6d4);}
-.vault{display:flex;height:calc(100vh - 56px);height:calc(100dvh - 56px);overflow:hidden;background:var(--vault-bg);position:relative}
+:root{--vault-bg:var(--bg,#15151f);--vault-side:var(--bg2,#1b1b27);--vault-line:rgba(255,255,255,.07);--vault-accent:var(--cyan,#06b6d4);--notes-header-h:0px;}
+.vault{display:flex;height:calc(100vh - var(--notes-header-h));height:calc(100dvh - var(--notes-header-h));height:calc(var(--app-h,100dvh) - var(--notes-header-h));overflow:hidden;background:var(--vault-bg);position:relative}
+/* Riel vertical de iconos (modo lectura/edición, pizarra…): separado del
+   sidebar de notas para que quede fijo aunque la lista de notas se oculte. */
+.vault-icon-rail{width:48px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:.4rem;padding:.6rem 0;background:var(--vault-side);border-right:1px solid var(--vault-line)}
+.vault-icon-rail-spacer{flex:1}
+.vault-rail-brand img{width:22px;height:22px;border-radius:6px;display:block}
+.vault-icon-rail-sep{width:28px;height:1px;background:var(--vault-line);margin:.1rem 0 .3rem}
+/* Ajustes, GitHub y Perfil viven en el riel vertical (abajo) y el icono de la
+   app arriba del todo del propio riel: la cabecera global ya no aporta nada
+   en esta página, así que se quita entera (--notes-header-h a 0 para que
+   .vault y el backdrop móvil ocupen justo el hueco que deja). */
+.notes-body .bh-header{display:none}
+/* PWA (viewport-fit=cover + barra de estado translúcida): sin cabecera global,
+   el vault llegaba hasta el borde físico y quedaba bajo la barra de estado
+   (arriba) y el indicador de inicio (abajo). Se reservan las zonas seguras. */
+.notes-body .vault{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 /* Sidebar */
 .vault-side{width:290px;flex-shrink:0;background:var(--vault-side);border-right:1px solid var(--vault-line);display:flex;flex-direction:column;transition:margin-left .25s ease}
 .vault-side-head{display:flex;align-items:center;gap:.3rem;padding:.55rem .65rem .35rem;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.4);font-weight:700}
@@ -92,14 +107,6 @@
 :root:is([data-theme="light"]) .tab-item:hover{background:rgba(0,0,0,.08);color:#111}
 :root:is([data-theme="light"]) .tab-item.active{background:var(--vault-bg);color:#111}
 :root:is([data-theme="light"]) .tab-close:hover{background:rgba(0,0,0,.12)}
-.zoom-pop{position:absolute;top:calc(100% + 6px);right:.5rem;display:none;align-items:center;gap:.3rem;padding:.4rem;background:var(--vault-side);border:1px solid var(--vault-line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);z-index:30}
-.zoom-pop.open{display:flex}
-.zoom-pop button{background:rgba(255,255,255,.06);border:none;color:rgba(255,255,255,.85);cursor:pointer;padding:.35rem .6rem;border-radius:6px;font:600 .9rem/1 inherit;min-width:2.3rem}
-.zoom-pop button:hover{background:rgba(255,255,255,.14);color:#fff}
-#zoom-val{min-width:3.2rem}
-:root:is([data-theme="light"]) .zoom-pop{background:#fff;border-color:#e2e8f0;box-shadow:0 6px 24px rgba(0,0,0,.12)}
-:root:is([data-theme="light"]) .zoom-pop button{background:rgba(0,0,0,.05);color:#1f2533}
-:root:is([data-theme="light"]) .zoom-pop button:hover{background:rgba(0,0,0,.1);color:#111}
 /* Barra de formato (estilo Word) */
 #btn-format .caret{width:12px;height:12px;margin-left:1px;opacity:.65}
 .format-bar{position:absolute;top:calc(100% + 6px);left:.5rem;right:.5rem;display:none;flex-wrap:wrap;align-items:center;gap:.35rem .4rem;padding:.55rem;background:var(--vault-side);border:1px solid var(--vault-line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.4);z-index:31;max-height:70vh;overflow-y:auto}
@@ -125,11 +132,53 @@
 .vault-tool-btn{background:rgba(255,255,255,.06);border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:.4rem;border-radius:8px;display:flex;align-items:center;flex-shrink:0}
 .vault-tool-btn:hover{background:rgba(255,255,255,.14);color:#fff}
 .vault-tool-btn svg{width:18px;height:18px}
+/* Grafo de la bóveda (vista de red, estilo Obsidian) */
+.graph-overlay{position:fixed;inset:0;z-index:1400;background:var(--vault-bg);display:none;flex-direction:column}
+.graph-overlay.show{display:flex}
+.graph-head{display:flex;align-items:center;gap:.6rem;padding:.6rem .9rem;border-bottom:1px solid var(--vault-line);flex-shrink:0}
+.graph-title{flex:1;font-weight:700;font-size:.95rem;color:#fff}
+.graph-close{background:rgba(255,255,255,.06);border:none;color:rgba(255,255,255,.75);cursor:pointer;padding:.45rem;border-radius:8px;display:flex;flex-shrink:0}
+.graph-close:hover{background:rgba(255,255,255,.14);color:#fff}
+.graph-close svg{width:18px;height:18px}
+/* Fila de controles: modo global/local, profundidad, aisladas, buscador, contador */
+.graph-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;padding:.5rem .9rem;border-bottom:1px solid var(--vault-line);flex-shrink:0}
+#graph-hops-seg{display:none}
+#graph-hops-seg.show{display:flex}
+.graph-toggle .ico-show{display:none}
+.graph-toggle.on .ico-hide{display:none}
+.graph-toggle.on .ico-show{display:block}
+.graph-toggle.on{background:var(--vault-accent);color:#fff}
+.graph-count{color:rgba(255,255,255,.45);font-size:.78rem;white-space:nowrap}
+.graph-search{position:relative;flex:1;min-width:140px;max-width:280px}
+.graph-search input{width:100%;background:rgba(0,0,0,.25);border:1px solid var(--vault-line);color:#fff;border-radius:8px;padding:.4rem 1.8rem .4rem .6rem;font-size:.82rem;outline:none}
+.graph-search input:focus{border-color:var(--vault-accent)}
+.graph-search input::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+.graph-search-clear{display:none;align-items:center;justify-content:center;position:absolute;right:.4rem;top:50%;transform:translateY(-50%);width:18px;height:18px;padding:0;background:none;border:none;border-radius:50%;color:rgba(255,255,255,.45);cursor:pointer}
+.graph-search-clear svg{width:13px;height:13px}
+.graph-search-clear:hover{color:#fff;background:rgba(255,255,255,.14)}
+.graph-search.has-value .graph-search-clear{display:flex}
+.graph-search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;max-height:300px;overflow-y:auto;background:var(--vault-side);border:1px solid var(--vault-line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.4);z-index:31}
+.graph-search-results.hidden{display:none}
+.graph-result{display:flex;flex-direction:column;gap:1px;padding:.4rem .6rem;cursor:pointer;line-height:1.25}
+.graph-result:hover,.graph-result.sel{background:color-mix(in srgb,var(--vault-accent) 14%,transparent)}
+.graph-result-name{font-size:.82rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.graph-result-path{font-size:.7rem;color:rgba(255,255,255,.45);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.graph-result-empty{padding:.6rem;font-size:.78rem;color:rgba(255,255,255,.45);text-align:center}
+.graph-body{position:relative;flex:1;min-height:0}
+#graph-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+#graph-canvas.dragging{cursor:grabbing}
+.graph-hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-size:.72rem;color:rgba(255,255,255,.45);background:rgba(0,0,0,.4);padding:.35rem .8rem;border-radius:20px;pointer-events:none;white-space:nowrap}
+@media(max-width:760px){
+  .graph-hint{white-space:normal;text-align:center;max-width:88%;bottom:10px}
+  .graph-title{display:none}
+  .graph-search{max-width:none}
+}
 #editor-pane{position:relative}
 #editor-pane.drag::after{content:"Suelta la imagen para insertarla";position:absolute;inset:.5rem;border:2px dashed var(--vault-accent);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;background:color-mix(in srgb,var(--vault-accent) 12%,transparent);font-size:.9rem;font-weight:600;pointer-events:none;z-index:5}
 .seg{display:flex;background:rgba(255,255,255,.06);border-radius:8px;padding:2px}
 .seg button{background:none;border:none;color:rgba(255,255,255,.6);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600}
 .seg button.active{background:var(--vault-accent);color:#fff}
+.seg button:disabled{opacity:.35;cursor:not-allowed}
 .vault-body{flex:1;display:flex;min-height:0;position:relative}
 /* Divisores arrastrables (escritorio): ajustar ancho de lista / editor / vista previa */
 .vault-resizer{flex:0 0 7px;align-self:stretch;cursor:col-resize;position:relative;z-index:6;touch-action:none}
@@ -139,7 +188,7 @@
 /* Editor Live Preview (CodeMirror) — una sola vista que se renderiza al escribir */
 .vault-cm{flex:1;min-width:0;min-height:0;display:flex;overflow:hidden}
 /* Modo lectura: nota renderizada, sin edición, con el mismo aspecto que la vista pública. */
-.vault-reader{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:auto;font-size:calc(var(--note-fs,1) * 1rem)}
+.vault-reader{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:auto}
 /* Botón lectura/edición: por defecto (editando) muestra el ojo; en lectura muestra el lápiz. */
 #btn-view-toggle .ico-edit{display:none}
 #btn-view-toggle.reading .ico-read{display:none}
@@ -148,11 +197,9 @@
 .cm-editor{flex:1;height:100%;background:transparent;color:#dcdce6;font-size:1rem;line-height:1.7}
 .cm-editor.cm-focused{outline:none}
 .cm-scroller{overflow:auto;-webkit-overflow-scrolling:touch;font-family:inherit;line-height:1.7;scroll-padding-bottom:120px}
-/* Caret nativo bien visible (sin drawSelection) + columna de lectura centrada
-   y escalable con Ctrl + / Ctrl - (variable --note-fs). */
+/* Caret nativo bien visible (sin drawSelection) + columna de lectura centrada. */
 .cm-content{padding:1.1rem max(1.6rem,calc((100% - 820px)/2)) max(40vh,280px) !important;max-width:none !important;margin:0 !important;line-height:1.7 !important;
-  font-size:calc(var(--note-fs,1) * 1rem);caret-color:#22d3ee !important}
-.cm-content img{zoom:var(--note-fs,1)}
+  caret-color:#22d3ee !important}
 :root:is([data-theme="light"]) .cm-content{caret-color:#0e7490 !important}
 /* Encabezados/código de los bloques renderizados en em para que escalen con el zoom */
 .cm-lp-block.markdown-body h1{font-size:1.8em}
@@ -295,6 +342,12 @@
 .shared-note-banner.is-write{flex-wrap:wrap}
 .shared-note-banner.is-write .shared-mode-seg{margin-left:auto}
 .shared-note-banner.is-write .vault-status{font-weight:600}
+/* Pista a una IA que sólo tenga el enlace (ver comentario en shared.html):
+   en su propia línea (flex-basis:100% fuerza el salto dentro del banner que
+   ya hace wrap) y deliberadamente más tenue que el resto del banner — es
+   información de servicio, no el mensaje principal para un humano. */
+.shared-ai-hint{flex-basis:100%;font-size:.72rem;font-weight:500;line-height:1.4;opacity:.6}
+.shared-ai-hint code{font-size:.72rem;padding:.05rem .3rem;border-radius:4px;background:rgba(255,255,255,.08)}
 /* Botón "descargar imágenes en .zip" — mismo tamaño/forma en las dos
    variantes de la cinta (sólo lectura y editable); en la de sólo lectura no
    hay ningún otro elemento con `margin-left:auto`, así que lo lleva él. */
@@ -385,11 +438,6 @@
 .vault-empty svg{width:54px;height:54px;opacity:.4;margin-bottom:1rem}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-left:.4rem;opacity:0;transition:opacity .3s;vertical-align:middle}
 .sync-dot.visible{opacity:1}
-.vault-hdr-btn{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;padding:6px;border-radius:8px;display:none}
-/* Visible solo en escritorio/tablet. En móvil el handle lateral cumple el
-   mismo rol (toggle del sidebar): tener los dos a la vez es redundante. */
-@media(min-width:761px){.vault-hdr-btn{display:flex}}
-.vault-hdr-btn:hover{background:rgba(255,255,255,.12)}
 /* context menu */
 .ctx-menu{position:fixed;z-index:1200;background:#222232;border:1px solid var(--vault-line);border-radius:10px;padding:.3rem;min-width:170px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:none}
 .ctx-menu button{display:flex;align-items:center;gap:.5rem;width:100%;background:none;border:none;color:rgba(255,255,255,.85);padding:.5rem .65rem;border-radius:7px;cursor:pointer;font-size:.85rem;text-align:left}
@@ -442,7 +490,7 @@
      tocarlo se cierra. Es el patrón estándar de drawer en iOS/Android y
      evita clicks accidentales en el editor de fondo. */
   .vault-side-backdrop{
-    position:fixed;left:0;right:0;top:56px;bottom:0;
+    position:fixed;left:0;right:0;top:var(--notes-header-h);bottom:0;
     background:rgba(0,0,0,.55);
     opacity:0;pointer-events:none;
     transition:opacity .25s ease;
@@ -580,6 +628,18 @@ body:has(.modal-back.show) #btn-side-handle{display:none !important}
 :root:is([data-theme="light"]) .vault-status{color:#8a92a6}
 :root:is([data-theme="light"]) .vault-tool-btn{background:rgba(0,0,0,.05);color:#4d5566}
 :root:is([data-theme="light"]) .vault-tool-btn:hover{background:rgba(0,0,0,.1);color:#111}
+:root:is([data-theme="light"]) .graph-title{color:#1a1f2e}
+:root:is([data-theme="light"]) .graph-count{color:#8a92a6}
+:root:is([data-theme="light"]) .graph-close{background:rgba(0,0,0,.05);color:#4d5566}
+:root:is([data-theme="light"]) .graph-close:hover{background:rgba(0,0,0,.1);color:#111}
+:root:is([data-theme="light"]) .graph-search input{background:#fff;color:#1a1f2e}
+:root:is([data-theme="light"]) .graph-search input::placeholder{color:#9aa2b4}
+:root:is([data-theme="light"]) .graph-search-clear{color:#9aa2b4}
+:root:is([data-theme="light"]) .graph-search-clear:hover{color:#1a1f2e;background:rgba(0,0,0,.08)}
+:root:is([data-theme="light"]) .graph-search-results{background:#fff;border-color:#e3e7ef;box-shadow:0 8px 28px rgba(0,0,0,.14)}
+:root:is([data-theme="light"]) .graph-result-name{color:#1a1f2e}
+:root:is([data-theme="light"]) .graph-result-path,:root:is([data-theme="light"]) .graph-result-empty{color:#8a92a6}
+:root:is([data-theme="light"]) .graph-hint{background:rgba(255,255,255,.85);color:#4d5566;box-shadow:0 2px 10px rgba(0,0,0,.1)}
 :root:is([data-theme="light"]) .seg{background:rgba(0,0,0,.05)}
 :root:is([data-theme="light"]) .shared-dl-btn{background:rgba(0,0,0,.06)}
 :root:is([data-theme="light"]) .shared-dl-btn:hover{background:rgba(0,0,0,.12)}
@@ -587,8 +647,6 @@ body:has(.modal-back.show) #btn-side-handle{display:none !important}
 :root:is([data-theme="light"]) .seg button.active{color:#fff}
 :root:is([data-theme="light"]) .cm-editor,
 :root:is([data-theme="light"]) #md-editor{color:#1f2533}
-:root:is([data-theme="light"]) .vault-hdr-btn{color:#4d5566}
-:root:is([data-theme="light"]) .vault-hdr-btn:hover{background:rgba(0,0,0,.08)}
 :root:is([data-theme="light"]) .vault-empty{color:#9aa2b4}
 :root:is([data-theme="light"]) .vault-side-handle,
 :root:is([data-theme="pink"]) .vault-side-handle{

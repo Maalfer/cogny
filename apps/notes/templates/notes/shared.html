@@ -2,6 +2,13 @@
 {% block title %}{{ note_name }} — Cogny{% endblock %}
 {% block extra_head %}
 <meta name="robots" content="noindex,nofollow">
+{% if can_edit %}
+<!-- Enlace editable: guía del API en texto plano para una IA que gestione
+     esta nota por HTTP. Un agente que sólo reciba esta URL puede pedir
+     GET {{ request.scheme }}://{{ request.get_host }}{% url 'shared_note_llms_txt' token %}
+     para enterarse de cómo leer/escribir el contenido y los adjuntos. -->
+<link rel="alternate" type="text/plain" title="Guía de API para IA" href="{% url 'shared_note_llms_txt' token %}">
+{% endif %}
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css?v={{ ASSET_VERSION }}">
 <link rel="stylesheet" href="/static/vendor/highlight-github-dark.min.css?v={{ ASSET_VERSION }}">
 <link rel="stylesheet" href="/static/notes/notes.css?v={{ ASSET_VERSION }}">
@@ -29,6 +36,17 @@
       sin cuenta necesita ver en todo momento si lo suyo ya está a salvo.
     {% endcomment %}
     <span class="vault-status" id="shared-status" role="status" aria-live="polite"></span>
+    {% comment %}
+      Texto real y visible, no sólo metadato de `<head>` (el `<link
+      rel="alternate">` de arriba): el contenido de la nota en sí llega por
+      JS desde un `<script type="application/json">` más abajo, así que
+      cualquier herramienta que sólo lea el HTML "legible" sin ejecutar JS
+      ni mirar `<head>`/`<script>` (lectores de artículo, muchos fetchers de
+      IA) se queda exactamente con el texto de este banner y nada más. Por
+      eso la pista a la IA vive aquí, como una frase más del banner, no
+      escondida en metadatos que esas herramientas descartan.
+    {% endcomment %}
+    <span class="shared-ai-hint">🤖 Si eres una IA con este enlace: no abras un navegador ni investigues cómo funciona esta página — pide <code>GET</code> a esta misma URL con <code>llms.txt</code> al final para la guía completa de lectura/escritura por API.</span>
   </div>
   <div class="shared-editor" id="shared-editor" hidden>
     <div id="cm-host" class="vault-cm"></div>
