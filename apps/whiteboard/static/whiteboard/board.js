@@ -347,7 +347,7 @@
   // { kind: 'path', name } para un icono de trazo propio, o
   // { kind: 'image', url, w, h } para uno de la biblioteca importada.
   let pendingPlacement = null;
-  let strokeWidth = 3;
+  let strokeWidth = 5;
 
   const savedAppState = (BOOT.scene && BOOT.scene.appState) || {};
   let zoom = savedAppState.zoom || 1;
@@ -561,6 +561,7 @@
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
   }
 
+  let editingId = null;
   function render() {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -591,7 +592,7 @@
       }
     }
 
-    elements.forEach(drawElement);
+    elements.forEach((el) => { if (el.id !== editingId) drawElement(el); });
     if (draftElement) drawElement(draftElement);
     if (selectedIds.size) {
       const showHandles = selectedIds.size === 1;
@@ -799,7 +800,7 @@
         el = { id: genId(), type: 'image', x: w.x - iw / 2, y: w.y - ih / 2, w: iw, h: ih, src: pendingPlacement.url };
       } else {
         const name = (pendingPlacement && pendingPlacement.name) || Object.keys(ICONS)[0];
-        const size = 48;
+        const size = 96;
         el = { id: genId(), type: 'icon', name, x: w.x - size / 2, y: w.y - size / 2, w: size, h: size, color };
       }
       snapshot();
@@ -963,7 +964,7 @@
     ta.setAttribute('wrap', 'off');
     ta.spellcheck = false;
     ta.value = existing ? existing.text : '';
-    const fontSize = (existing && existing.fontSize) || 20;
+    const fontSize = (existing && existing.fontSize) || 36;
     const fontStr = `${fontSize * zoom}px "Assistant", sans-serif`;
     ta.style.font = fontStr;
     // app.css fija `input,textarea,select{font-size:16px !important}` (anti-zoom
@@ -987,6 +988,7 @@
     }
     ta.style.left = sx + 'px'; ta.style.top = sy + 'px';
     document.body.appendChild(ta);
+    if (existing) { editingId = existing.id; render(); }
     // El propio clic que abre el cuadro de texto sigue su curso como mousedown
     // nativo DESPUÉS de este handler (pointerdown y mousedown son eventos
     // distintos para un ratón real, a diferencia de lo que simula un test) y
@@ -1016,9 +1018,10 @@
     const commit = () => {
       if (done) return;
       done = true;
+      editingId = null;
       const text = ta.value;
       ta.remove();
-      if (!text.trim()) { setTool('select'); return; }
+      if (!text.trim()) { setTool('select'); render(); return; }
       if (existing) {
         snapshot();
         existing.text = text;
@@ -1034,7 +1037,7 @@
     };
     ta.addEventListener('blur', commit);
     ta.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') { done = true; ta.remove(); setTool('select'); }
+      if (ev.key === 'Escape') { done = true; editingId = null; ta.remove(); render(); setTool('select'); }
       ev.stopPropagation();
     });
   }
