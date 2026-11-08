@@ -210,6 +210,7 @@ body.subapp-body{ padding-left: env(safe-area-inset-left, 0); padding-right: env
   display: flex;
   height: 100vh;
   height: 100dvh;
+  height: var(--app-h, 100dvh);
   overflow: hidden;
   position: relative;
 }
@@ -1735,12 +1736,6 @@ html{ overflow-x: hidden; }
    había nada que marcar; ahora son páginas y el nav lo señala. */
 .bh-desk-btn[aria-current="page"]{ background: var(--cyan-dim); color: var(--cyan); }
 .bh-desk-user[aria-current="page"]{ background: var(--cyan-dim); }
-/* Botón de logout con color de peligro al hacer hover */
-.bh-desk-logout:hover{ background: rgba(239,68,68,.1); color: #ef4444; }
-/* El logout va en un <form> (la vista es @require_POST). `display:contents`
-   saca al form del layout: el botón sigue siendo hijo directo del flex y se
-   coloca igual que cuando era un <a>. */
-.bh-logout-form{ display: contents; }
 /* Separador vertical */
 .bh-desk-sep{
   width: 1px;
@@ -2428,3 +2423,8 @@ solo fade */
   .tkt-lb-close { transition: none; }
   .tkt-upload-spinner { animation: none; border-top-color: var(--cyan); }
 }
+
+/* PWA: sin zoom por doble toque, pero el pellizco sigue disponible (accesibilidad). */
+html{ touch-action: manipulation; }
+/* Teclado abierto: no reservar el margen del indicador de inicio. */
+html.kb-open .notes-body .vault{ padding-bottom: 0; }

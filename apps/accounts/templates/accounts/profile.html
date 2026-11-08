@@ -244,6 +244,25 @@
       </div>
     </article>
 
+    <!-- ── Cerrar sesión ── -->
+    <article class="pfx-card pfx-card-wide">
+      <div class="pfx-card-head">
+        <span class="pfx-ico pfx-ico-logout" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+        </span>
+        <div class="pfx-card-titles">
+          <h2 class="pfx-card-title">Cerrar sesión</h2>
+          <p class="pfx-card-desc">Saldrás de esta cuenta en este dispositivo.</p>
+        </div>
+        <form method="post" action="/logout" onsubmit="return confirm('¿Cerrar sesión?')">{% csrf_token %}
+          <button type="submit" class="pfx-btn pfx-btn-danger">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+            <span>Cerrar sesión</span>
+          </button>
+        </form>
+      </div>
+    </article>
+
   </div>
 </div>
 

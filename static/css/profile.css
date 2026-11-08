@@ -277,6 +277,7 @@
 .pfx-ico-lock{ background: rgba(167,139,250,.16); color: #8b5cf6; }
 .pfx-ico-access{ background: rgba(34,197,94,.16); color: #22c55e; }
 .pfx-ico-settings{ background: rgba(148,163,184,.2); color: var(--text2); }
+.pfx-ico-logout{ background: rgba(239,68,68,.14); color: #ef4444; }
 
 .pfx-card-titles{ flex: 1; min-width: 0; display: block; }
 .pfx-card-title{
@@ -438,6 +439,13 @@
   border-color: var(--border);
 }
 .pfx-btn-ghost:hover{ background: var(--bg4); border-color: var(--cyan-border); }
+
+.pfx-btn-danger{
+  background: rgba(239,68,68,.1);
+  color: #ef4444;
+  border-color: rgba(239,68,68,.3);
+}
+.pfx-btn-danger:hover{ background: rgba(239,68,68,.18); border-color: #ef4444; }
 
 /* ──────────────────────────── Mensajes ──────────────────────────── */
 .pfx-msg{
