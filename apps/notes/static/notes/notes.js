@@ -209,6 +209,38 @@ function wrapTables(container){
     tbl.parentNode.insertBefore(w, tbl); w.appendChild(tbl);
   });
 }
+// Las imágenes sin width/height se cargan con alto 0 y luego "empujan" todo lo
+// de abajo al llegar su tamaño real → en notas largas con varias imágenes eso
+// se nota como saltos al hacer scroll (el contenido se mueve bajo el cursor).
+// Guardamos el tamaño natural la primera vez que carga cada imagen y, en los
+// renders siguientes (reabrir la nota, cambiar de modo…), lo aplicamos de
+// entrada como atributos width/height: el navegador reserva el hueco correcto
+// desde el primer pintado (mapea width/height a aspect-ratio automáticamente).
+let imgDimCache=null;
+function loadImgDimCache(){
+  if(imgDimCache) return imgDimCache;
+  try{ imgDimCache=JSON.parse(localStorage.getItem('cogny-img-dims')||'{}'); }catch(_){ imgDimCache={}; }
+  return imgDimCache;
+}
+let imgDimSaveTimer=null;
+function saveImgDimCache(){
+  clearTimeout(imgDimSaveTimer);
+  imgDimSaveTimer=setTimeout(()=>{ try{ localStorage.setItem('cogny-img-dims', JSON.stringify(imgDimCache)); }catch(_){} }, 400);
+}
+function applyImgDimHint(img){
+  if(img.getAttribute('width')) return;   // ya trae tamaño explícito (p.ej. embed |400)
+  const src=img.getAttribute('src')||''; if(!src) return;
+  const cache=loadImgDimCache();
+  const hit=cache[src];
+  if(hit){ img.width=hit[0]; img.height=hit[1]; }
+  img.addEventListener('load', ()=>{
+    if(!img.naturalWidth) return;
+    const cur=cache[src];
+    if(cur && cur[0]===img.naturalWidth && cur[1]===img.naturalHeight) return;
+    cache[src]=[img.naturalWidth, img.naturalHeight];
+    saveImgDimCache();
+  }, {once:true});
+}
 function postProcess(container, depth){
   depth=depth||0;
   wrapTables(container);
@@ -244,9 +276,11 @@ function postProcess(container, depth){
   // Resolve relative images
   container.querySelectorAll('img').forEach(img=>{
     const src=img.getAttribute('src')||'';
-    if(/^(https?:|data:|\/)/.test(src)) return;
-    const f=findFileByName(decodeURIComponent(src));
-    if(f) img.src=assetUrl(f.path);
+    if(!/^(https?:|data:|\/)/.test(src)){
+      const f=findFileByName(decodeURIComponent(src));
+      if(f) img.src=assetUrl(f.path);
+    }
+    applyImgDimHint(img);
   });
   // Wikilink existence styling
   container.querySelectorAll('.wikilink').forEach(w=>{
@@ -292,7 +326,9 @@ function resolveEmbed(el, depth){
     // Tamaño estilo Obsidian: |ancho  o  |anchoxalto
     const m=(extra||'').trim().match(/^(\d+)(?:x(\d+))?$/);
     let dim=''; if(m){ dim+=` width="${m[1]}"`; if(m[2]) dim+=` height="${m[2]}"`; }
-    el.innerHTML=`<img src="${assetUrl(f.path)}"${dim}>`; el.style.border='none'; return;
+    el.innerHTML=`<img src="${assetUrl(f.path)}"${dim}>`; el.style.border='none';
+    if(!m) applyImgDimHint(el.querySelector('img'));
+    return;
   }
   if(ext==='pdf'){ el.innerHTML=`<iframe src="${assetUrl(f.path)}" style="width:100%;height:480px;border:0"></iframe>`; return; }
   if(ext==='md'){
@@ -1352,29 +1388,53 @@ async function saveNow(){
 /* 'read' = nota renderizada (bonita, sin editar) · 'edit' = editor CodeMirror.
    Por defecto las notas se abren en lectura; la preferencia se recuerda. */
 let viewMode = CAN_WRITE ? (localStorage.getItem('cogny-view-mode') || 'read') : 'read';
-function renderReader(){
+// Fracción de scroll (0..1) a restaurar en el modo que se va a mostrar, o null
+// para ir al principio (abrir una nota nueva). La lectura y el editor son dos
+// contenedores de scroll independientes (#cm-reader vs ED.view.scrollDOM), así
+// que cambiar de modo no conserva el scroll por sí solo — hay que leerlo del
+// contenedor que se oculta y aplicarlo al que aparece. Como en Live Preview los
+// bloques no activos ya se pintan con el mismo render que el lector, ambos
+// documentos tienen una altura total parecida y la fracción es una buena
+// aproximación de "sigo en el mismo sitio".
+function scrollFracOf(mode){
+  const el = mode==='read' ? $('cm-reader') : (ED && ED.view.scrollDOM);
+  if(!el) return 0;
+  const max=el.scrollHeight-el.clientHeight;
+  return max>0 ? el.scrollTop/max : 0;
+}
+function setScrollFrac(mode, frac){
+  const el = mode==='read' ? $('cm-reader') : (ED && ED.view.scrollDOM);
+  if(!el) return;
+  const max=el.scrollHeight-el.clientHeight;
+  el.scrollTop = max>0 ? frac*max : 0;
+}
+function renderReader(scrollFrac){
   const rd=$('cm-reader'); if(!rd) return;
   const md=(current&&current.content)||'';
   rd.innerHTML=renderMarkdown(md); postProcess(rd,0);
-  rd.scrollTop=0;
+  rd.scrollTop = scrollFrac ? scrollFrac*Math.max(0, rd.scrollHeight-rd.clientHeight) : 0;
 }
-function applyViewMode(){
+function applyViewMode(scrollFrac){
   const btn=$('btn-view-toggle'), host=$('cm-host'), rd=$('cm-reader');
   const reading = viewMode==='read';
   if(btn){ btn.classList.toggle('reading', reading);
     btn.title = reading ? 'Editar nota' : 'Modo lectura'; }
   if(host) host.style.display = reading ? 'none' : 'flex';
   if(rd) rd.style.display = reading ? 'block' : 'none';
-  if(reading) renderReader();
-  else if(ED) try { ED.view.focus(); } catch(_){}
+  if(reading) renderReader(scrollFrac);
+  else if(ED){
+    if(scrollFrac) setScrollFrac('edit', scrollFrac);
+    try { ED.view.focus(); } catch(_){}
+  }
 }
 function toggleViewMode(){
   if(!CAN_WRITE) return;   // sin escritura no hay modo edición
+  const frac = scrollFracOf(viewMode);
   // Al salir de edición, sincroniza el contenido más reciente del editor antes de renderizar.
   if(viewMode==='edit' && ED && current) current.content = ED.getValue().replace(/\n+$/, '');
   viewMode = viewMode==='read' ? 'edit' : 'read';
   localStorage.setItem('cogny-view-mode', viewMode);
-  applyViewMode();
+  applyViewMode(frac);
 }
 
 /* ════════════ Editor Live Preview (CodeMirror) ════════════ */
