@@ -300,7 +300,7 @@
 .markdown-body ul,.markdown-body ol{padding-left:1.5em;margin:.5em 0}
 .markdown-body li{margin:.2em 0}
 .markdown-body li.task-list-item{list-style:none;margin-left:-1.3em}
-.markdown-body img{max-width:100%;border-radius:8px}
+.markdown-body img{max-width:100%;height:auto;border-radius:8px;cursor:zoom-in}
 .markdown-body table{border-collapse:collapse;margin:.7em 0;width:auto}
 .markdown-body th,.markdown-body td{border:1px solid var(--vault-line);padding:.4em .7em}
 .markdown-body th{background:rgba(255,255,255,.05)}
