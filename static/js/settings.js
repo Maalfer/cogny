@@ -100,21 +100,61 @@
   /* ══════════════════════ Enlaces compartidos ══════════════════════ */
   const sharedList = $('shared-links-list');
 
+  // Cuenta atrás de los enlaces editables. El servidor manda `expires_at`
+  // (ISO); con eso la fila se actualiza cada segundo sin volver a pedir la
+  // lista, y al llegar a cero se retira sola (el enlace ya no está activo).
+  let shareTicker = null;
+
+  function fmtShareRemaining(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  }
+
   function shareExpiryLabel(s) {
-    if (!s.expires_at) return '';
-    const min = Math.max(1, Math.ceil((s.expires_in || 0) / 60));
-    return ' · Editable · caduca en ' + min + ' min';
+    if (!s.expires_at) return ' · Sólo lectura · sin caducidad';
+    const left = (Date.parse(s.expires_at) - Date.now()) / 1000;
+    return ' · Editable · caduca en <span class="share-remaining">' +
+           fmtShareRemaining(left) + '</span>';
+  }
+
+  function updateShareCountdowns() {
+    let expired = 0;
+    sharedList.querySelectorAll('.stx-item[data-expires]').forEach(item => {
+      const end = Number(item.dataset.expires);
+      if (!end) return;
+      const left = (end - Date.now()) / 1000;
+      if (left <= 0) { item.remove(); expired++; return; }
+      const el = item.querySelector('.share-remaining');
+      if (el) el.textContent = fmtShareRemaining(left);
+    });
+    if (expired) {
+      if (!sharedList.children.length) $('shared-links-empty').style.display = 'flex';
+      toast(expired === 1 ? 'Un enlace ha caducado y ya no está activo'
+                          : expired + ' enlaces han caducado y ya no están activos');
+    }
+  }
+
+  function startShareTicker() {
+    stopShareTicker();
+    shareTicker = setInterval(updateShareCountdowns, 1000);
+  }
+
+  function stopShareTicker() {
+    if (shareTicker) { clearInterval(shareTicker); shareTicker = null; }
   }
 
   function renderSharedLinks(shares) {
     if (!shares.length) {
+      stopShareTicker();
       sharedList.innerHTML = '';
       $('shared-links-empty').style.display = 'flex';
       return;
     }
     $('shared-links-empty').style.display = 'none';
-    sharedList.innerHTML = shares.map(s => `
-      <div class="stx-item" data-path="${esc(s.path)}" data-url="${esc(s.url)}">
+    sharedList.innerHTML = shares.map(s => {
+      const end = s.expires_at ? (Date.parse(s.expires_at) || 0) : 0;
+      return `
+      <div class="stx-item" data-path="${esc(s.path)}" data-url="${esc(s.url)}" data-expires="${end}">
         <div class="stx-item-info">
           <div class="stx-item-name"><span>${esc(s.name)}</span></div>
           <div class="stx-item-meta">${iconGlobe}<span>Público${shareExpiryLabel(s)} · ${esc(s.path)}</span></div>
@@ -124,12 +164,15 @@
           <button class="stx-btn stx-copy" title="Copiar enlace" aria-label="Copiar el enlace de ${esc(s.name)}">${iconCopyLink}</button>
           <button class="stx-btn stx-revoke" title="Dejar de compartir" aria-label="Dejar de compartir ${esc(s.name)}">${iconTrash}</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+    startShareTicker();
   }
 
   async function loadSharedLinks() {
     if (!sharedList) return;
     const loading = $('shared-links-loading');
+    stopShareTicker();
     loading.style.display = '';
     sharedList.innerHTML = '';
     $('shared-links-empty').style.display = 'none';

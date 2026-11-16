@@ -14,7 +14,6 @@ urlpatterns = [
     path("reorder", views.reorder, name="reorder"),
     path("delete", views.delete, name="delete"),
     path("search", views.search, name="search"),
-    path("graph", views.graph, name="graph"),
     path("upload", views.upload, name="upload"),
     path("asset", views.asset, name="asset"),
     path("export", views.export_vault, name="export"),

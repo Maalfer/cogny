@@ -40,15 +40,6 @@
       <svg class="ico-read" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
       <svg class="ico-edit" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 0 0 0-.04z"/></svg>
     </button>
-    <button class="vault-tool-btn" id="btn-graph" title="Grafo de la bóveda" aria-label="Ver el grafo de notas interconectadas">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <line x1="12" y1="7" x2="6.3" y2="16.3"/>
-        <line x1="12" y1="7" x2="17.7" y2="16.3"/>
-        <circle cx="12" cy="5" r="2.2" fill="currentColor" stroke="none"/>
-        <circle cx="5" cy="18.5" r="2.2" fill="currentColor" stroke="none"/>
-        <circle cx="19" cy="18.5" r="2.2" fill="currentColor" stroke="none"/>
-      </svg>
-    </button>
     <div class="vault-icon-rail-spacer"></div>
     <a class="vault-tool-btn" href="/profile/" title="Mi perfil" aria-label="Mi perfil">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
@@ -217,40 +208,6 @@
 <div id="print-pane" class="markdown-body"></div>
 <div id="img-lightbox" class="img-lightbox" aria-hidden="true"><button class="lightbox-close" aria-label="Cerrar imagen" onclick="closeLightbox()">&#215;</button><img alt=""></div>
 
-<div class="graph-overlay" id="graph-overlay" aria-hidden="true">
-  <div class="graph-head">
-    <span class="graph-title">Grafo de la bóveda</span>
-    <button class="graph-close" id="graph-close" aria-label="Cerrar grafo">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-    </button>
-  </div>
-  <div class="graph-controls">
-    <div class="seg" id="graph-mode-seg">
-      <button type="button" data-mode="local" title="Solo la nota abierta y sus conexiones">Local</button>
-      <button type="button" data-mode="global" title="Toda la bóveda">Global</button>
-    </div>
-    <div class="seg" id="graph-hops-seg">
-      <button type="button" data-hops="1" title="Conexiones directas">1 salto</button>
-      <button type="button" data-hops="2" title="Conexiones de las conexiones">2 saltos</button>
-    </div>
-    <button class="vault-tool-btn graph-toggle" id="graph-orphans-btn" aria-label="Mostrar u ocultar notas sin conexiones">
-      <svg class="ico-hide" viewBox="0 0 24 24" fill="currentColor"><path d="M12 6c-5 0-9.27 3.11-11 7.5 1 2.54 2.76 4.67 5 6.07l1.47-1.47A9.6 9.6 0 0 1 3.18 13.5a9.6 9.6 0 0 1 12.6-5.37l1.53-1.53A11.4 11.4 0 0 0 12 6zm-1.07 1.14 1.8 1.8a2.5 2.5 0 0 1 2.33 2.33l1.8 1.8a4.5 4.5 0 0 0-5.93-5.93zM3.27 2 2 3.27l3.2 3.2C3.25 7.73 1.63 9.4.63 11.5c1.73 4.39 6 7.5 11 7.5 1.8 0 3.5-.4 5-1.12l3.5 3.5L21.5 20 3.27 2zm6.27 6.27 1.69 1.69a2.5 2.5 0 0 0 .07.53l2.47 2.47a4.5 4.5 0 0 1-6.18-6.18l1.95 1.49z"/></svg>
-      <svg class="ico-show" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
-    </button>
-    <div class="graph-search" id="graph-search">
-      <input type="search" id="graph-search-input" placeholder="Buscar una nota…" autocomplete="off" aria-label="Buscar una nota en el grafo">
-      <button type="button" id="graph-search-clear" class="graph-search-clear" aria-label="Borrar búsqueda" tabindex="-1">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-      <div class="graph-search-results hidden" id="graph-search-results"></div>
-    </div>
-    <span class="graph-count" id="graph-count"></span>
-  </div>
-  <div class="graph-body">
-    <canvas id="graph-canvas"></canvas>
-    <div class="graph-hint" id="graph-hint">Rueda: zoom · Arrastra el fondo: mover · Arrastra un nodo: reordenar · Clic en un nodo: abrir la nota</div>
-  </div>
-</div>
 <input type="file" id="import-file" accept=".zip,.md,application/zip,application/x-zip-compressed,application/octet-stream,text/markdown" style="display:none">
 <input type="file" id="asset-file" accept="image/*" multiple style="display:none">
 

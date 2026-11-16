@@ -291,12 +291,6 @@ def search(request):
 
 @login_required
 @require_GET
-def graph(request):
-    return JsonResponse(vault.build_graph(vault.root()))
-
-
-@login_required
-@require_GET
 def storage(request):
     """Estadísticas de la bóveda: total, desglose por tipo y conteos."""
     return JsonResponse({"success": True, **vault.stats(vault.root())})

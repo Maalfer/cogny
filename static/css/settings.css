@@ -92,6 +92,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Cuenta atrás del enlace editable: cifras de ancho fijo para que no baile
+   la fila al pasar de 9:59 a 9:58. */
+.stx-item-meta .share-remaining{
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--cyan);
+}
 
 .stx-item-actions{
   display: flex;

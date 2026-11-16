@@ -537,54 +537,6 @@ def iter_files(base: Path):
             yield p
 
 
-_WIKILINK_RE = re.compile(r"!?\[\[([^\]\n|#]+)")
-
-
-def build_graph(base: Path) -> dict:
-    """Nodos = notas, enlaces = wikilinks `[[...]]`/`![[...]]` que resuelven a
-    otra nota de la bóveda (vista de grafo, estilo Obsidian).
-
-    La resolución de cada enlace replica `findFileByName` del cliente (JS):
-    primero por ruta exacta, si no por nombre de archivo en toda la bóveda
-    (primera coincidencia gana), para que el grafo vea los mismos enlaces
-    "rotos" o resueltos que ve el editor.
-    """
-    notes = list(iter_notes(base))
-    by_path = {}
-    by_base = {}
-    for p in notes:
-        rel = rel_of(base, p)
-        by_path[rel.lower()] = rel
-        by_base.setdefault(p.stem.lower(), rel)
-
-    def resolve(target: str):
-        target = target.strip().replace("\\", "/")
-        if not target:
-            return None
-        hit = by_path.get(target.lower()) or by_path.get(f"{target.lower()}.md")
-        if hit:
-            return hit
-        name = target.rsplit("/", 1)[-1].lower()
-        return by_base.get(name) or by_base.get(re.sub(r"\.[^.]+$", "", name))
-
-    edges = set()
-    for p in notes:
-        src = rel_of(base, p)
-        try:
-            text = p.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        for m in _WIKILINK_RE.finditer(text):
-            dst = resolve(m.group(1))
-            if dst and dst != src:
-                edges.add(tuple(sorted((src, dst))))
-
-    return {
-        "nodes": [{"path": rel_of(base, p), "name": p.stem} for p in notes],
-        "links": [{"source": a, "target": b} for a, b in edges],
-    }
-
-
 def search_notes(base: Path, terms: list, limit: int, snippet_before: int, snippet_after: int,
                  exclude: set = frozenset()):
     """Notas que contienen TODOS los términos. Devuelve `(path, texto, idx)`.
