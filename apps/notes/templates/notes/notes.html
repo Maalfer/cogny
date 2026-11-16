@@ -31,16 +31,12 @@
 
 {% block content %}
 <div class="vault" id="vault">
-  <aside class="vault-icon-rail" id="vault-icon-rail">
+  <aside class="vault-icon-rail" id="vault-icon-rail" aria-label="Acciones de la aplicación">
     <a class="vault-tool-btn vault-rail-brand" href="https://cogny.es/" target="_blank" rel="noopener noreferrer" title="Cogny" aria-label="Sitio de Cogny">
       <img src="/static/icons/icon-192.png?v={{ ASSET_VERSION }}" alt="" width="22" height="22">
     </a>
-    <div class="vault-icon-rail-sep"></div>
-    <button class="vault-tool-btn" id="btn-view-toggle" title="Modo lectura" aria-label="Cambiar entre lectura y edición">
-      <svg class="ico-read" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
-      <svg class="ico-edit" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 0 0 0-.04z"/></svg>
-    </button>
     <div class="vault-icon-rail-spacer"></div>
+    <div class="vault-icon-rail-sep"></div>
     <a class="vault-tool-btn" href="/profile/" title="Mi perfil" aria-label="Mi perfil">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
     </a>
@@ -118,6 +114,10 @@
     <div class="vault-toolbar" id="vault-toolbar" style="display:none">
       <div class="vault-title" id="vault-title"></div>
       <span class="vault-status" id="vault-status"></span>
+      <button class="vault-tool-btn" id="btn-view-toggle" title="Modo lectura" aria-label="Cambiar entre lectura y edición">
+        <svg class="ico-read" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+        <svg class="ico-edit" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 0 0 0-.04z"/></svg>
+      </button>
       <button class="vault-tool-btn" id="btn-format" title="Formato: insertar tablas, negritas, callouts…" aria-label="Barra de formato">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v3h5.5v12h3V7H19V4z"/></svg>
         <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>

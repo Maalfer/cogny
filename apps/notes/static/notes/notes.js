@@ -1418,7 +1418,8 @@ function applyViewMode(scrollFrac){
   const btn=$('btn-view-toggle'), host=$('cm-host'), rd=$('cm-reader');
   const reading = viewMode==='read';
   if(btn){ btn.classList.toggle('reading', reading);
-    btn.title = reading ? 'Editar nota' : 'Modo lectura'; }
+    btn.title = reading ? 'Editar nota' : 'Modo lectura';
+    btn.setAttribute('aria-label', reading ? 'Editar nota' : 'Ver en modo lectura'); }
   if(host) host.style.display = reading ? 'none' : 'flex';
   if(rd) rd.style.display = reading ? 'block' : 'none';
   if(reading) renderReader(scrollFrac);
