@@ -16,9 +16,9 @@ bóveda pública.
   comprobación es siempre de servidor, el frontend sólo esconde botones).
 - `apps/notes` — el vault en sí: árbol de carpetas, edición, adjuntos,
   export/import ZIP, enlaces públicos por nota (`SharedNote`, `/s/<token>/`:
-  sólo lectura por defecto, con contraseña opcional y —si se marca
-  `can_write`— también escritura, que sirve `shared_note_save` sobre ESA nota
-  y nada más). Todo lo que toca disco
+  sólo lectura por defecto y —si se marca `can_write`— también escritura, que
+  caduca sola a los 10 minutos y sirve `shared_note_save` sobre ESA nota y
+  nada más). Todo lo que toca disco
   vive en `apps/notes/vault.py` (rutas seguras vía `safe_path`, orden manual
   de carpetas, escritura atómica, búsqueda, stats, optimización a WebP);
   `apps/notes/pdf.py` exporta una nota a PDF con Chromium headless y

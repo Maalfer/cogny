@@ -1876,9 +1876,8 @@ document.addEventListener('scroll', hideCtx, true);
 
 /* (Los clics de wikilink/tag/embed se gestionan en initEditor, sobre el editor CM.) */
 
-/* ════════════ Compartir nota (enlace público, con contraseña opcional) ════════ */
+/* ════════════ Compartir nota (enlace público) ════════ */
 let shareItem = null;
-let sharePwOn = false;
 let shareWriteOn = false;
 /* Último estado que dio el servidor para el enlace abierto (null = no hay
    enlace). `expires_at` llega sólo en los enlaces editables, que caducan a los
@@ -1922,8 +1921,7 @@ function renderShareStatus(){
     dot.classList.add('expired');
     return;
   }
-  let txt = 'Enlace activo · ' + (shareState.can_write ? 'lectura y escritura' : 'sólo lectura')
-          + (shareState.has_password ? ' · con contraseña' : '');
+  let txt = 'Enlace activo · ' + (shareState.can_write ? 'lectura y escritura' : 'sólo lectura');
   if(remaining !== null) txt += ' · caduca en ' + fmtShareRemaining(remaining);
   $('share-link-field').value = shareState.url || '';
   $('share-status-text').textContent = txt;
@@ -1958,28 +1956,18 @@ async function openShareModal(it){
   $('share-modal').classList.add('show');
   $('share-loading').style.display=''; $('share-body').style.display='none';
   $('share-save').disabled = true; $('share-stop').style.display='none';
-  sharePwOn = false;
-  $('share-pw-switch').classList.remove('on'); $('share-pw-switch').setAttribute('aria-checked','false');
-  $('share-pw-field').classList.remove('show'); $('share-pw-input').value='';
   setShareWrite(false);
   renderShareStatus();
   startShareTicker();
   try{
     // Sólo se consulta el estado: abrir el modal ya no publica la nota por
-    // sí solo. El enlace se crea cuando el usuario pulsa "Guardar" (mismo
-    // handler que aplica/quita la contraseña), nunca antes de esa decisión
-    // explícita.
+    // sí solo. El enlace se crea cuando el usuario pulsa "Guardar", nunca
+    // antes de esa decisión explícita.
     const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
     if(res.shared){
       shareState = res;
       renderShareStatus();
       setShareWrite(!!res.can_write);
-      if(res.has_password){
-        sharePwOn = true;
-        $('share-pw-switch').classList.add('on'); $('share-pw-switch').setAttribute('aria-checked','true');
-        $('share-pw-field').classList.add('show');
-        $('share-pw-input').placeholder = 'Dejar en blanco para no cambiarla';
-      }
     }else{
       shareState = null;
       renderShareStatus();
@@ -1991,28 +1979,17 @@ async function openShareModal(it){
   $('share-save').disabled = false;
 }
 
-$('share-pw-toggle-row').addEventListener('click', ()=>{
-  sharePwOn = !sharePwOn;
-  $('share-pw-switch').classList.toggle('on', sharePwOn);
-  $('share-pw-switch').setAttribute('aria-checked', String(sharePwOn));
-  $('share-pw-field').classList.toggle('show', sharePwOn);
-  if(sharePwOn) setTimeout(()=>$('share-pw-input').focus(), 10);
-});
-
 $('share-write-toggle-row').addEventListener('click', ()=>setShareWrite(!shareWriteOn));
 
 $('share-save').addEventListener('click', async ()=>{
   if(!shareItem) return;
   const btn=$('share-save'); btn.disabled=true; btn.textContent='Guardando…';
-  const password = sharePwOn ? $('share-pw-input').value : '';
   try{
     const res = await api('/api/notes/share/create',
-                          {path: shareItem.path, password, can_write: shareWriteOn});
+                          {path: shareItem.path, can_write: shareWriteOn});
     if(res.error){ alert(res.error); return; }
     shareState = res;
     renderShareStatus();
-    if(res.has_password) $('share-pw-input').placeholder='Dejar en blanco para no cambiarla';
-    $('share-pw-input').value='';
   }catch(e){
     alert('Error de red al compartir la nota');
   }finally{

@@ -29,8 +29,7 @@ class SharedNote(models.Model):
     `token` es la parte pública de la URL (`/s/<token>/`); una nota sólo puede
     tener un enlace activo a la vez (`path` es único), así que reabrir el
     modal de "Compartir" reutiliza el mismo token en vez de invalidar enlaces
-    ya repartidos. `password_hash` vacío = acceso libre; con contraseña, el
-    hash se guarda con el mismo hasher que usa Django para las cuentas.
+    ya repartidos. El token ES la única credencial del enlace.
 
     `can_write` convierte el enlace en editable: quien lo abra escribe en la
     nota como el dueño, sin cuenta. Es una decisión por enlace y NO por
@@ -51,7 +50,6 @@ class SharedNote(models.Model):
 
     token = models.CharField(max_length=32, primary_key=True, editable=False)
     path = models.CharField(max_length=600, unique=True)
-    password_hash = models.CharField(max_length=128, blank=True, default="")
     can_write = models.BooleanField(default=False)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

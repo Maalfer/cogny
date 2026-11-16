@@ -160,14 +160,6 @@ class SharingTests(VaultTestCase):
         second = self.json_post("/api/notes/share/create", {"path": "Carpeta/nota.md"}).json()
         self.assertEqual(first["token"], second["token"])
 
-    def test_con_contrasena_pide_la_contrasena(self):
-        token = self.json_post("/api/notes/share/create",
-                               {"path": "Carpeta/nota.md", "password": "secreta"}).json()["token"]
-        anon = self.client_class()
-        self.assertNotContains(anon.get(f"/s/{token}/"), "contenido compartido")
-        self.assertContains(anon.post(f"/s/{token}/", {"password": "secreta"}),
-                            "contenido compartido")
-
     def test_mover_la_nota_no_rompe_el_enlace(self):
         token = self.json_post("/api/notes/share/create",
                                {"path": "Carpeta/nota.md"}).json()["token"]
@@ -205,9 +197,9 @@ class SharedAssetOwnershipTests(VaultTestCase):
         self.editor = self.make_user(username="editor_t", role=User.ROLE_EDITOR)
         self.client.force_login(self.editor)
 
-    def _share(self, path, password=""):
+    def _share(self, path):
         return self.json_post("/api/notes/share/create",
-                              {"path": path, "password": password}).json()["token"]
+                              {"path": path}).json()["token"]
 
     def test_caso_legitimo_el_adjunto_subido_para_la_nota_si_se_ve(self):
         self.write_note("Publico/nota.md", "hola")

@@ -1,23 +1,21 @@
 """Enlace compartido con escritura: `/s/<token>/save`.
 
-El enlace de sólo lectura y el editable comparten token y puerta de
-contraseña; lo único que los separa es `SharedNote.can_write`. Lo que se
-comprueba, por orden de importancia:
+El enlace de sólo lectura y el editable comparten token; lo único que los
+separa es `SharedNote.can_write`. Lo que se comprueba, por orden de
+importancia:
 
 1. Sin `can_write` el endpoint de guardado NO existe (404) y la nota no cambia:
    que la marca por defecto sea "sólo lectura" no sirve de nada si el POST
    funciona igual.
 2. Con `can_write` se escribe de verdad, y lo escrito es lo que ve la
    siguiente visita.
-3. La contraseña protege también la escritura: sin pasar la puerta no se
-   guarda, aunque se conozca el token.
-4. Quitar el permiso más tarde cierra la puerta a quien ya tenía el enlace.
-5. El enlace sigue siendo de UNA nota: no hay forma de tocar otra, ni de
+3. Quitar el permiso más tarde cierra la puerta a quien ya tenía el enlace.
+4. El enlace sigue siendo de UNA nota: no hay forma de tocar otra, ni de
    renombrar, borrar o leer la bóveda con él.
-6. En modo escritura el mismo enlace también expone el API JSON de la nota y
+5. En modo escritura el mismo enlace también expone el API JSON de la nota y
    de sus adjuntos (`/s/<token>/note`, `/s/<token>/assets...`), pensado para
    dárselo a una IA que gestione la nota por HTTP sin sesión.
-7. El enlace editable CADUCA a los 10 minutos (`SharedNote.expires_at`), para
+6. El enlace editable CADUCA a los 10 minutos (`SharedNote.expires_at`), para
    que no quede escribible para siempre porque el dueño olvide revocarlo. Al
    vencer, la nota deja de estar compartida y todo `/s/<token>/...` da 404. El
    enlace de sólo lectura sigue sin caducidad.
@@ -41,9 +39,9 @@ class SharedWriteTests(VaultTestCase):
         self.write_note("Carpeta/nota.md", "contenido original")
         self.write_note("Carpeta/otra.md", "la otra nota")
 
-    def _share(self, can_write=False, password=""):
+    def _share(self, can_write=False):
         return self.json_post("/api/notes/share/create", {
-            "path": "Carpeta/nota.md", "can_write": can_write, "password": password,
+            "path": "Carpeta/nota.md", "can_write": can_write,
         }).json()
 
     def _save(self, token, content, client=None):
@@ -108,20 +106,7 @@ class SharedWriteTests(VaultTestCase):
         token = self._share(can_write=True)["token"]
         self.assertEqual(self.client_class().get(f"/s/{token}/save").status_code, 405)
 
-    # ── 3. Contraseña ──
-
-    def test_con_contrasena_no_se_escribe_sin_pasar_la_puerta(self):
-        token = self._share(can_write=True, password="secreta")["token"]
-        anon = self.client_class()
-        self.assertEqual(self._save(token, "colado", client=anon).status_code, 404)
-        self.assertEqual(self._disk(), "contenido original")
-
-        # Con la contraseña puesta, la misma sesión ya sí escribe.
-        anon.post(f"/s/{token}/", {"password": "secreta"})
-        self.assertEqual(self._save(token, "ya dentro", client=anon).status_code, 200)
-        self.assertEqual(self._disk(), "ya dentro")
-
-    # ── 4. Revocar ──
+    # ── 3. Revocar ──
 
     def test_quitar_el_permiso_cierra_la_puerta_a_quien_ya_tenia_el_enlace(self):
         token = self._share(can_write=True)["token"]
@@ -241,9 +226,9 @@ class SharedEditableApiTests(VaultTestCase):
         self.client.force_login(self.owner)
         self.write_note("Carpeta/nota.md", "contenido original")
 
-    def _share(self, can_write=False, password=""):
+    def _share(self, can_write=False):
         return self.json_post("/api/notes/share/create", {
-            "path": "Carpeta/nota.md", "can_write": can_write, "password": password,
+            "path": "Carpeta/nota.md", "can_write": can_write,
         }).json()
 
     def _fake_image(self, name="foto.png"):
@@ -280,13 +265,6 @@ class SharedEditableApiTests(VaultTestCase):
                                    content_type="application/json").status_code, 404)
         self.assertEqual((self.vault_dir / "Carpeta/nota.md").read_text(),
                          "contenido original")
-
-    def test_con_contrasena_no_se_lee_sin_pasar_la_puerta(self):
-        token = self._share(can_write=True, password="secreta")["token"]
-        anon = self.client_class()
-        self.assertEqual(anon.get(f"/s/{token}/note").status_code, 404)
-        anon.post(f"/s/{token}/", {"password": "secreta"})
-        self.assertEqual(anon.get(f"/s/{token}/note").status_code, 200)
 
     def test_no_alcanza_a_otra_nota_ni_a_la_boveda(self):
         token = self._share(can_write=True)["token"]
