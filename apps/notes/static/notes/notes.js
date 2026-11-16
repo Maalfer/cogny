@@ -1880,22 +1880,70 @@ document.addEventListener('scroll', hideCtx, true);
 let shareItem = null;
 let sharePwOn = false;
 let shareWriteOn = false;
+/* Último estado que dio el servidor para el enlace abierto (null = no hay
+   enlace). `expires_at` llega sólo en los enlaces editables, que caducan a los
+   10 minutos: con él se pinta la cuenta atrás sin volver a preguntar. */
+let shareState = null;
+let shareTicker = null;
 
-function closeShareModal(){ $('share-modal').classList.remove('show'); shareItem=null; }
+function closeShareModal(){
+  $('share-modal').classList.remove('show');
+  shareItem = null;
+  if(shareTicker){ clearInterval(shareTicker); shareTicker=null; }
+}
+
+function fmtShareRemaining(ms){
+  const total = Math.max(0, Math.ceil(ms/1000));
+  const m = Math.floor(total/60), s = total%60;
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+/* Pinta la línea de estado a partir de `shareState`. Se vuelve a llamar cada
+   segundo mientras el modal está abierto, así que la cuenta atrás del enlace
+   editable baja sola y, al llegar a cero, la nota aparece como "no compartida"
+   sin esperar a reabrir el modal. El servidor hace lo mismo por su cuenta: a
+   partir de ese momento `/s/<token>/` responde 404. */
+function renderShareStatus(){
+  const dot = $('share-status-text').parentElement;
+  if(!shareState){
+    $('share-link-field').value = '';
+    $('share-status-text').textContent = 'No compartida · pulsa Guardar para generar el enlace';
+    $('share-stop').style.display = 'none';
+    dot.classList.remove('expired');
+    return;
+  }
+  const remaining = shareState.expires_at
+    ? new Date(shareState.expires_at).getTime() - Date.now()
+    : null;
+  if(remaining !== null && remaining <= 0){
+    $('share-link-field').value = '';
+    $('share-status-text').textContent = 'Enlace caducado · la nota ha dejado de estar compartida';
+    $('share-stop').style.display = 'none';
+    dot.classList.add('expired');
+    return;
+  }
+  let txt = 'Enlace activo · ' + (shareState.can_write ? 'lectura y escritura' : 'sólo lectura')
+          + (shareState.has_password ? ' · con contraseña' : '');
+  if(remaining !== null) txt += ' · caduca en ' + fmtShareRemaining(remaining);
+  $('share-link-field').value = shareState.url || '';
+  $('share-status-text').textContent = txt;
+  $('share-stop').style.display = '';
+  dot.classList.remove('expired');
+}
+
+function startShareTicker(){
+  if(shareTicker) clearInterval(shareTicker);
+  shareTicker = setInterval(renderShareStatus, 1000);
+}
 
 /* El encabezado del modal y la línea de estado dicen SIEMPRE qué permite el
    enlace tal y como está configurado ahora mismo: prometer "modo lectura" con
    la escritura encendida sería la peor manera de enterarse. */
 function refreshShareBlurb(){
   $('share-blurb').textContent = shareWriteOn
-    ? 'Cualquiera con el enlace podrá leer y editar esta nota, sin necesidad de cuenta.'
+    ? 'Cualquiera con el enlace podrá leer y editar esta nota, sin necesidad de cuenta. El enlace caduca solo a los 10 minutos.'
     : 'Cualquiera con el enlace podrá ver esta nota en modo lectura, sin necesidad de cuenta.';
   $('share-write-warn').classList.toggle('show', shareWriteOn);
-}
-function shareStatusText(res){
-  if(!res) return 'No compartida · pulsa Guardar para generar el enlace';
-  return 'Enlace activo · ' + (res.can_write ? 'lectura y escritura' : 'sólo lectura')
-       + (res.has_password ? ' · con contraseña' : '');
 }
 function setShareWrite(on){
   shareWriteOn = on;
@@ -1906,6 +1954,7 @@ function setShareWrite(on){
 
 async function openShareModal(it){
   shareItem = it;
+  shareState = null;
   $('share-modal').classList.add('show');
   $('share-loading').style.display=''; $('share-body').style.display='none';
   $('share-save').disabled = true; $('share-stop').style.display='none';
@@ -1913,6 +1962,8 @@ async function openShareModal(it){
   $('share-pw-switch').classList.remove('on'); $('share-pw-switch').setAttribute('aria-checked','false');
   $('share-pw-field').classList.remove('show'); $('share-pw-input').value='';
   setShareWrite(false);
+  renderShareStatus();
+  startShareTicker();
   try{
     // Sólo se consulta el estado: abrir el modal ya no publica la nota por
     // sí solo. El enlace se crea cuando el usuario pulsa "Guardar" (mismo
@@ -1920,9 +1971,8 @@ async function openShareModal(it){
     // explícita.
     const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
     if(res.shared){
-      $('share-link-field').value = res.url;
-      $('share-status-text').textContent = shareStatusText(res);
-      $('share-stop').style.display='';
+      shareState = res;
+      renderShareStatus();
       setShareWrite(!!res.can_write);
       if(res.has_password){
         sharePwOn = true;
@@ -1931,8 +1981,8 @@ async function openShareModal(it){
         $('share-pw-input').placeholder = 'Dejar en blanco para no cambiarla';
       }
     }else{
-      $('share-link-field').value = '';
-      $('share-status-text').textContent = shareStatusText(null);
+      shareState = null;
+      renderShareStatus();
     }
   }catch(e){
     $('share-status-text').textContent = 'Error al consultar el estado del enlace';
@@ -1959,9 +2009,8 @@ $('share-save').addEventListener('click', async ()=>{
     const res = await api('/api/notes/share/create',
                           {path: shareItem.path, password, can_write: shareWriteOn});
     if(res.error){ alert(res.error); return; }
-    $('share-link-field').value = res.url;
-    $('share-status-text').textContent = shareStatusText(res);
-    $('share-stop').style.display='';
+    shareState = res;
+    renderShareStatus();
     if(res.has_password) $('share-pw-input').placeholder='Dejar en blanco para no cambiarla';
     $('share-pw-input').value='';
   }catch(e){

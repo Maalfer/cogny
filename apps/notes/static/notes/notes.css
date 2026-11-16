@@ -394,6 +394,8 @@
 .share-warn.show{display:block}
 .share-status-row{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:rgba(255,255,255,.5);margin:-.3rem 0 1rem}
 .share-status-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0}
+.share-status-row.expired{color:#fca5a5}
+.share-status-row.expired .share-status-dot{background:#f87171}
 
 /* Modal "Enlaces compartidos" */
 .shared-links-list{display:flex;flex-direction:column;gap:.5rem;max-height:52vh;overflow-y:auto;margin:0 0 1rem}

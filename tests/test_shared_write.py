@@ -17,9 +17,16 @@ comprueba, por orden de importancia:
 6. En modo escritura el mismo enlace también expone el API JSON de la nota y
    de sus adjuntos (`/s/<token>/note`, `/s/<token>/assets...`), pensado para
    dárselo a una IA que gestione la nota por HTTP sin sesión.
+7. El enlace editable CADUCA a los 10 minutos (`SharedNote.expires_at`), para
+   que no quede escribible para siempre porque el dueño olvide revocarlo. Al
+   vencer, la nota deja de estar compartida y todo `/s/<token>/...` da 404. El
+   enlace de sólo lectura sigue sin caducidad.
 """
 import io
 import json
+from datetime import timedelta
+
+from django.utils import timezone
 
 from apps.notes.models import SharedNote
 
@@ -163,6 +170,60 @@ class SharedWriteTests(VaultTestCase):
         self.assertTrue(status["can_write"])
         listed = self.client.get("/api/notes/share/list").json()["shares"]
         self.assertEqual([s["can_write"] for s in listed], [True])
+
+    # ── 7. Caducidad del enlace editable ──
+
+    def test_el_enlace_editable_nace_con_10_minutos_de_vida(self):
+        res = self._share(can_write=True)
+        self.assertIsNotNone(res["expires_at"])
+        self.assertAlmostEqual(res["expires_in"], 600, delta=15)
+        share = SharedNote.objects.get(token=res["token"])
+        self.assertAlmostEqual(
+            (share.expires_at - timezone.now()).total_seconds(), 600, delta=15)
+
+    def test_cuando_caduca_la_nota_deja_de_estar_compartida(self):
+        token = self._share(can_write=True)["token"]
+        # Se adelanta el reloj de la fila en vez de esperar 10 minutos reales.
+        SharedNote.objects.filter(token=token).update(
+            expires_at=timezone.now() - timedelta(seconds=1))
+        anon = self.client_class()
+        self.assertEqual(anon.get(f"/s/{token}/").status_code, 404)
+        self.assertEqual(anon.get(f"/s/{token}/note").status_code, 404)
+        self.assertEqual(anon.get(f"/s/{token}/llms.txt").status_code, 404)
+        self.assertEqual(self._save(token, "tarde", client=anon).status_code, 404)
+        self.assertEqual(self._disk(), "contenido original")
+
+    def test_status_y_list_ya_no_ven_el_enlace_caducado(self):
+        token = self._share(can_write=True)["token"]
+        SharedNote.objects.filter(token=token).update(
+            expires_at=timezone.now() - timedelta(seconds=1))
+        status = self.client.get("/api/notes/share/status?path=Carpeta/nota.md").json()
+        self.assertFalse(status["shared"])
+        self.assertEqual(self.client.get("/api/notes/share/list").json()["shares"], [])
+        # El barrido que hace el modal/panel borra la fila ya muerta.
+        self.assertFalse(SharedNote.objects.filter(token=token).exists())
+
+    def test_el_enlace_de_lectura_no_caduca(self):
+        res = self._share(can_write=False)
+        self.assertIsNone(res["expires_at"])
+        self.assertIsNone(res["expires_in"])
+        self.assertIsNone(SharedNote.objects.get(token=res["token"]).expires_at)
+
+    def test_guardar_de_nuevo_rearma_los_10_minutos(self):
+        token = self._share(can_write=True)["token"]
+        SharedNote.objects.filter(token=token).update(
+            expires_at=timezone.now() + timedelta(minutes=1))
+        res = self._share(can_write=True)
+        self.assertEqual(res["token"], token)
+        self.assertAlmostEqual(res["expires_in"], 600, delta=15)
+
+    def test_apagar_la_escritura_quita_la_caducidad(self):
+        token = self._share(can_write=True)["token"]
+        res = self._share(can_write=False)
+        self.assertEqual(res["token"], token)
+        self.assertIsNone(res["expires_at"])
+        self.assertIsNone(SharedNote.objects.get(token=token).expires_at)
+        self.assertEqual(self.client_class().get(f"/s/{token}/").status_code, 200)
 
 
 # ── API de la nota editable (para una IA, sin sesión) ──

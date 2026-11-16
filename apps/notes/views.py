@@ -8,6 +8,7 @@ import json
 import re
 import secrets
 import shutil
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -19,6 +20,7 @@ from django.core.cache import cache
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
@@ -609,6 +611,34 @@ def theme_preview(request):
 
 # ════════════ Compartir nota (enlace público, con contraseña opcional) ════════
 
+# Vida de un enlace con permiso de escritura. El enlace editable es el único
+# que se regala entero (token = credencial), así que no puede quedarse vivo
+# para siempre porque el dueño olvide volver al modal: a los 10 minutos deja
+# de servir y la nota deja de estar compartida. Guardar otra vez con la
+# escritura encendida lo rearma desde cero.
+SHARE_WRITE_TTL = timedelta(minutes=10)
+
+
+def _purge_expired_shares() -> None:
+    """Borra de la BD los enlaces ya caducados (los de lectura no se tocan)."""
+    SharedNote.objects.filter(expires_at__lte=timezone.now()).delete()
+
+
+def _share_payload(request, share: SharedNote) -> dict:
+    """Estado del enlace tal y como lo pintan el modal y el panel de ajustes."""
+    expires_in = None
+    if share.expires_at:
+        expires_in = max(0, int((share.expires_at - timezone.now()).total_seconds()))
+    return {
+        "token": share.token,
+        "url": request.build_absolute_uri(f"/s/{share.token}/"),
+        "has_password": bool(share.password_hash),
+        "can_write": share.can_write,
+        "expires_at": share.expires_at.isoformat() if share.expires_at else None,
+        "expires_in": expires_in,
+    }
+
+
 @login_required
 @require_write
 @require_POST
@@ -620,7 +650,9 @@ def share_create(request):
     que el enlace no cambie cada vez que se reabre el modal de "Compartir".
     `password` vacío/ausente quita la contraseña; con valor, la (re)establece.
     `can_write` decide si el enlace es de sólo lectura o también deja escribir
-    en la nota (ver `SharedNote`).
+    en la nota (ver `SharedNote`). Un enlace con escritura caduca solo a los
+    `SHARE_WRITE_TTL`; apagar la escritura quita la caducidad y lo deja como
+    el enlace de lectura de siempre.
     """
     root = vault.root()
     password = request.data.get("password") or ""
@@ -637,32 +669,28 @@ def share_create(request):
     )
     share.password_hash = make_password(password) if password else ""
     share.can_write = bool(request.data.get("can_write"))
-    share.save(update_fields=["password_hash", "can_write", "updated_at"])
-    return JsonResponse({
-        "success": True, "token": share.token,
-        "url": request.build_absolute_uri(f"/s/{share.token}/"),
-        "has_password": bool(share.password_hash),
-        "can_write": share.can_write,
-    })
+    share.expires_at = (
+        timezone.now() + SHARE_WRITE_TTL if share.can_write else None
+    )
+    share.save(update_fields=["password_hash", "can_write", "expires_at", "updated_at"])
+    payload = _share_payload(request, share)
+    payload["success"] = True
+    return JsonResponse(payload)
 
 
 @login_required
 @require_GET
 def share_status(request):
     """Estado actual del enlace público de una nota (o `shared: false`)."""
+    _purge_expired_shares()
     root = vault.root()
     target, err = _resolve(root, request.GET.get("path", ""))
     if err:
         return err
-    share = SharedNote.objects.filter(path=vault.rel_of(root, target)).first()
+    share = SharedNote.objects.alive().filter(path=vault.rel_of(root, target)).first()
     if not share:
         return JsonResponse({"shared": False})
-    return JsonResponse({
-        "shared": True, "token": share.token,
-        "url": request.build_absolute_uri(f"/s/{share.token}/"),
-        "has_password": bool(share.password_hash),
-        "can_write": share.can_write,
-    })
+    return JsonResponse({"shared": True, **_share_payload(request, share)})
 
 
 @login_required
@@ -675,17 +703,17 @@ def share_list(request):
     vista necesita el mismo permiso que `share_create`/`share_revoke` — no
     basta con estar logueado. Antes sólo llevaba `@login_required`, así que
     un invitado de sólo lectura podía listar los tokens de toda la bóveda.
+    Los caducados se barren aquí antes de listar: un enlace vencido ya no es
+    un enlace activo aunque su fila siga en la BD.
     """
+    _purge_expired_shares()
     return JsonResponse({"shares": [
         {
             "path": s.path,
             "name": Path(s.path).stem,
-            "token": s.token,
-            "url": request.build_absolute_uri(f"/s/{s.token}/"),
-            "has_password": bool(s.password_hash),
-            "can_write": s.can_write,
+            **_share_payload(request, s),
         }
-        for s in SharedNote.objects.all().order_by("-updated_at")
+        for s in SharedNote.objects.alive().order_by("-updated_at")
     ]})
 
 
@@ -880,7 +908,7 @@ def _shared_target(share: SharedNote):
 # abre ninguna puerta.
 @ensure_csrf_cookie
 def shared_note_view(request, token):
-    share = SharedNote.objects.filter(token=token).first()
+    share = SharedNote.objects.alive().filter(token=token).first()
     if not share:
         raise Http404
     root, target = _shared_target(share)
@@ -897,6 +925,10 @@ def shared_note_view(request, token):
             return render(request, "notes/shared_gate.html", {"error": error})
 
     content, assets, has_images = _shared_page_data(root, token, target, share.path)
+    expires_minutes = None
+    if share.expires_at:
+        seconds_left = max(0, int((share.expires_at - timezone.now()).total_seconds()))
+        expires_minutes = max(1, (seconds_left + 59) // 60)
     response = render(request, "notes/shared.html", {
         "token": token,
         "note_name": target.stem,
@@ -905,6 +937,7 @@ def shared_note_view(request, token):
         # para el rol de la SESIÓN (lo lee `base.html`), y pisarlo aquí haría
         # que la página compartida mintiera sobre quién es quien la mira.
         "can_edit": share.can_write,
+        "expires_minutes": expires_minutes,
         "assets": assets,
         "has_images": has_images,
     })
@@ -936,7 +969,7 @@ def shared_note_view(request, token):
 # secreta, el CONTENIDO de la nota sí. Por eso tampoco se incluye el nombre
 # real de la nota cuando hay contraseña de por medio.
 def shared_note_llms_txt(request, token):
-    share = SharedNote.objects.filter(token=token, can_write=True).first()
+    share = SharedNote.objects.alive().filter(token=token, can_write=True).first()
     if not share:
         raise Http404
     root, target = _shared_target(share)
@@ -944,6 +977,11 @@ def shared_note_llms_txt(request, token):
     base = request.build_absolute_uri(f"/s/{token}/")
     gated = bool(share.password_hash) and not request.session.get(_share_gate_key(token))
     note_name = "(nombre oculto hasta introducir la contraseña)" if gated else target.stem
+    if share.expires_at:
+        seconds_left = max(0, int((share.expires_at - timezone.now()).total_seconds()))
+        minutes_left = max(1, (seconds_left + 59) // 60)
+    else:
+        minutes_left = 10
 
     lines = [
         f"# Guía de API — nota compartida en Cogny",
@@ -965,6 +1003,12 @@ def shared_note_llms_txt(request, token):
         "reescribir ESTA nota (y sólo esta nota) por HTTP, sin cuenta ni",
         "sesión previa. El token de la URL ES la credencial — no hace falta",
         "ninguna cabecera de autenticación aparte.",
+        "",
+        "⏳ El enlace CADUCA. Los enlaces editables duran 10 minutos desde que",
+        f"el dueño los guarda; a este le quedan ~{minutes_left} min. Cuando",
+        "venza, todas las URLs de este documento empezarán a responder 404 y",
+        "la nota volverá a estar sin compartir: pide al dueño que vuelva a",
+        "guardar el enlace para rearmarlo. No se puede renovar desde aquí.",
         "",
         "No hay forma de listar la bóveda, ver otras notas, ni renombrar o",
         "borrar esta nota desde este API: sólo leer/escribir su contenido y",
@@ -1153,9 +1197,9 @@ def shared_note_llms_txt(request, token):
         "   referenciando los adjuntos con `![[name]]`",
         "",
         "Cualquier endpoint de este documento responde 404 si el token no",
-        "existe, si el enlace es de sólo lectura, o (salvo este propio",
-        "documento) si la nota lleva contraseña y la sesión aún no la ha",
-        "superado.",
+        "existe, si el enlace ha caducado, si es de sólo lectura, o (salvo",
+        "este propio documento) si la nota lleva contraseña y la sesión aún",
+        "no la ha superado.",
     ]
     return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
@@ -1175,7 +1219,7 @@ def shared_note_save(request, token):
     guardado a medias no puede dejar la nota truncada. Sólo cambia el
     contenido: ni renombra, ni borra, ni toca adjuntos.
     """
-    share = SharedNote.objects.filter(token=token, can_write=True).first()
+    share = SharedNote.objects.alive().filter(token=token, can_write=True).first()
     if not share:
         raise Http404
     _root, target = _shared_target(share)
@@ -1199,7 +1243,7 @@ def shared_note_save(request, token):
 
 @require_GET
 def shared_note_asset(request, token):
-    share = SharedNote.objects.filter(token=token).first()
+    share = SharedNote.objects.alive().filter(token=token).first()
     if not share:
         raise Http404
     if share.password_hash and not request.session.get(_share_gate_key(token)):
@@ -1232,7 +1276,7 @@ def shared_note_images_zip(request, token):
     `shared_note_view`: enlace vivo, nota que sigue existiendo, contraseña ya
     superada en esta sesión si la nota la lleva.
     """
-    share = SharedNote.objects.filter(token=token).first()
+    share = SharedNote.objects.alive().filter(token=token).first()
     if not share:
         raise Http404
     root, target = _shared_target(share)
@@ -1283,7 +1327,7 @@ def shared_note_images_zip(request, token):
 
 def _shared_api_target(request, token):
     """Enlace editable vivo → `(root, target)` de su nota, o 404."""
-    share = SharedNote.objects.filter(token=token, can_write=True).first()
+    share = SharedNote.objects.alive().filter(token=token, can_write=True).first()
     if not share:
         raise Http404
     root, target = _shared_target(share)

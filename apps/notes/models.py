@@ -4,6 +4,23 @@ Esta app es 'view-only' para Django ORM en cuanto al contenido: las notas son
 archivos Markdown bajo settings.VAULT_ROOT/. Los modelos que sí definimos son
 metadata (no contenido): enlaces públicos y marcas de exportación a PDF."""
 from django.db import models
+from django.utils import timezone
+
+
+class SharedNoteQuerySet(models.QuerySet):
+    """Enlaces que siguen sirviendo (`alive()`), no los ya caducados.
+
+    Un `expires_at` pasado equivale a un enlace revocado: ni aparece en el
+    modal ni en el panel de ajustes, y `/s/<token>/` responde 404. La fila
+    puede seguir en la BD hasta que barra `views._purge_expired_shares`; lo
+    que nunca puede es seguir dando acceso.
+    """
+
+    def alive(self):
+        return self.filter(
+            models.Q(expires_at__isnull=True)
+            | models.Q(expires_at__gt=timezone.now())
+        )
 
 
 class SharedNote(models.Model):
@@ -23,14 +40,24 @@ class SharedNote(models.Model):
     escritura también expone el API JSON de la nota y sus adjuntos (ver
     `views.shared_note_note` / `shared_note_assets`), pensado para dárselo a
     una IA que gestione la nota por HTTP sin sesión.
+
+    `expires_at` es la caducidad del enlace (vacía = no caduca). Los enlaces
+    editables se crean con 10 minutos de vida (`views.SHARE_WRITE_TTL`) y se
+    rearman al volver a guardarlos: así una nota no queda escribible para
+    siempre sólo porque su dueño olvidó revocar el enlace. Al apagar la
+    escritura la caducidad se borra y el enlace vuelve a ser el de lectura de
+    siempre.
     """
 
     token = models.CharField(max_length=32, primary_key=True, editable=False)
     path = models.CharField(max_length=600, unique=True)
     password_hash = models.CharField(max_length=128, blank=True, default="")
     can_write = models.BooleanField(default=False)
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SharedNoteQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.path} ({self.token})"

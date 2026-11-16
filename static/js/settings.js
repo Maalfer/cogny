@@ -101,6 +101,12 @@
   /* ══════════════════════ Enlaces compartidos ══════════════════════ */
   const sharedList = $('shared-links-list');
 
+  function shareExpiryLabel(s) {
+    if (!s.expires_at) return '';
+    const min = Math.max(1, Math.ceil((s.expires_in || 0) / 60));
+    return ' · Editable · caduca en ' + min + ' min';
+  }
+
   function renderSharedLinks(shares) {
     if (!shares.length) {
       sharedList.innerHTML = '';
@@ -112,7 +118,7 @@
       <div class="stx-item" data-path="${esc(s.path)}" data-url="${esc(s.url)}">
         <div class="stx-item-info">
           <div class="stx-item-name"><span>${esc(s.name)}</span></div>
-          <div class="stx-item-meta">${s.has_password ? iconLock : iconGlobe}<span>${s.has_password ? 'Con contraseña' : 'Público'} · ${esc(s.path)}</span></div>
+          <div class="stx-item-meta">${s.has_password ? iconLock : iconGlobe}<span>${s.has_password ? 'Con contraseña' : 'Público'}${shareExpiryLabel(s)} · ${esc(s.path)}</span></div>
         </div>
         <div class="stx-item-actions">
           <button class="stx-btn stx-open" title="Abrir esta nota" aria-label="Abrir la nota ${esc(s.name)}">${iconOpenTab}</button>
