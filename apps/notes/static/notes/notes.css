@@ -4,7 +4,7 @@
    pisando estos tres valores porque el claro necesita justo lo contrario. */
 :root{--vault-bg:var(--bg,#15151f);--vault-side:var(--bg2,#1b1b27);--vault-line:rgba(255,255,255,.07);--vault-accent:var(--cyan,#06b6d4);--notes-header-h:0px;}
 .vault{display:flex;height:calc(100vh - var(--notes-header-h));height:calc(100dvh - var(--notes-header-h));height:calc(var(--app-h,100dvh) - var(--notes-header-h));overflow:hidden;background:var(--vault-bg);position:relative}
-/* Riel vertical de iconos (modo lectura/edición, pizarra…): separado del
+/* Riel vertical de iconos (modo lectura/edición, grafo…): separado del
    sidebar de notas para que quede fijo aunque la lista de notas se oculte. */
 .vault-icon-rail{width:48px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:.4rem;padding:.6rem 0;background:var(--vault-side);border-right:1px solid var(--vault-line)}
 .vault-icon-rail-spacer{flex:1}

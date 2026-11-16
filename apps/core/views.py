@@ -105,7 +105,6 @@ def manifest(request):
         ],
         "shortcuts": [
             {"name": "Notas", "url": "/"},
-            {"name": "Pizarra", "url": "/pizarra/"},
             {"name": "Conocimiento", "url": "/conocimiento/"},
             {"name": "Ajustes", "url": "/settings/"},
         ],

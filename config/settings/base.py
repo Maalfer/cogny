@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.notes",
     "apps.knowledge",
-    "apps.whiteboard",
 ]
 
 MIDDLEWARE = [
@@ -170,4 +169,3 @@ UPLOAD_HOST = os.environ.get("UPLOAD_HOST", "")
 DATA_ROOT = Path(os.environ.get("DATA_ROOT", BASE_DIR / "data"))
 VAULT_ROOT = Path(os.environ.get("VAULT_ROOT", DATA_ROOT / "vault"))
 AVATARS_ROOT = Path(os.environ.get("AVATARS_ROOT", BASE_DIR / "static" / "avatars"))
-WHITEBOARD_ROOT = Path(os.environ.get("WHITEBOARD_ROOT", DATA_ROOT / "pizarra"))
