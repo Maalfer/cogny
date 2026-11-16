@@ -1956,27 +1956,37 @@ async function openShareModal(it){
   $('share-modal').classList.add('show');
   $('share-loading').style.display=''; $('share-body').style.display='none';
   $('share-save').disabled = true; $('share-stop').style.display='none';
-  setShareWrite(false);
+  setShareWrite(true);            // por defecto se comparte ya editable
   renderShareStatus();
   startShareTicker();
   try{
-    // Sólo se consulta el estado: abrir el modal ya no publica la nota por
-    // sí solo. El enlace se crea cuando el usuario pulsa "Guardar", nunca
-    // antes de esa decisión explícita.
+    // Si la nota aún no tiene enlace, se crea en el acto con escritura: así el
+    // enlace aparece relleno y listo para copiar sin tener que pulsar
+    // "Guardar" primero. Sigue caducando a los 10 minutos y "Guardar" sigue
+    // sirviendo para cambiar los ajustes o rearmarlo. Si ya había enlace, se
+    // respeta lo que tuviera configurado (una lectura compartida no se
+    // convierte en editable sólo por abrir el modal).
     const res = await fetch('/api/notes/share/status?path='+encodeURIComponent(it.path)).then(r=>r.json());
     if(res.shared){
       shareState = res;
-      renderShareStatus();
       setShareWrite(!!res.can_write);
     }else{
-      shareState = null;
-      renderShareStatus();
+      const created = await api('/api/notes/share/create',
+                                {path: it.path, can_write: true});
+      if(created.error){
+        $('share-status-text').textContent = created.error;
+        return;
+      }
+      shareState = created;
+      setShareWrite(true);
     }
+    renderShareStatus();
   }catch(e){
     $('share-status-text').textContent = 'Error al consultar el estado del enlace';
+  }finally{
+    $('share-loading').style.display='none'; $('share-body').style.display='';
+    $('share-save').disabled = false;
   }
-  $('share-loading').style.display='none'; $('share-body').style.display='';
-  $('share-save').disabled = false;
 }
 
 $('share-write-toggle-row').addEventListener('click', ()=>setShareWrite(!shareWriteOn));
