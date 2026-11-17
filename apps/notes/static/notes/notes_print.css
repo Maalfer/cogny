@@ -170,7 +170,11 @@ body{
    metadatos": borde fino + una franja de color a la izquierda. Los temas
    sobreescriben el color de la franja. La cabecera va en versalitas con
    letter-spacing para que se lea como "clave" y no como "etiqueta suelta". */
-.tag-pill{
+/* Con `.markdown-body` delante: la etiqueta es un `<a>`, y sin él la regla de
+   enlaces (`.markdown-body a`, más específica) le ponía su color y su
+   subrayado — en un tema con la pastilla oscura el texto ni se veía. */
+.tag-pill,.markdown-body .tag-pill{
+  border-bottom:none;padding-bottom:.1em;
   display:inline-block;
   background:#e0f2fe;color:#0369a1;
   border-radius:11px;padding:.1em .6em;
