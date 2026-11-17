@@ -394,9 +394,15 @@ def _sanitize_css(value: str) -> str:
 
 
 def _escape_style_text(value: str) -> str:
-    """Neutraliza `<`/`>` sin tocar comillas ni `&` — ver el docstring de
-    `_NoteHTMLSanitizer` sobre por qué escapar de más rompe CSS legítima."""
-    return value.replace("<", "&lt;").replace(">", "&gt;")
+    """Neutraliza `<` sin tocar `>`, comillas ni `&` — ver el docstring de
+    `_NoteHTMLSanitizer` sobre por qué escapar de más rompe CSS legítima.
+
+    `<` sale como el escape CSS `\\3c ` (no como `&lt;`): dentro de un
+    `<style>` real las entidades no se decodifican, así que `&lt;` llegaba al
+    motor de CSS como texto literal, mientras que `\\3c ` el propio CSS lo
+    vuelve a convertir en `<` (p.ej. en un `content:"<"`). Para el tokenizador
+    HTML es texto inerte en cualquier modo de parseo: no lleva `<`."""
+    return value.replace("<", "\\3c ")
 
 
 class _NoteHTMLSanitizer(HTMLParser):
@@ -426,15 +432,17 @@ class _NoteHTMLSanitizer(HTMLParser):
     documento alrededor. `_sanitize_css` sigue aplicándose antes de escapar,
     para seguir recortando `url()`/`@import` de la CSS legítima.
 
-    Ese escapado sólo toca `<`/`>` (ver `_escape_style_text`), no comillas ni
-    `&`: un `<style>` real nunca decodifica entidades (es "raw text" en el
+    Ese escapado sólo toca `<` (ver `_escape_style_text`), no comillas, `&`
+    ni `>`: un `<style>` real nunca decodifica entidades (es "raw text" en el
     HTML5 real, igual que `<script>`), así que escapar comillas rompía CSS
     legítima de Mermaid con valores entre comillas (`font-family:"trebuchet
     ms"` salía como `font-family:&quot;trebuchet ms&quot;`, letra literal
-    para el motor de CSS). `<`/`>` sí son seguros de tocar siempre: son los
-    únicos bytes que un tokenizador HTML usa para abrir una etiqueta nueva —
-    su forma escapada nunca se re-interpreta como marcado, entre en el modo
-    de parseo que entre.
+    para el motor de CSS). Lo mismo pasaba con `>`: escapado a `&gt;`, el
+    combinador de hijo directo (`.a > .b`) dejaba de serlo y Chromium tiraba
+    la regla ENTERA sin avisar — una trampa para quien escribe un tema. `<`
+    es el único byte con el que un tokenizador HTML abre una etiqueta (o un
+    comentario, o un CDATA) nueva, en cualquier modo de parseo; sin él, un
+    `>` suelto es texto inerte, así que dejarlo pasar no reabre el mXSS.
     """
 
     def __init__(self):
@@ -583,9 +591,16 @@ _CSS_CACHE = None
 def _styles() -> str:
     """Hojas de estilo del PDF, combinadas y cacheadas.
 
-    `notes_print.css` + highlight + KaTeX (con las fuentes reescritas a
-    `file://`). Así el documento es 100% local, sin red, que es lo único fiable
-    con Chromium headless `--single-process` ejecutado por www-data.
+    Las fuentes de `vendor/fonts` (familias libres, OFL) + `notes_print.css`
+    + highlight + KaTeX, con las URLs de las fuentes reescritas a `file://`.
+    Así el documento es 100% local, sin red, que es lo único fiable con
+    Chromium headless ejecutado por www-data.
+
+    Las fuentes van incluidas porque el servidor no tiene ninguna de las que
+    piden los temas ("Segoe UI", Lato, Manrope...): sin ellas todo salía en
+    DejaVu/Liberation. Un tema las usa por su nombre (`font-family:"Inter"`)
+    sin `@font-face` propio — ver `theme_starter.html`. `@font-face` sólo
+    carga la fuente si algún texto la usa, así que no engordan el PDF.
     """
     global _CSS_CACHE
     if _CSS_CACHE is not None:
@@ -599,7 +614,12 @@ def _styles() -> str:
         except OSError:
             return ""
 
-    parts = [read("notes/notes_print.css"), read("vendor/highlight-github-dark.min.css")]
+    fonts = read("vendor/fonts/fonts.css")
+    if fonts:
+        fonts_dir = os.path.join(sroot, "vendor", "fonts") + "/"
+        fonts = fonts.replace("url(fonts/", "url(file://" + fonts_dir)
+    parts = [fonts, read("notes/notes_print.css"),
+             read("vendor/highlight-github-dark.min.css")]
     katex = read("vendor/katex/katex.min.css")
     if katex:
         fonts_dir = os.path.join(sroot, "vendor", "katex", "fonts") + "/"
@@ -610,12 +630,17 @@ def _styles() -> str:
 
 # ── Hoja y temas ─────────────────────────────────────────────────────────────
 
-# Nota para quien escriba un tema (y para el `theme_starter.html`): Chromium no
-# implementa las cajas de margen de `@page`, que serían el sitio de una
-# cabecera repetida. Lo que sí repite en cada página es el `<thead>`/`<tfoot>`
-# de una tabla, y el contenido refluye entre ellos sin solaparse. Sacar un
-# `position:fixed` al margen con desplazamientos negativos (`top:-17mm`) NO
-# vale: este Chromium lo coloca en el lado contrario de la página.
+# Nota para quien escriba un tema (y para el `theme_starter.html`): lo que
+# Chromium repite en cada página con HTML de verdad (imágenes, varios colores)
+# es el `<thead>`/`<tfoot>` de una tabla, y el contenido refluye entre ellos
+# sin solaparse. Sacar un `position:fixed` al margen con desplazamientos
+# negativos (`top:-17mm`) NO vale: este Chromium lo coloca en el lado
+# contrario de la página.
+#
+# Desde Chromium 131 SÍ funcionan las cajas de margen de `@page`
+# (`@bottom-right{content:counter(page) " / " counter(pages)}`), comprobado
+# con el Chromium 156 del servidor: es la única forma de numerar páginas. Sólo
+# admiten texto (`content`) con su tipografía, color, fondo y bordes.
 
 _MARGIN_MM = 14           # margen por defecto; un tema lo cambia con su @page
 
@@ -629,7 +654,8 @@ def _page_rule(landscape: bool, margin: str) -> str:
 # ── Impresión ────────────────────────────────────────────────────────────────
 
 def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
-              landscape: bool = False, theme_html: str | None = None) -> str:
+              landscape: bool = False, theme_html: str | None = None,
+              folder: str = "") -> str:
     """El HTML autónomo que se le da a imprimir a Chromium.
 
     Separado de `render` para poder comprobarlo en los tests sin arrancar un
@@ -638,6 +664,7 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
 
     `theme_html` permite imprimir una plantilla que aún no está guardada (la
     vista previa del editor de temas) sin tener que crear un tema de mentira.
+    `folder` es la carpeta de la nota, para el marcador `{{ carpeta }}`.
     """
     body = '<main class="markdown-body">' + body_html + '</main>'
     if theme is not None or theme_html is not None:
@@ -647,7 +674,7 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
         # un `src="{{ img:logo }}"` perdería el atributo entero si se saneara
         # primero. Y sanear DESPUÉS es obligatorio: la plantilla la escribe una
         # persona, pero el `file://` que se le cuele lo lee el servidor.
-        body = sanitize_html(themes.fill(template, body, title, images))
+        body = sanitize_html(themes.fill(template, body, title, images, folder))
     page_css = _page_rule(landscape, f"{_MARGIN_MM}mm")
     body_class = " ".join(c for c in ("print-dark" if dark else "",
                                       "landscape" if landscape else "") if c)
@@ -671,7 +698,8 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
 
 
 def render(body_html: str, dark: bool = False, theme=None, title: str = "",
-           landscape: bool = False, theme_html: str | None = None) -> bytes:
+           landscape: bool = False, theme_html: str | None = None,
+           folder: str = "") -> bytes:
     """Imprime a PDF el HTML (ya saneado) de una nota. Levanta `PdfError`.
 
     Con `theme` (un `PdfTheme`) la nota se maqueta dentro de la plantilla
@@ -684,7 +712,7 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
     diagramas, código largo, imágenes grandes— los marca el cliente con
     `pdf-wide` para que ocupen el ancho completo. Ver `notes_print.css`.
     """
-    doc = _document(body_html, dark, theme, title, landscape, theme_html)
+    doc = _document(body_html, dark, theme, title, landscape, theme_html, folder)
 
     workdir = tempfile.mkdtemp(prefix="notepdf_")
     guard, guard_port = _start_egress_guard()

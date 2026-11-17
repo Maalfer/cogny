@@ -37,7 +37,7 @@ IMAGE_MIME = {
 }
 
 CONTENT_TAG = "contenido"
-# `{{ contenido }}`, `{{ titulo }}`, `{{ fecha }}`, `{{ img:logo }}`
+# `{{ contenido }}`, `{{ titulo }}`, `{{ carpeta }}`, `{{ fecha }}`, `{{ img:logo }}`
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-zA-Z]+)\s*(?::\s*([^}]*?)\s*)?\}\}")
 _HAS_CONTENT_RE = re.compile(r"\{\{\s*%s\s*\}\}" % CONTENT_TAG)
 _SVG_RE = re.compile(rb"<(\?xml|svg)\b", re.IGNORECASE)
@@ -109,28 +109,57 @@ def starter_html() -> str:
 
 
 # Nota de mentira para la vista previa del editor: lleva a propósito un poco de
-# todo (títulos, tabla, código, cita, lista) para que se vea de un vistazo qué
-# le hace el tema a cada cosa, y texto suficiente para pasar de una página y
+# TODO lo que puede salir en una nota, con el mismo marcado que genera el
+# cliente (`postProcess` en notes.js: callouts con su icono, tablas en
+# `.table-wrap`, código resaltado por highlight.js, propiedades, etiquetas,
+# tareas, notas al pie, incrustaciones), para que se vea de un vistazo qué le
+# hace el tema a cada cosa — y texto suficiente para pasar de una página y
 # comprobar que la cabecera y el pie se repiten.
 SAMPLE_NOTE_HTML = """
+<div class="note-props"><table><tr><th>autor</th><td>Equipo de formación</td></tr><tr><th>tema</th><td>Ejemplo de tema PDF</td></tr><tr><th>tags</th><td>muestra, pdf</td></tr></table></div>
 <h1>Nota de muestra</h1>
 <p>Este PDF sirve para ver cómo queda el tema que estás escribiendo. El texto no
-es de ninguna nota real: es un ejemplo con un poco de cada cosa.</p>
+es de ninguna nota real: es un ejemplo con un poco de cada cosa que puede
+aparecer en una nota. Etiquetas: <a class="tag-pill" data-tag="muestra">#muestra</a> <a class="tag-pill" data-tag="pdf">#pdf</a></p>
 <p>Un párrafo con <strong>negrita</strong>, <em>cursiva</em>, un
-<a href="https://example.com">enlace</a> y <code>código en línea</code>.</p>
-<h2>Una tabla</h2>
-<table><thead><tr><th>Concepto</th><th>Importe</th><th>Estado</th></tr></thead>
+<a href="https://example.com">enlace</a>, un <a class="wikilink" data-target="Otra nota">enlace interno</a>,
+<mark>texto resaltado</mark> y <code>código en línea</code>.</p>
+<div class="callout" data-cl="info"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 11v5M12 8h.01"/></svg><span>Objetivo</span></div><div class="callout-content"><p>Un callout de tipo <code>info</code>. Los de Obsidian (<code>[!tip]</code>, <code>[!warning]</code>…) salen así en el PDF.</p></div></div>
+<h2>1. Una tabla</h2>
+<div class="table-wrap"><table><thead><tr><th>Concepto</th><th>Importe</th><th>Estado</th></tr></thead>
 <tbody><tr><td>Primera fila</td><td>120,00 €</td><td>Pagado</td></tr>
 <tr><td>Segunda fila</td><td>148,50 €</td><td>Pendiente</td></tr>
-<tr><td>Tercera fila</td><td>96,30 €</td><td>Pagado</td></tr></tbody></table>
-<blockquote>Una cita destacada, para ver el filete lateral y el color.</blockquote>
-<h3>Un bloque de código</h3>
-<pre><code>def saludar(nombre):
-    return f"Hola, {nombre}"</code></pre>
-<h2>Una lista</h2>
-<ul><li>Primer punto de la lista</li><li>Segundo punto de la lista</li>
-<li>Tercer punto de la lista</li></ul>
-""" + "<p>Texto de relleno para que la muestra pase de una página y se vea que la cabecera y el pie se repiten en todas.</p>" * 14
+<tr><td>Tercera fila</td><td>96,30 €</td><td>Pagado</td></tr></tbody></table></div>
+<div class="callout" data-cl="tip"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M12 19v3M5 12H2M22 12h-3M19 5l-2 2M7 17l-2 2M19 19l-2-2M7 7 5 5"/><circle cx="12" cy="12" r="4"/></svg><span>Consejo</span></div><div class="callout-content"><p>Un callout de tipo <code>tip</code>.</p></div></div>
+<blockquote><p>Una cita destacada, para ver el filete lateral y el color.</p></blockquote>
+<h2>2. Código e imágenes</h2>
+<h3>2.1 Un bloque de código</h3>
+<pre><code class="hljs language-python"><span class="hljs-keyword">def</span> <span class="hljs-title function_">saludar</span>(<span class="hljs-params">nombre</span>):
+    <span class="hljs-comment"># Devuelve un saludo</span>
+    <span class="hljs-keyword">return</span> <span class="hljs-string">f"Hola, <span class="hljs-subst">{nombre}</span>"</span>
+
+<span class="hljs-built_in">print</span>(saludar(<span class="hljs-string">"mundo"</span>), <span class="hljs-number">42</span>)</code><span class="lang-label">python</span></pre>
+<h3>2.2 Una imagen</h3>
+<p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iMjIwIiB2aWV3Qm94PSIwIDAgNjQwIDIyMCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZTVlN2ViIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjY2JkNWUxIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSIyMjAiIGZpbGw9InVybCgjZykiLz48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjI2IiBmaWxsPSIjMzM0MTU1Ii8+PGNpcmNsZSBjeD0iMTgiIGN5PSIxMyIgcj0iNSIgZmlsbD0iI2Y4NzE3MSIvPjxjaXJjbGUgY3g9IjM2IiBjeT0iMTMiIHI9IjUiIGZpbGw9IiNmYmJmMjQiLz48Y2lyY2xlIGN4PSI1NCIgY3k9IjEzIiByPSI1IiBmaWxsPSIjMzRkMzk5Ii8+PHJlY3QgeD0iNDAiIHk9IjYwIiB3aWR0aD0iMzAwIiBoZWlnaHQ9IjE2IiByeD0iNCIgZmlsbD0iIzk0YTNiOCIvPjxyZWN0IHg9IjQwIiB5PSI5MiIgd2lkdGg9IjQ2MCIgaGVpZ2h0PSIxMiIgcng9IjQiIGZpbGw9IiNhOGIzYzIiLz48cmVjdCB4PSI0MCIgeT0iMTE2IiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjEyIiByeD0iNCIgZmlsbD0iI2E4YjNjMiIvPjxyZWN0IHg9IjQwIiB5PSIxNjAiIHdpZHRoPSIxNDAiIGhlaWdodD0iMzQiIHJ4PSI2IiBmaWxsPSIjNjQ3NDhiIi8+PC9zdmc+" alt="Captura de ejemplo"></p>
+<div class="callout" data-cl="warning"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2 21h20L12 3.5z"/><path d="M12 10v5M12 18h.01"/></svg><span>Cuidado</span></div><div class="callout-content"><p>Un callout de tipo <code>warning</code>.</p></div></div>
+<div class="callout" data-cl="success"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>Hecho</span></div><div class="callout-content"><p>Un callout de tipo <code>success</code>.</p></div></div>
+<div class="callout" data-cl="danger"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/></svg><span>Peligro</span></div><div class="callout-content"><p>Un callout de tipo <code>danger</code>.</p></div></div>
+<div class="callout" data-cl="question"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.3 9.3a3 3 0 1 1 4.2 1.7c-.8.4-1 1-1 1.8v.3M12 17h.01"/></svg><span>Pregunta</span></div><div class="callout-content"><p>Un callout de tipo <code>question</code>.</p></div></div>
+<div class="callout" data-cl="example"><div class="callout-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg><span>Ejemplo</span></div><div class="callout-content"><p>Un callout de tipo <code>example</code>.</p></div></div>
+<div class="callout" data-cl="quote"><div class="callout-title"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h4v4H8c0 2 1 3 3 3v2c-3 0-5-2-5-5V7zm10 0h4v4h-3c0 2 1 3 3 3v2c-3 0-5-2-5-5V7z"/></svg><span>Cita</span></div><div class="callout-content"><p>Un callout de tipo <code>quote</code>.</p></div></div>
+<h2>3. Listas</h2>
+<ol><li>Primer paso numerado</li><li>Segundo paso, con una sublista:<ul><li>Un punto</li><li>Otro punto<ul><li>Tercer nivel</li></ul></li></ul></li><li>Tercer paso</li></ol>
+<ul><li class="task-list-item"><input type="checkbox" checked disabled> Tarea hecha</li><li class="task-list-item"><input type="checkbox" disabled> Tarea pendiente</li></ul>
+<hr>
+<h4>Un encabezado de cuarto nivel</h4>
+<p>Un texto con nota al pie<sup class="fn-ref"><a href="#fn-1">1</a></sup>.</p>
+<div class="internal-embed"><div class="embed-title">▣ Otra nota</div><div class="embed-body"><p>Contenido de una nota incrustada con <code>![[Otra nota]]</code>.</p></div></div>
+""" + "<p>Texto de relleno para que la muestra pase de una página y se vea que la cabecera y el pie se repiten en todas.</p>" * 8 + """
+<ol class="footnotes"><li id="fn-1">El texto de la nota al pie.</li></ol>
+"""
+
+# Carpeta de mentira para `{{ carpeta }}` en la vista previa.
+SAMPLE_NOTE_FOLDER = "Carpeta / Subcarpeta"
 
 
 # ── Imágenes en disco ────────────────────────────────────────────────────────
@@ -279,7 +308,8 @@ def _fecha_larga() -> str:
     return f"{today.day} de {_MESES[today.month - 1]} de {today.year}"
 
 
-def fill(template: str, content_html: str, title: str, images: dict) -> str:
+def fill(template: str, content_html: str, title: str, images: dict,
+         folder: str = "") -> str:
     """Sustituye los marcadores del tema. El resultado hay que sanearlo.
 
     Una sola pasada de `re.sub`: `re.sub` no vuelve a mirar lo que inserta,
@@ -296,6 +326,8 @@ def fill(template: str, content_html: str, title: str, images: dict) -> str:
             return content_html
         if key == "titulo":
             return html_escape(title or "")
+        if key == "carpeta":
+            return html_escape(folder or "")
         if key == "fecha":
             return _fecha_larga()
         if key == "img":

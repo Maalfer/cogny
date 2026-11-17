@@ -196,6 +196,30 @@ class ThemeFillTests(VaultTestCase):
         out = themes.fill("{{ titulo }}{{ contenido }}", "", "<img onerror=x>", {})
         self.assertNotIn("<img", out)
 
+    def test_la_carpeta_se_sustituye_y_se_escapa(self):
+        out = themes.fill("<b>{{ carpeta }}</b>{{ contenido }}", "", "t", {},
+                          "Materias / <img onerror=x>")
+        self.assertIn("<b>Materias / &lt;img onerror=x&gt;</b>", out)
+        # Sin carpeta (nota en la raíz) el marcador queda vacío, no a la vista.
+        self.assertIn("<b></b>", themes.fill("<b>{{ carpeta }}</b>{{ contenido }}", "", "t", {}))
+
+    def test_la_carpeta_llega_al_documento(self):
+        doc = pdf._document("<p>hola</p>", theme_html="<i>{{ carpeta }}</i>{{ contenido }}",
+                            folder="Tema 2")
+        self.assertIn("<i>Tema 2</i>", doc)
+
+    def test_las_fuentes_incluidas_se_sirven_en_local(self):
+        """Los temas usan "Inter", "JetBrains Mono"... por su nombre: tienen
+        que ir declaradas en la hoja del documento y apuntar a ficheros
+        locales (Chromium imprime sin red)."""
+        pdf._CSS_CACHE = None
+        css = pdf._styles()
+        self.assertIn('font-family:"Inter"', css)
+        self.assertIn('font-family:"JetBrains Mono"', css)
+        self.assertIn('font-family:"Segoe UI"', css)       # alias de Inter
+        self.assertNotIn("url(fonts/", css)                 # todas reescritas
+        self.assertIn("url(file://", css)
+
     def test_las_imagenes_entran_como_data_uri(self):
         theme = themes.save_theme({"name": "Acme", "html": PLANTILLA})
         themes.add_image(theme, "logo", _django_upload(PNG, "logo.png"))

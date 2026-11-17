@@ -8,7 +8,10 @@
 html,body{margin:0;padding:0}
 body{
   background:#fff;color:#1a1a1a;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* "Inter" va incluida (vendor/fonts, ver `pdf._styles`): en el servidor no
+     hay ninguna de las del sistema que la preceden ("Segoe UI" y Roboto son
+     alias de la propia Inter), así que es la que sale. */
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Inter",Helvetica,Arial,sans-serif;
   /* `font-feature-settings` activa ligaduras y números proporcionales viejos
      donde la fuente los tenga (Segoe UI / Inter / Charter): los números
      "2026" en una fecha salen como cifras con gracia en vez de monoespacio
@@ -70,21 +73,30 @@ body{
    el bloque llama la atención porque rompe la línea base; el inline se
    camufla. Sin `box-shadow` (queda "web 2.0"). Borde superior fino de
    color de marca para que se note al hojear — el tema puede sobreescribirlo. */
-.markdown-body code{background:#eef0f2;color:#111;padding:.15em .42em;border-radius:4px;font-size:.87em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:500}
+.markdown-body code{background:#eef0f2;color:#111;padding:.15em .42em;border-radius:4px;font-size:.87em;font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:500;font-variant-ligatures:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+/* `code` dentro de un título: hereda el tamaño y el color del título y pierde
+   la caja — con fondo y borde de chip, un "(`ejemplo.xaml`)" en un H3 pesaba
+   más que el propio título. */
+.markdown-body :is(h1,h2,h3,h4,h5,h6) code{font-size:.9em;color:inherit;background:transparent;border:none;padding:0;font-weight:inherit}
 .markdown-body pre{
   background:#0d1117;padding:.95rem 1.05rem;border-radius:6px;
   border:.5px solid #30363d;
   overflow:hidden;white-space:pre-wrap;word-break:break-word;break-inside:avoid;
   position:relative;
 }
-.markdown-body pre code{background:none;padding:0;font-size:.85rem;color:#e6edf3;font-weight:400;line-height:1.55}
+.markdown-body pre code{background:none;padding:0;font-size:.85rem;color:#e6edf3;font-weight:400;line-height:1.55;border:none;border-radius:0}
+/* highlight.js (`highlight-github-dark.min.css`) le pone a `pre code.hljs`
+   su propio fondo y `padding:1em`: dentro del `<pre>`, que ya tiene los
+   suyos, salía una caja dentro de otra caja. El `<pre>` (y el tema, que lo
+   sobreescribe) manda; el `code` sólo pinta el texto. */
+.markdown-body pre code.hljs{background:transparent;padding:0;display:block;overflow:visible}
 /* Etiqueta de lenguaje discreta arriba a la derecha (`.lang-bash`, `.lang-python`,
    etc.) — la pone `addCopyBtn`/postProcess en notes.js al identificar el
    bloque. Pequeña, monoespaciada, en un mostaza apagado: identifica sin
    estridencia. */
 .markdown-body pre .lang-label{
   display:block;position:absolute;top:.45em;right:.7em;
-  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   font-size:.65rem;color:#7d8590;letter-spacing:.05em;
   text-transform:lowercase;font-weight:600;
   pointer-events:none;
@@ -105,6 +117,10 @@ body{
 .markdown-body hr{
   border:none;height:0;margin:1.8em auto;text-align:center;
   position:relative;
+  /* El `hr` de Chromium trae `overflow:hidden` de serie: con `height:0` se
+     comía el adorno de `::after` entero y el separador no salía en ningún
+     tema (comprobado imprimiendo). */
+  overflow:visible;
 }
 .markdown-body hr::after{
   content:"◆  ◆  ◆";letter-spacing:.6em;color:#aaa;font-size:.65em;

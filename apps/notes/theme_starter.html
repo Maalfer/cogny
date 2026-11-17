@@ -11,11 +11,30 @@
      MARCADORES
        {{ contenido }}     la nota (obligatorio, una sola vez)
        {{ titulo }}        el nombre de la nota, sin la extensión
+       {{ carpeta }}       la carpeta de la nota — Materias / Tema 2
        {{ fecha }}         la fecha de hoy en largo — 3 de agosto de 2026
        {{ img:NOMBRE }}    una imagen del tema, incrustada en el PDF
 
-     CUATRO COSAS QUE CONVIENE SABER (tres rarezas del Chromium que imprime
-     y una del saneador)
+     FUENTES INCLUIDAS (úsalas por su nombre, sin @font-face)
+       "Inter"           sans moderna, para texto
+       "Lato"            sans humanista
+       "Manrope"         sans geométrica
+       "Montserrat"      sans geométrica, para títulos
+       "Nunito"          sans redondeada, amable
+       "Source Serif 4"  serif de lectura
+       "JetBrains Mono"  monoespaciada, para código
+     Cualquier otra que no esté en el servidor cae a la genérica. Las de
+     Windows/macOS más pedidas ("Segoe UI", Roboto, Consolas, Menlo...) se
+     sustituyen solas por Inter / JetBrains Mono.
+
+     NÚMEROS DE PÁGINA
+     Con las cajas de margen de @page (sólo texto, con su fuente y color):
+       @page{ @bottom-right{ content:counter(page) " / " counter(pages); } }
+     Hay @top-left, @top-center, @top-right, @bottom-left, @bottom-center...
+     El margen de @page de ese lado tiene que ser lo bastante alto como para
+     que quepa el texto.
+
+     TRES COSAS QUE CONVIENE SABER (rarezas del Chromium que imprime)
 
      1. Cabecera y pie se repiten en todas las páginas porque van en el
         <thead> y el <tfoot> de la tabla de abajo: es lo único que Chromium
@@ -30,15 +49,11 @@
         selectores `body.landscape ...`.
 
      3. Los estilos base de la nota (títulos, código, tablas, fórmulas) ya
-        están cargados: aquí sólo hace falta lo que quieras cambiar.
-
-     4. En el CSS NO uses el combinador de hijo directo (el signo de mayor
-        que): el saneador lo escapa y el navegador tira la regla ENTERA sin
-        avisar. Y cuidado con cambiarlo por un descendiente a lo bruto —
-        `.hoja tbody td` también alcanzaría las celdas de las tablas de la
-        propia nota y las dejaría sin bordes ni relleno. Para apuntar sólo a
-        las celdas de la tabla de abajo, márcalas con una clase: es lo que
-        hace `.celda`.
+        están cargados: aquí sólo hace falta lo que quieras cambiar. Ojo con
+        los selectores de descendiente a lo bruto: `.hoja td` también alcanza
+        las celdas de las tablas de la propia nota y las dejaría sin bordes
+        ni relleno. Por eso las celdas de la tabla de abajo llevan una clase
+        (`.celda`). El combinador de hijo directo (`>`) también funciona.
      ══════════════════════════════════════════════════════════════════════════ -->
 
 <style>
@@ -48,7 +63,16 @@
     --gris:       #8a8a8a;
   }
 
-  @page{ margin: 12mm 16mm; }
+  /* Margen inferior algo mayor para que quepa el número de página. */
+  @page{
+    margin: 12mm 16mm 14mm;
+    @bottom-right{
+      content: counter(page) " / " counter(pages);
+      font-family:"Inter", sans-serif; font-size:7.5pt; color:#8a8a8a;
+    }
+  }
+
+  body{ font-family:"Inter", sans-serif; }
 
   /* ── Estructura que repite cabecera y pie ─────────────────────────────── */
   .hoja{ width:100%; border-collapse:collapse; table-layout:fixed; }
@@ -90,7 +114,7 @@
 
 <footer class="pie">
   <span>Confidencial</span>
-  <span>{{ titulo }}</span>
+  <span>{{ carpeta }} · {{ titulo }}</span>
 </footer>
 
 <table class="hoja">

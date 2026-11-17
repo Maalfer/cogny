@@ -28,7 +28,10 @@ bóveda pública.
   decisión de aspecto se escribe en el CSS del tema. Las imágenes del tema son
   ficheros bajo `DATA_ROOT/themes/`, no blobs en la BD, y se incrustan como
   `data:` URI. El HTML del tema **se sanea igual que el de una nota** aunque lo
-  escriba el dueño: Chromium imprime desde `file://`. Si tocas la maqueta del
+  escriba el dueño: Chromium imprime desde `file://`. Las fuentes que pueden
+  usar los temas van incluidas en `static/vendor/fonts` (estáticas, OFL; ver
+  la cabecera de `fonts.css` sobre por qué no variables) porque el servidor
+  no tiene ninguna de las que se suelen pedir. Si tocas la maqueta del
   PDF, lee antes los comentarios de `pdf.py`/`theme_starter.html` sobre cómo se
   repiten cabecera y pie (thead/tfoot, no `position:fixed` con offsets
   negativos) y sobre el apaisado a dos columnas.

