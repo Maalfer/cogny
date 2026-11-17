@@ -37,7 +37,12 @@ IMAGE_MIME = {
 }
 
 CONTENT_TAG = "contenido"
-# `{{ contenido }}`, `{{ titulo }}`, `{{ carpeta }}`, `{{ fecha }}`, `{{ img:logo }}`
+# `{{ contenido }}`, `{{ titulo }}`, `{{ fecha }}`, `{{ img:logo }}`
+#
+# A propósito NO hay marcador para la carpeta o la ruta de la nota dentro de la
+# bóveda (existió un `{{ carpeta }}` y se quitó): los PDF se reparten a gente
+# de fuera —alumnos, clientes— que no tiene por qué ver cómo está organizada
+# la bóveda por dentro. El cliente ni siquiera manda la ruta al exportar.
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-zA-Z]+)\s*(?::\s*([^}]*?)\s*)?\}\}")
 _HAS_CONTENT_RE = re.compile(r"\{\{\s*%s\s*\}\}" % CONTENT_TAG)
 _SVG_RE = re.compile(rb"<(\?xml|svg)\b", re.IGNORECASE)
@@ -157,10 +162,6 @@ aparecer en una nota. Etiquetas: <a class="tag-pill" data-tag="muestra">#muestra
 """ + "<p>Texto de relleno para que la muestra pase de una página y se vea que la cabecera y el pie se repiten en todas.</p>" * 8 + """
 <ol class="footnotes"><li id="fn-1">El texto de la nota al pie.</li></ol>
 """
-
-# Carpeta de mentira para `{{ carpeta }}` en la vista previa.
-SAMPLE_NOTE_FOLDER = "Carpeta / Subcarpeta"
-
 
 # ── Imágenes en disco ────────────────────────────────────────────────────────
 
@@ -308,8 +309,7 @@ def _fecha_larga() -> str:
     return f"{today.day} de {_MESES[today.month - 1]} de {today.year}"
 
 
-def fill(template: str, content_html: str, title: str, images: dict,
-         folder: str = "") -> str:
+def fill(template: str, content_html: str, title: str, images: dict) -> str:
     """Sustituye los marcadores del tema. El resultado hay que sanearlo.
 
     Una sola pasada de `re.sub`: `re.sub` no vuelve a mirar lo que inserta,
@@ -326,8 +326,6 @@ def fill(template: str, content_html: str, title: str, images: dict,
             return content_html
         if key == "titulo":
             return html_escape(title or "")
-        if key == "carpeta":
-            return html_escape(folder or "")
         if key == "fecha":
             return _fecha_larga()
         if key == "img":

@@ -393,7 +393,6 @@ def notes_pdf(request):
         return _err("Nada que exportar")
     display_title = as_text(request.data.get("title")).strip()[:120]
     filename = vault.sanitize_name(display_title or "nota") or "nota"
-    folder = as_text(request.data.get("folder")).strip()[:300]
     theme = None
     if request.data.get("theme") not in (None, "", 0):
         theme = PdfTheme.objects.filter(pk=as_int(request.data.get("theme"))).first()
@@ -401,7 +400,7 @@ def notes_pdf(request):
             return _err("El tema ya no existe", 404)
     try:
         pdf_bytes = pdf.render(body_html, dark=bool(request.data.get("dark")),
-                               theme=theme, title=display_title, folder=folder,
+                               theme=theme, title=display_title,
                                landscape=bool(request.data.get("landscape")))
     except pdf.PdfError as exc:
         return _err(str(exc), exc.status)
@@ -594,7 +593,6 @@ def theme_preview(request):
         pdf_bytes = pdf.render(themes.SAMPLE_NOTE_HTML,
                                theme=theme, theme_html=html,
                                title="Nota de muestra",
-                               folder=themes.SAMPLE_NOTE_FOLDER,
                                landscape=bool(request.data.get("landscape")))
     except pdf.PdfError as exc:
         return _err(str(exc), exc.status)

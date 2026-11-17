@@ -5,6 +5,10 @@ piezas que sí son de este proyecto —validación, ficheros y el documento que 
 le da a imprimir—, que es donde puede romperse algo.
 """
 import io
+from pathlib import Path
+from unittest import mock
+
+from django.conf import settings
 
 from apps.accounts.models import User
 from apps.notes import pdf, themes
@@ -196,17 +200,27 @@ class ThemeFillTests(VaultTestCase):
         out = themes.fill("{{ titulo }}{{ contenido }}", "", "<img onerror=x>", {})
         self.assertNotIn("<img", out)
 
-    def test_la_carpeta_se_sustituye_y_se_escapa(self):
-        out = themes.fill("<b>{{ carpeta }}</b>{{ contenido }}", "", "t", {},
-                          "Materias / <img onerror=x>")
-        self.assertIn("<b>Materias / &lt;img onerror=x&gt;</b>", out)
-        # Sin carpeta (nota en la raíz) el marcador queda vacío, no a la vista.
-        self.assertIn("<b></b>", themes.fill("<b>{{ carpeta }}</b>{{ contenido }}", "", "t", {}))
+    def test_la_ruta_de_la_nota_nunca_llega_al_pdf(self):
+        """Los PDF se reparten fuera (alumnos, clientes): la ruta de la nota
+        dentro de la bóveda no debe aparecer. No hay marcador para ella —un
+        `{{ carpeta }}` se queda como texto, no se resuelve—, el cliente no la
+        manda, y si alguien la manda a mano el servidor la ignora."""
+        self.assertIn("{{ carpeta }}", themes.fill("{{ carpeta }}{{ contenido }}", "", "t", {}))
+        js = (Path(settings.BASE_DIR) / "apps/notes/static/notes/notes.js").read_text(encoding="utf-8")
+        envio = js.split("fetch('/api/notes/pdf'", 1)[1].split("});", 1)[0]
+        self.assertNotIn("path", envio)
+        self.assertNotIn("folder", envio)
+        theme = themes.save_theme({"name": "Acme", "html": "<i>{{ carpeta }}</i>{{ contenido }}"})
+        with mock.patch("apps.notes.pdf.render", return_value=b"%PDF") as render:
+            resp = self.json_post("/api/notes/pdf", {"html": "<p>hola</p>", "title": "n",
+                                                     "theme": theme.pk,
+                                                     "folder": "Materias / Secreto"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("Secreto", repr(render.call_args))
 
-    def test_la_carpeta_llega_al_documento(self):
-        doc = pdf._document("<p>hola</p>", theme_html="<i>{{ carpeta }}</i>{{ contenido }}",
-                            folder="Tema 2")
-        self.assertIn("<i>Tema 2</i>", doc)
+    def test_el_titulo_del_pdf_es_el_nombre_de_la_nota(self):
+        doc = pdf._document("<p>hola</p>", title="Mi <nota>")
+        self.assertIn("<title>Mi &lt;nota&gt;</title>", doc)
 
     def test_las_fuentes_incluidas_se_sirven_en_local(self):
         """Los temas usan "Inter", "JetBrains Mono"... por su nombre: tienen

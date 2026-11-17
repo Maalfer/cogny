@@ -654,8 +654,7 @@ def _page_rule(landscape: bool, margin: str) -> str:
 # ── Impresión ────────────────────────────────────────────────────────────────
 
 def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
-              landscape: bool = False, theme_html: str | None = None,
-              folder: str = "") -> str:
+              landscape: bool = False, theme_html: str | None = None) -> str:
     """El HTML autónomo que se le da a imprimir a Chromium.
 
     Separado de `render` para poder comprobarlo en los tests sin arrancar un
@@ -664,7 +663,6 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
 
     `theme_html` permite imprimir una plantilla que aún no está guardada (la
     vista previa del editor de temas) sin tener que crear un tema de mentira.
-    `folder` es la carpeta de la nota, para el marcador `{{ carpeta }}`.
     """
     body = '<main class="markdown-body">' + body_html + '</main>'
     if theme is not None or theme_html is not None:
@@ -674,7 +672,7 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
         # un `src="{{ img:logo }}"` perdería el atributo entero si se saneara
         # primero. Y sanear DESPUÉS es obligatorio: la plantilla la escribe una
         # persona, pero el `file://` que se le cuele lo lee el servidor.
-        body = sanitize_html(themes.fill(template, body, title, images, folder))
+        body = sanitize_html(themes.fill(template, body, title, images))
     page_css = _page_rule(landscape, f"{_MARGIN_MM}mm")
     body_class = " ".join(c for c in ("print-dark" if dark else "",
                                       "landscape" if landscape else "") if c)
@@ -684,6 +682,9 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
     return (
         '<!doctype html><html class="' + ("print-dark" if dark else "") +
         '"><head><meta charset="utf-8">'
+        # El <title> es el título del PDF en sus metadatos: sin él, Chromium
+        # ponía el nombre del fichero temporal ("in.html").
+        '<title>' + html_escape(title or "Nota") + '</title>'
         # El HTML ya viene renderizado: esta página nunca necesita ejecutar
         # nada. Es la red de seguridad real si algo se cuela pese a
         # `sanitize_html` — a diferencia de los flags de línea de comandos de
@@ -698,8 +699,7 @@ def _document(body_html: str, dark: bool = False, theme=None, title: str = "",
 
 
 def render(body_html: str, dark: bool = False, theme=None, title: str = "",
-           landscape: bool = False, theme_html: str | None = None,
-           folder: str = "") -> bytes:
+           landscape: bool = False, theme_html: str | None = None) -> bytes:
     """Imprime a PDF el HTML (ya saneado) de una nota. Levanta `PdfError`.
 
     Con `theme` (un `PdfTheme`) la nota se maqueta dentro de la plantilla
@@ -712,7 +712,7 @@ def render(body_html: str, dark: bool = False, theme=None, title: str = "",
     diagramas, código largo, imágenes grandes— los marca el cliente con
     `pdf-wide` para que ocupen el ancho completo. Ver `notes_print.css`.
     """
-    doc = _document(body_html, dark, theme, title, landscape, theme_html, folder)
+    doc = _document(body_html, dark, theme, title, landscape, theme_html)
 
     workdir = tempfile.mkdtemp(prefix="notepdf_")
     guard, guard_port = _start_egress_guard()

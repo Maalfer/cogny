@@ -941,11 +941,11 @@ async function exportNotePDF(it, opts){
   try{
     const html = await prepareExportHtml(it, opts);
     const base=(((current&&current.name)||it.name||'nota')).replace(/\.md$/i,'');
-    // Carpeta de la nota ("Materias / Tema 2"), para el `{{ carpeta }}` del tema.
-    const folder=String(it.path||'').split('/').filter(Boolean).slice(0,-1).join(' / ');
+    // Sólo el NOMBRE de la nota, nunca su ruta: el PDF lo leen alumnos y
+    // clientes, que no tienen por qué ver cómo está organizada la bóveda.
     const res=await fetch('/api/notes/pdf',{method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-      body:JSON.stringify({html, title:base, folder, dark:!!opts.dark,
+      body:JSON.stringify({html, title:base, dark:!!opts.dark,
                            theme:opts.theme||null, landscape:!!opts.landscape})});
     if(!res.ok) throw new Error('http '+res.status);
     const blob=await res.blob();
